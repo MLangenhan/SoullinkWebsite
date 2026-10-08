@@ -10,9 +10,14 @@
 -- Spielernamen und Website-Adresse lassen sich in den ersten Zeilen unten anpassen (genau vier Namen).
 
 -- Einstellungen: Adresse der Challenge, Website und Spielernamen (Plätze 1–4, Paare 1↔2 und 3↔4)
-select set_config('demo.slug', 'demo-platin-soullink', false),
-       set_config('demo.site_url', 'https://mlangenhan.github.io/SoullinkWebsite', false),
-       set_config('demo.players', 'Moritz,Janne,Elsmann,Linus', false);
+-- Alles bis auf die Links am Ende gibt keine Zeilen zurück: Der Supabase SQL Editor zeigt nur ein Ergebnis.
+do $demo$
+begin
+  perform set_config('demo.slug', 'demo-platin-soullink', false),
+          set_config('demo.site_url', 'https://mlangenhan.github.io/SoullinkWebsite', false),
+          set_config('demo.players', 'Moritz,Janne,Elsmann,Linus', false);
+end
+$demo$;
 
 -- -------------------------------------------------------------------------------------
 -- Hilfsfunktionen (nur für diese Sitzung). Bewusst ohne temporäre Tabellen: Der Supabase SQL
@@ -195,12 +200,16 @@ $fn$;
 
 delete from public.challenges where slug = current_setting('demo.slug');
 
-with c as (
+do $demo$
+declare
+  v_id uuid;
+begin
   insert into public.challenges (slug, name, game, visibility)
   values (current_setting('demo.slug'), 'Demo: Platin Soul Link', 'Pokémon Platin', 'private')
-  returning id
-)
-select set_config('demo.challenge_id', id::text, false) from c;
+  returning id into v_id;
+  perform set_config('demo.challenge_id', v_id::text, false);
+end
+$demo$;
 
 insert into public.challenge_members (challenge_id, role, display_name, color, seat, link_group)
 select pg_temp.challenge(), case when p.seat = 0 then 'owner' else 'player' end::public.member_role,
@@ -209,171 +218,175 @@ from unnest(string_to_array(current_setting('demo.players'), ',')) with ordinali
      lateral (select p0.name, (p0.n - 1)::smallint as seat) as p
 where p0.n <= 4;
 
--- -------------------------------------------------------------------------------------
--- Run 1: endet in der ersten Arena
--- -------------------------------------------------------------------------------------
+do $demo$
+begin
+  -- -------------------------------------------------------------------------------------
+  -- Run 1: endet in der ersten Arena
+  -- -------------------------------------------------------------------------------------
 
-select pg_temp.sitzung('2026-08-01 19:30+02');
-select pg_temp.fang('Starter', 'Panflam', 'Plinfa', 'Chelast', 'Panflam');
-select pg_temp.fang('Route 201', 'Staralili', 'Bidiza', 'Staralili', 'Sheinux');
-select pg_temp.fang('Route 202', 'Sheinux', 'Zirpurze', 'Bidiza', 'Staralili');
-select pg_temp.fang('Route 203', 'Abra', 'Zubat', 'Sheinux', 'Zirpurze');
-select pg_temp.stirbt(3, 'Bidiza', 'Rivalenkampf', 'Baro', 9, 'Route 203');
-select pg_temp.fang('Erzelingen-Mine', 'Kleinstein', 'Onix', 'Kleinstein', 'Onix');
-select pg_temp.entwickelt(1, 'Staralili', 'Staravia');
-select pg_temp.stirbt(1, 'Staravia', 'Arenakampf Erzelingen', 'Veit', 14);
-select pg_temp.stirbt(1, 'Panflam', 'Arenakampf Erzelingen', 'Veit', 13);
-select pg_temp.stirbt(2, 'Zubat', 'Arenakampf Erzelingen', 'Veit', 11);
-select pg_temp.wipe(1, 'Veits Koknodon räumt mit Kopfnuss das halbe Team ab');
+  perform pg_temp.sitzung('2026-08-01 19:30+02');
+  perform pg_temp.fang('Starter', 'Panflam', 'Plinfa', 'Chelast', 'Panflam');
+  perform pg_temp.fang('Route 201', 'Staralili', 'Bidiza', 'Staralili', 'Sheinux');
+  perform pg_temp.fang('Route 202', 'Sheinux', 'Zirpurze', 'Bidiza', 'Staralili');
+  perform pg_temp.fang('Route 203', 'Abra', 'Zubat', 'Sheinux', 'Zirpurze');
+  perform pg_temp.stirbt(3, 'Bidiza', 'Rivalenkampf', 'Baro', 9, 'Route 203');
+  perform pg_temp.fang('Erzelingen-Mine', 'Kleinstein', 'Onix', 'Kleinstein', 'Onix');
+  perform pg_temp.entwickelt(1, 'Staralili', 'Staravia');
+  perform pg_temp.stirbt(1, 'Staravia', 'Arenakampf Erzelingen', 'Veit', 14);
+  perform pg_temp.stirbt(1, 'Panflam', 'Arenakampf Erzelingen', 'Veit', 13);
+  perform pg_temp.stirbt(2, 'Zubat', 'Arenakampf Erzelingen', 'Veit', 11);
+  perform pg_temp.wipe(1, 'Veits Koknodon räumt mit Kopfnuss das halbe Team ab');
 
--- -------------------------------------------------------------------------------------
--- Run 2: scheitert an Silvanas Roserade
--- -------------------------------------------------------------------------------------
+  -- -------------------------------------------------------------------------------------
+  -- Run 2: scheitert an Silvanas Roserade
+  -- -------------------------------------------------------------------------------------
 
-select pg_temp.sitzung('2026-08-03 20:00+02');
-select pg_temp.fang('Starter', 'Plinfa', 'Chelast', 'Plinfa', 'Chelast');
-select pg_temp.fang('Route 201', 'Bidiza', 'Staralili', 'Staralili', 'Bidiza');
-select pg_temp.fang('Route 202', 'Staralili', 'Sheinux', 'Zirpurze', 'Sheinux');
-select pg_temp.fang('Route 203', 'Abra', 'Zubat', 'Sheinux', 'Abra');
-select pg_temp.fang('Erzelingen-Mine', 'Onix', 'Kleinstein', 'Kleinstein', 'Onix');
+  perform pg_temp.sitzung('2026-08-03 20:00+02');
+  perform pg_temp.fang('Starter', 'Plinfa', 'Chelast', 'Plinfa', 'Chelast');
+  perform pg_temp.fang('Route 201', 'Bidiza', 'Staralili', 'Staralili', 'Bidiza');
+  perform pg_temp.fang('Route 202', 'Staralili', 'Sheinux', 'Zirpurze', 'Sheinux');
+  perform pg_temp.fang('Route 203', 'Abra', 'Zubat', 'Sheinux', 'Abra');
+  perform pg_temp.fang('Erzelingen-Mine', 'Onix', 'Kleinstein', 'Kleinstein', 'Onix');
 
-select pg_temp.sitzung('2026-08-05 19:45+02');
-select pg_temp.fang('Route 204', 'Knospi', 'Wadribie', 'Knospi', null);
-select pg_temp.fang('Route 205', 'Bamelin', 'Schalellos', 'Pachirisu', 'Bamelin');
-select pg_temp.entwickelt(1, 'Plinfa', 'Pliprin');
-select pg_temp.entwickelt(2, 'Chelast', 'Chelcarain');
-select pg_temp.entwickelt(1, 'Staralili', 'Staravia');
-select pg_temp.entwickelt(4, 'Chelast', 'Chelcarain');
-select pg_temp.fang('Windkraftwerk', 'Driftlon', 'Driftlon', 'Driftlon', 'Driftlon', 'static');
-select pg_temp.stirbt(4, 'Bidiza', 'Team Galaktik', 'Rüpel', 15, 'Windkraftwerk');
-select pg_temp.fang('Ewigwald', 'Nebulak', 'Haspiror', 'Wadribie', 'Zirpurze');
+  perform pg_temp.sitzung('2026-08-05 19:45+02');
+  perform pg_temp.fang('Route 204', 'Knospi', 'Wadribie', 'Knospi', null);
+  perform pg_temp.fang('Route 205', 'Bamelin', 'Schalellos', 'Pachirisu', 'Bamelin');
+  perform pg_temp.entwickelt(1, 'Plinfa', 'Pliprin');
+  perform pg_temp.entwickelt(2, 'Chelast', 'Chelcarain');
+  perform pg_temp.entwickelt(1, 'Staralili', 'Staravia');
+  perform pg_temp.entwickelt(4, 'Chelast', 'Chelcarain');
+  perform pg_temp.fang('Windkraftwerk', 'Driftlon', 'Driftlon', 'Driftlon', 'Driftlon', 'static');
+  perform pg_temp.stirbt(4, 'Bidiza', 'Team Galaktik', 'Rüpel', 15, 'Windkraftwerk');
+  perform pg_temp.fang('Ewigwald', 'Nebulak', 'Haspiror', 'Wadribie', 'Zirpurze');
 
-select pg_temp.sitzung('2026-08-07 20:15+02');
-select pg_temp.stirbt(3, 'Kleinstein', 'Arenakampf Ewigenau', 'Silvana', 20);
-select pg_temp.stirbt(3, 'Plinfa', 'Arenakampf Ewigenau', 'Silvana', 21);
-select pg_temp.stirbt(3, 'Driftlon', 'Arenakampf Ewigenau', 'Silvana', 19);
-select pg_temp.wipe(3, 'Silvanas Roserade mit Giga-Sauger, gegen Pflanzen hatte keiner was dabei');
+  perform pg_temp.sitzung('2026-08-07 20:15+02');
+  perform pg_temp.stirbt(3, 'Kleinstein', 'Arenakampf Ewigenau', 'Silvana', 20);
+  perform pg_temp.stirbt(3, 'Plinfa', 'Arenakampf Ewigenau', 'Silvana', 21);
+  perform pg_temp.stirbt(3, 'Driftlon', 'Arenakampf Ewigenau', 'Silvana', 19);
+  perform pg_temp.wipe(3, 'Silvanas Roserade mit Giga-Sauger, gegen Pflanzen hatte keiner was dabei');
 
--- -------------------------------------------------------------------------------------
--- Run 3: kommt bis Herzhofen
--- -------------------------------------------------------------------------------------
+  -- -------------------------------------------------------------------------------------
+  -- Run 3: kommt bis Herzhofen
+  -- -------------------------------------------------------------------------------------
 
-select pg_temp.sitzung('2026-08-12 19:30+02');
-select pg_temp.fang('Starter', 'Chelast', 'Panflam', 'Panflam', 'Plinfa');
-select pg_temp.fang('Route 201', 'Sheinux', 'Staralili', 'Bidiza', 'Staralili');
-select pg_temp.fang('Route 202', 'Staralili', 'Bidiza', 'Sheinux', 'Zirpurze');
-select pg_temp.fang('Route 203', 'Zubat', 'Abra', 'Abra', 'Sheinux');
-select pg_temp.fang('Erzelingen-Mine', 'Kleinstein', 'Onix', 'Onix', 'Kleinstein');
-select pg_temp.entwickelt(1, 'Staralili', 'Staravia');
-select pg_temp.entwickelt(2, 'Panflam', 'Panpyro');
-select pg_temp.fang('Route 204', 'Knospi', 'Knospi', 'Wadribie', 'Haspiror');
+  perform pg_temp.sitzung('2026-08-12 19:30+02');
+  perform pg_temp.fang('Starter', 'Chelast', 'Panflam', 'Panflam', 'Plinfa');
+  perform pg_temp.fang('Route 201', 'Sheinux', 'Staralili', 'Bidiza', 'Staralili');
+  perform pg_temp.fang('Route 202', 'Staralili', 'Bidiza', 'Sheinux', 'Zirpurze');
+  perform pg_temp.fang('Route 203', 'Zubat', 'Abra', 'Abra', 'Sheinux');
+  perform pg_temp.fang('Erzelingen-Mine', 'Kleinstein', 'Onix', 'Onix', 'Kleinstein');
+  perform pg_temp.entwickelt(1, 'Staralili', 'Staravia');
+  perform pg_temp.entwickelt(2, 'Panflam', 'Panpyro');
+  perform pg_temp.fang('Route 204', 'Knospi', 'Knospi', 'Wadribie', 'Haspiror');
 
-select pg_temp.sitzung('2026-08-14 20:00+02');
-select pg_temp.fang('Route 205', 'Schalellos', 'Bamelin', 'Bamelin', 'Pachirisu');
-select pg_temp.fang('Windkraftwerk', 'Driftlon', 'Driftlon', 'Driftlon', 'Driftlon', 'static');
-select pg_temp.fang('Ewigwald', 'Haspiror', 'Nebulak', 'Zirpurze', 'Nebulak');
-select pg_temp.stirbt(4, 'Staralili', 'Rivalenkampf', 'Baro', 19);
-select pg_temp.entwickelt(1, 'Chelast', 'Chelcarain');
-select pg_temp.entwickelt(3, 'Panflam', 'Panpyro');
-select pg_temp.entwickelt(4, 'Plinfa', 'Pliprin');
+  perform pg_temp.sitzung('2026-08-14 20:00+02');
+  perform pg_temp.fang('Route 205', 'Schalellos', 'Bamelin', 'Bamelin', 'Pachirisu');
+  perform pg_temp.fang('Windkraftwerk', 'Driftlon', 'Driftlon', 'Driftlon', 'Driftlon', 'static');
+  perform pg_temp.fang('Ewigwald', 'Haspiror', 'Nebulak', 'Zirpurze', 'Nebulak');
+  perform pg_temp.stirbt(4, 'Staralili', 'Rivalenkampf', 'Baro', 19);
+  perform pg_temp.entwickelt(1, 'Chelast', 'Chelcarain');
+  perform pg_temp.entwickelt(3, 'Panflam', 'Panpyro');
+  perform pg_temp.entwickelt(4, 'Plinfa', 'Pliprin');
 
-select pg_temp.sitzung('2026-08-19 19:30+02');
-select pg_temp.fang('Route 206', 'Ponita', 'Skorgla', 'Skunkapuh', 'Zirpeise');
-select pg_temp.fang('Route 207', 'Machollo', 'Ponita', 'Kleinstein', 'Machollo');
-select pg_temp.stirbt(1, 'Sheinux', 'Wildes Pokémon', 'Kleinstein', 17, 'Route 207');
+  perform pg_temp.sitzung('2026-08-19 19:30+02');
+  perform pg_temp.fang('Route 206', 'Ponita', 'Skorgla', 'Skunkapuh', 'Zirpeise');
+  perform pg_temp.fang('Route 207', 'Machollo', 'Ponita', 'Kleinstein', 'Machollo');
+  perform pg_temp.stirbt(1, 'Sheinux', 'Wildes Pokémon', 'Kleinstein', 17, 'Route 207');
 
-select pg_temp.sitzung('2026-08-22 18:00+02');
-select pg_temp.fang('Route 208', 'Trasla', 'Roselia', 'Bidifas', 'Zubat');
-select pg_temp.fang('Herzhofen', 'Evoli', 'Evoli', 'Evoli', 'Evoli', 'static');
-select pg_temp.fang('Route 209', 'Zwirrlicht', 'Bidifas', 'Staravia', 'Roselia');
-select pg_temp.stirbt(3, 'Wadribie', 'Wildes Pokémon', 'Staravia', 18, 'Route 209');
-select pg_temp.stirbt(2, 'Skorgla', 'Arenakampf Herzhofen', 'Lamina', 25);
-select pg_temp.stirbt(2, 'Onix', 'Arenakampf Herzhofen', 'Lamina', 24);
-select pg_temp.stirbt(2, 'Panpyro', 'Arenakampf Herzhofen', 'Lamina', 26);
-select pg_temp.wipe(2, 'Laminas Traunmagil mit Psystrahl und Verwirrung, das war es');
+  perform pg_temp.sitzung('2026-08-22 18:00+02');
+  perform pg_temp.fang('Route 208', 'Trasla', 'Roselia', 'Bidifas', 'Zubat');
+  perform pg_temp.fang('Herzhofen', 'Evoli', 'Evoli', 'Evoli', 'Evoli', 'static');
+  perform pg_temp.fang('Route 209', 'Zwirrlicht', 'Bidifas', 'Staravia', 'Roselia');
+  perform pg_temp.stirbt(3, 'Wadribie', 'Wildes Pokémon', 'Staravia', 18, 'Route 209');
+  perform pg_temp.stirbt(2, 'Skorgla', 'Arenakampf Herzhofen', 'Lamina', 25);
+  perform pg_temp.stirbt(2, 'Onix', 'Arenakampf Herzhofen', 'Lamina', 24);
+  perform pg_temp.stirbt(2, 'Panpyro', 'Arenakampf Herzhofen', 'Lamina', 26);
+  perform pg_temp.wipe(2, 'Laminas Traunmagil mit Psystrahl und Verwirrung, das war es');
 
--- -------------------------------------------------------------------------------------
--- Run 4: bis zum Champ
--- -------------------------------------------------------------------------------------
+  -- -------------------------------------------------------------------------------------
+  -- Run 4: bis zum Champ
+  -- -------------------------------------------------------------------------------------
 
-select pg_temp.sitzung('2026-08-26 19:30+02');
-select pg_temp.fang('Starter', 'Plinfa', 'Chelast', 'Panflam', 'Plinfa');
-select pg_temp.fang('Route 201', 'Staralili', 'Sheinux', 'Bidiza', 'Staralili');
-select pg_temp.fang('Route 202', 'Bidiza', 'Staralili', 'Sheinux', 'Zirpurze');
-select pg_temp.fang('Route 203', 'Abra', 'Zubat', 'Zubat', 'Abra');
-select pg_temp.fang('Erzelingen-Mine', 'Onix', 'Kleinstein', 'Kleinstein', 'Onix');
-select pg_temp.entwickelt(1, 'Staralili', 'Staravia');
-select pg_temp.fang('Route 204', 'Knospi', 'Wadribie', 'Knospi', 'Haspiror');
+  perform pg_temp.sitzung('2026-08-26 19:30+02');
+  perform pg_temp.fang('Starter', 'Plinfa', 'Chelast', 'Panflam', 'Plinfa');
+  perform pg_temp.fang('Route 201', 'Staralili', 'Sheinux', 'Bidiza', 'Staralili');
+  perform pg_temp.fang('Route 202', 'Bidiza', 'Staralili', 'Sheinux', 'Zirpurze');
+  perform pg_temp.fang('Route 203', 'Abra', 'Zubat', 'Zubat', 'Abra');
+  perform pg_temp.fang('Erzelingen-Mine', 'Onix', 'Kleinstein', 'Kleinstein', 'Onix');
+  perform pg_temp.entwickelt(1, 'Staralili', 'Staravia');
+  perform pg_temp.fang('Route 204', 'Knospi', 'Wadribie', 'Knospi', 'Haspiror');
 
-select pg_temp.sitzung('2026-08-29 20:00+02');
-select pg_temp.fang('Route 205', 'Bamelin', 'Pachirisu', 'Schalellos', 'Bamelin');
--- Linus hatte sich vertippt: Es war ein Pachirisu
-select pg_temp.korrigiert(4, 'Bamelin', 'Pachirisu');
-select pg_temp.fang('Windkraftwerk', 'Driftlon', 'Driftlon', 'Driftlon', 'Driftlon', 'static');
-select pg_temp.fang('Ewigwald', 'Nebulak', 'Haspiror', 'Zirpurze', 'Nebulak');
-select pg_temp.entwickelt(1, 'Plinfa', 'Pliprin');
-select pg_temp.entwickelt(2, 'Chelast', 'Chelcarain');
-select pg_temp.entwickelt(3, 'Panflam', 'Panpyro');
-select pg_temp.entwickelt(4, 'Plinfa', 'Pliprin');
-select pg_temp.stirbt(3, 'Zubat', 'Team Galaktik', 'Rüpel', 16);
+  perform pg_temp.sitzung('2026-08-29 20:00+02');
+  perform pg_temp.fang('Route 205', 'Bamelin', 'Pachirisu', 'Schalellos', 'Bamelin');
+  -- Linus hatte sich vertippt: Es war ein Pachirisu
+  perform pg_temp.korrigiert(4, 'Bamelin', 'Pachirisu');
+  perform pg_temp.fang('Windkraftwerk', 'Driftlon', 'Driftlon', 'Driftlon', 'Driftlon', 'static');
+  perform pg_temp.fang('Ewigwald', 'Nebulak', 'Haspiror', 'Zirpurze', 'Nebulak');
+  perform pg_temp.entwickelt(1, 'Plinfa', 'Pliprin');
+  perform pg_temp.entwickelt(2, 'Chelast', 'Chelcarain');
+  perform pg_temp.entwickelt(3, 'Panflam', 'Panpyro');
+  perform pg_temp.entwickelt(4, 'Plinfa', 'Pliprin');
+  perform pg_temp.stirbt(3, 'Zubat', 'Team Galaktik', 'Rüpel', 16);
 
-select pg_temp.sitzung('2026-09-02 19:30+02');
-select pg_temp.fang('Route 206', 'Ponita', 'Skorgla', 'Skunkapuh', 'Zirpeise');
-select pg_temp.fang('Route 207', 'Machollo', 'Ponita', 'Machollo', 'Kleinstein');
-select pg_temp.fang('Kraterberg', 'Bronzel', 'Meditie', 'Klingplim', 'Bronzel');
-select pg_temp.entwickelt(2, 'Sheinux', 'Luxio');
-select pg_temp.fang('Route 208', 'Trasla', 'Roselia', 'Bidifas', 'Zubat');
-select pg_temp.fang('Herzhofen', 'Evoli', 'Evoli', 'Evoli', 'Evoli', 'static');
+  perform pg_temp.sitzung('2026-09-02 19:30+02');
+  perform pg_temp.fang('Route 206', 'Ponita', 'Skorgla', 'Skunkapuh', 'Zirpeise');
+  perform pg_temp.fang('Route 207', 'Machollo', 'Ponita', 'Machollo', 'Kleinstein');
+  perform pg_temp.fang('Kraterberg', 'Bronzel', 'Meditie', 'Klingplim', 'Bronzel');
+  perform pg_temp.entwickelt(2, 'Sheinux', 'Luxio');
+  perform pg_temp.fang('Route 208', 'Trasla', 'Roselia', 'Bidifas', 'Zubat');
+  perform pg_temp.fang('Herzhofen', 'Evoli', 'Evoli', 'Evoli', 'Evoli', 'static');
 
-select pg_temp.sitzung('2026-09-05 20:00+02');
-select pg_temp.fang('Route 209', 'Zwirrlicht', 'Bidifas', 'Staravia', 'Roselia');
-select pg_temp.stirbt(4, 'Zirpeise', 'Arenakampf Herzhofen', 'Lamina', 27);
--- Aus Versehen in die Box geschoben und gleich zurückgenommen
-select pg_temp.box(1, 'Onix');
-select pg_temp.rueckgaengig(1);
-select pg_temp.fang('Route 210', 'Sichlor', 'Wablu', 'Ponita', 'Machollo');
-select pg_temp.entwickelt(4, 'Evoli', 'Psiana');
+  perform pg_temp.sitzung('2026-09-05 20:00+02');
+  perform pg_temp.fang('Route 209', 'Zwirrlicht', 'Bidifas', 'Staravia', 'Roselia');
+  perform pg_temp.stirbt(4, 'Zirpeise', 'Arenakampf Herzhofen', 'Lamina', 27);
+  -- Aus Versehen in die Box geschoben und gleich zurückgenommen
+  perform pg_temp.box(1, 'Onix');
+  perform pg_temp.rueckgaengig(1);
+  perform pg_temp.fang('Route 210', 'Sichlor', 'Wablu', 'Ponita', 'Machollo');
+  perform pg_temp.entwickelt(4, 'Evoli', 'Psiana');
 
-select pg_temp.sitzung('2026-09-09 19:30+02');
-select pg_temp.fang('Route 215', 'Schlurp', 'Abra', 'Kadabra', 'Ponita');
-select pg_temp.stirbt(1, 'Bidiza', 'Arenakampf Schleiede', 'Hilda', 27);
-select pg_temp.team(1, 'Bamelin');
-select pg_temp.fang('Route 212', 'Glibunkel', 'Kirlia', 'Roselia', 'Glibunkel');
-select pg_temp.fang('Großmoor', 'Pionskora', 'Venuflibis', 'Felino', 'Pionskora');
-select pg_temp.stirbt(3, 'Ponita', 'Arenakampf Weideburg', 'Wellenbrecher Marinus', 33);
+  perform pg_temp.sitzung('2026-09-09 19:30+02');
+  perform pg_temp.fang('Route 215', 'Schlurp', 'Abra', 'Kadabra', 'Ponita');
+  perform pg_temp.stirbt(1, 'Bidiza', 'Arenakampf Schleiede', 'Hilda', 27);
+  perform pg_temp.team(1, 'Bamelin');
+  perform pg_temp.fang('Route 212', 'Glibunkel', 'Kirlia', 'Roselia', 'Glibunkel');
+  perform pg_temp.fang('Großmoor', 'Pionskora', 'Venuflibis', 'Felino', 'Pionskora');
+  perform pg_temp.stirbt(3, 'Ponita', 'Arenakampf Weideburg', 'Wellenbrecher Marinus', 33);
 
-select pg_temp.sitzung('2026-09-13 18:30+02');
-select pg_temp.fang('Route 213', 'Plaudagei', 'Schalellos', 'Plaudagei', null);
-select pg_temp.fang('Route 214', 'Rihorn', 'Skunkapuh', 'Zirpeise', 'Rihorn');
-select pg_temp.fang('Route 218', 'Finneon', 'Tentacha', 'Finneon', 'Tentacha');
-select pg_temp.fang('Eiseninsel', 'Riolu', 'Riolu', 'Riolu', 'Riolu', 'static');
-select pg_temp.stirbt(2, 'Roselia', 'Arenakampf Kanalava', 'Adam', 35);
+  perform pg_temp.sitzung('2026-09-13 18:30+02');
+  perform pg_temp.fang('Route 213', 'Plaudagei', 'Schalellos', 'Plaudagei', null);
+  perform pg_temp.fang('Route 214', 'Rihorn', 'Skunkapuh', 'Zirpeise', 'Rihorn');
+  perform pg_temp.fang('Route 218', 'Finneon', 'Tentacha', 'Finneon', 'Tentacha');
+  perform pg_temp.fang('Eiseninsel', 'Riolu', 'Riolu', 'Riolu', 'Riolu', 'static');
+  perform pg_temp.stirbt(2, 'Roselia', 'Arenakampf Kanalava', 'Adam', 35);
 
-select pg_temp.sitzung('2026-09-17 20:00+02');
-select pg_temp.entwickelt(1, 'Pliprin', 'Impoleon');
-select pg_temp.entwickelt(2, 'Chelcarain', 'Chelterrar');
-select pg_temp.entwickelt(3, 'Panpyro', 'Panferno');
-select pg_temp.entwickelt(4, 'Pliprin', 'Impoleon');
-select pg_temp.entwickelt(1, 'Staravia', 'Staraptor');
-select pg_temp.entwickelt(2, 'Luxio', 'Luxtra');
-select pg_temp.entwickelt(3, 'Riolu', 'Lucario');
-select pg_temp.fang('Route 216', 'Shnebedeck', null, 'Quiekel', 'Schneppke');
-select pg_temp.fang('Route 217', 'Schneppke', 'Shnebedeck', 'Sniebel', 'Quiekel');
-select pg_temp.stirbt(4, 'Rihorn', 'Arenakampf Blizzach', 'Frida', 37);
-select pg_temp.stirbt(2, 'Skorgla', 'Arenakampf Blizzach', 'Frida', 36);
+  perform pg_temp.sitzung('2026-09-17 20:00+02');
+  perform pg_temp.entwickelt(1, 'Pliprin', 'Impoleon');
+  perform pg_temp.entwickelt(2, 'Chelcarain', 'Chelterrar');
+  perform pg_temp.entwickelt(3, 'Panpyro', 'Panferno');
+  perform pg_temp.entwickelt(4, 'Pliprin', 'Impoleon');
+  perform pg_temp.entwickelt(1, 'Staravia', 'Staraptor');
+  perform pg_temp.entwickelt(2, 'Luxio', 'Luxtra');
+  perform pg_temp.entwickelt(3, 'Riolu', 'Lucario');
+  perform pg_temp.fang('Route 216', 'Shnebedeck', null, 'Quiekel', 'Schneppke');
+  perform pg_temp.fang('Route 217', 'Schneppke', 'Shnebedeck', 'Sniebel', 'Quiekel');
+  perform pg_temp.stirbt(4, 'Rihorn', 'Arenakampf Blizzach', 'Frida', 37);
+  perform pg_temp.stirbt(2, 'Skorgla', 'Arenakampf Blizzach', 'Frida', 36);
 
-select pg_temp.sitzung('2026-09-24 19:30+02');
-select pg_temp.fang('Route 222', 'Pantimos', 'Gastrodon', 'Luxio', 'Plaudagei');
-select pg_temp.stirbt(3, 'Finneon', 'Arenakampf Sonnewik', 'Volkner', 45);
+  perform pg_temp.sitzung('2026-09-24 19:30+02');
+  perform pg_temp.fang('Route 222', 'Pantimos', 'Gastrodon', 'Luxio', 'Plaudagei');
+  perform pg_temp.stirbt(3, 'Finneon', 'Arenakampf Sonnewik', 'Volkner', 45);
 
-select pg_temp.sitzung('2026-09-30 20:00+02');
-select pg_temp.fang('Siegesstraße', 'Georok', 'Golbat', 'Maschock', 'Rihorn');
+  perform pg_temp.sitzung('2026-09-30 20:00+02');
+  perform pg_temp.fang('Siegesstraße', 'Georok', 'Golbat', 'Maschock', 'Rihorn');
 
-select pg_temp.sitzung('2026-10-04 18:00+02');
-select pg_temp.stirbt(4, 'Pionskora', 'Top Vier', 'Ignaz', 51);
-select pg_temp.stirbt(1, 'Glibunkel', 'Top Vier', 'Lucian', 50);
-select pg_temp.stirbt(3, 'Luxio', 'Champ', 'Cynthia', 55);
-select pg_temp.sieg('Champ Cynthia besiegt! Knakrack fiel im letzten Zug gegen Impoleons Hydrokanone');
+  perform pg_temp.sitzung('2026-10-04 18:00+02');
+  perform pg_temp.stirbt(4, 'Pionskora', 'Top Vier', 'Ignaz', 51);
+  perform pg_temp.stirbt(1, 'Glibunkel', 'Top Vier', 'Lucian', 50);
+  perform pg_temp.stirbt(3, 'Luxio', 'Champ', 'Cynthia', 55);
+  perform pg_temp.sieg('Champ Cynthia besiegt! Knakrack fiel im letzten Zug gegen Impoleons Hydrokanone');
+end
+$demo$;
 
 -- -------------------------------------------------------------------------------------
 -- Persönliche Links (gespeichert werden nur die Hashes)
