@@ -7,29 +7,33 @@
 --
 -- Alles läuft über private.append_event, also durch dieselben Prüfungen wie die Website
 -- (Soul-Links, Partner-Tode, Runs). Erneutes Ausführen löscht die alte Demo und legt sie neu an.
--- Spielernamen und Website-Adresse lassen sich in den ersten Zeilen unten anpassen.
+-- Spielernamen und Website-Adresse lassen sich in den ersten Zeilen unten anpassen (genau vier Namen).
 
-create temporary table demo_settings as
-select
-  'demo-platin-soullink'::text as slug,
-  'https://mlangenhan.github.io/SoullinkWebsite'::text as site_url,
-  array['Moritz', 'Janne', 'Elsmann', 'Linus'] as players;
+-- Einstellungen: Adresse der Challenge, Website und Spielernamen (Plätze 1–4, Paare 1↔2 und 3↔4)
+select set_config('demo.slug', 'demo-platin-soullink', false),
+       set_config('demo.site_url', 'https://mlangenhan.github.io/SoullinkWebsite', false),
+       set_config('demo.players', 'Moritz,Janne,Elsmann,Linus', false);
 
 -- -------------------------------------------------------------------------------------
--- Hilfsfunktionen (nur für diese Sitzung)
+-- Hilfsfunktionen (nur für diese Sitzung). Bewusst ohne temporäre Tabellen: Der Supabase SQL
+-- Editor hängt an neue Tabellen automatisch RLS-Befehle an und zerlegt dabei Funktionsrümpfe.
+-- Zustand (Challenge, Uhrzeit) liegt in Sitzungsvariablen.
 -- -------------------------------------------------------------------------------------
 
-create temporary table demo_state (challenge_id uuid not null, clock timestamptz not null);
+create function pg_temp.challenge() returns uuid
+language sql stable as $fn$
+  select current_setting('demo.challenge_id')::uuid;
+$fn$;
 
--- Spieler nach Platz 1–4 (Paare: 1↔2, 3↔4)
+-- Spieler nach Platz 1–4
 create function pg_temp.member(p_seat integer) returns uuid
-language sql stable as $$
+language sql stable as $fn$
   select m.id from public.challenge_members m
-  where m.challenge_id = (select challenge_id from pg_temp.demo_state) and m.seat = p_seat - 1;
-$$;
+  where m.challenge_id = pg_temp.challenge() and m.seat = p_seat - 1;
+$fn$;
 
 create function pg_temp.species(p_name text) returns integer
-language plpgsql stable as $$
+language plpgsql stable as $fn$
 declare
   v_id integer;
 begin
@@ -39,54 +43,54 @@ begin
   end if;
   return v_id;
 end;
-$$;
+$fn$;
 
 create function pg_temp.route(p_name text) returns uuid
-language plpgsql as $$
+language plpgsql as $fn$
 declare
-  v_challenge uuid := (select challenge_id from pg_temp.demo_state);
   v_id uuid;
 begin
-  select r.id into v_id from public.routes r where r.challenge_id = v_challenge and lower(r.name) = lower(p_name);
+  select r.id into v_id from public.routes r
+  where r.challenge_id = pg_temp.challenge() and lower(r.name) = lower(p_name);
   if v_id is null then
     insert into public.routes (challenge_id, name, sort_order)
-    values (v_challenge, p_name, (select count(*) from public.routes r where r.challenge_id = v_challenge))
+    values (pg_temp.challenge(), p_name,
+            (select count(*) from public.routes r where r.challenge_id = pg_temp.challenge()))
     returning id into v_id;
   end if;
   return v_id;
 end;
-$$;
+$fn$;
 
 -- Beginn einer Spielsitzung; jedes Ereignis danach liegt ein paar Minuten später
 create function pg_temp.sitzung(p_start timestamptz) returns void
-language sql as $$
-  update pg_temp.demo_state set clock = p_start;
-$$;
+language sql as $fn$
+  select set_config('demo.clock', p_start::text, false);
+$fn$;
 
 create function pg_temp.ev(p_type public.event_type, p_payload jsonb, p_seat integer, p_minutes integer default 4)
 returns public.events
-language plpgsql as $$
+language plpgsql as $fn$
 declare
-  v_state pg_temp.demo_state;
+  v_clock timestamptz := current_setting('demo.clock')::timestamptz + make_interval(mins => p_minutes);
 begin
-  update pg_temp.demo_state set clock = clock + make_interval(mins => p_minutes) returning * into v_state;
+  perform set_config('demo.clock', v_clock::text, false);
   return private.append_event(
-    v_state.challenge_id, p_type, p_payload, 'web', null, pg_temp.member(p_seat), null, null, v_state.clock
+    pg_temp.challenge(), p_type, p_payload, 'web', null, pg_temp.member(p_seat), null, null, v_clock
   );
 end;
-$$;
+$fn$;
 
 -- Lebendes Pokémon eines Spielers im laufenden Run
 create function pg_temp.encounter(p_seat integer, p_species text) returns uuid
-language plpgsql stable as $$
+language plpgsql stable as $fn$
 declare
-  v_challenge uuid := (select challenge_id from pg_temp.demo_state);
   v_id uuid;
 begin
   select en.encounter_id into v_id
   from public.encounters en
-  where en.challenge_id = v_challenge
-    and en.run_number = private.current_run(v_challenge)
+  where en.challenge_id = pg_temp.challenge()
+    and en.run_number = private.current_run(pg_temp.challenge())
     and en.member_id = pg_temp.member(p_seat)
     and en.species_id = pg_temp.species(p_species)
     and en.state in ('team', 'box')
@@ -97,14 +101,13 @@ begin
   end if;
   return v_id;
 end;
-$$;
+$fn$;
 
 -- Eine Route für alle vier Spieler (null = verpasst). Ins Team, solange dort weniger als sechs sind.
 create function pg_temp.fang(p_route text, p1 text, p2 text, p3 text, p4 text, p_kind text default 'wild')
 returns void
-language plpgsql as $$
+language plpgsql as $fn$
 declare
-  v_challenge uuid := (select challenge_id from pg_temp.demo_state);
   v_route uuid := pg_temp.route(p_route);
   v_species text[] := array[p1, p2, p3, p4];
   v_team integer;
@@ -114,7 +117,7 @@ begin
       perform pg_temp.ev('encounter_missed', jsonb_build_object('member_id', pg_temp.member(seat), 'route_id', v_route), seat);
     else
       select count(*) into v_team from public.encounters en
-      where en.challenge_id = v_challenge and en.run_number = private.current_run(v_challenge)
+      where en.challenge_id = pg_temp.challenge() and en.run_number = private.current_run(pg_temp.challenge())
         and en.member_id = pg_temp.member(seat) and en.state = 'team';
       perform pg_temp.ev('encounter_logged', jsonb_build_object(
         'member_id', pg_temp.member(seat),
@@ -126,37 +129,37 @@ begin
     end if;
   end loop;
 end;
-$$;
+$fn$;
 
 create function pg_temp.entwickelt(p_seat integer, p_from text, p_to text) returns void
-language sql as $$
+language sql as $fn$
   select pg_temp.ev('encounter_evolved', jsonb_build_object(
     'encounter_id', pg_temp.encounter(p_seat, p_from), 'species_id', pg_temp.species(p_to)), p_seat, 2);
-$$;
+$fn$;
 
 create function pg_temp.korrigiert(p_seat integer, p_from text, p_to text) returns void
-language sql as $$
+language sql as $fn$
   select pg_temp.ev('encounter_corrected', jsonb_build_object(
     'encounter_id', pg_temp.encounter(p_seat, p_from), 'species_id', pg_temp.species(p_to)), p_seat, 1);
-$$;
+$fn$;
 
 create function pg_temp.box(p_seat integer, p_species text) returns void
-language sql as $$
+language sql as $fn$
   select pg_temp.ev('encounter_status_changed', jsonb_build_object(
     'encounter_id', pg_temp.encounter(p_seat, p_species), 'status', 'box'), p_seat, 1);
-$$;
+$fn$;
 
 create function pg_temp.team(p_seat integer, p_species text) returns void
-language sql as $$
+language sql as $fn$
   select pg_temp.ev('encounter_status_changed', jsonb_build_object(
     'encounter_id', pg_temp.encounter(p_seat, p_species), 'status', 'team'), p_seat, 1);
-$$;
+$fn$;
 
 -- Tod; der Soul-Link-Partner stirbt automatisch mit (zählt aber nur beim Besitzer)
 create function pg_temp.stirbt(p_seat integer, p_species text, p_cause text, p_opponent text, p_level integer,
                                p_route text default null)
 returns void
-language sql as $$
+language sql as $fn$
   select pg_temp.ev('pokemon_died', jsonb_strip_nulls(jsonb_build_object(
     'encounter_id', pg_temp.encounter(p_seat, p_species),
     'cause', p_cause,
@@ -164,48 +167,47 @@ language sql as $$
     'level', p_level,
     'route_id', case when p_route is not null then pg_temp.route(p_route) end
   )), p_seat, 6);
-$$;
+$fn$;
 
 -- Letztes Ereignis rückgängig machen (wie der Undo-Knopf in der Timeline)
 create function pg_temp.rueckgaengig(p_seat integer) returns void
-language sql as $$
+language sql as $fn$
   select pg_temp.ev('event_reverted', jsonb_build_object('event_id', (
     select max(e.id) from public.active_events e
-    where e.challenge_id = (select challenge_id from pg_temp.demo_state) and e.type <> 'event_reverted'
+    where e.challenge_id = pg_temp.challenge() and e.type <> 'event_reverted'
   )), p_seat, 1);
-$$;
+$fn$;
 
 create function pg_temp.wipe(p_seat integer, p_note text) returns void
-language sql as $$
+language sql as $fn$
   select pg_temp.ev('run_ended', jsonb_build_object(
     'result', 'wipe', 'caused_by_member_id', pg_temp.member(p_seat), 'note', p_note), 1, 10);
-$$;
+$fn$;
 
 create function pg_temp.sieg(p_note text) returns void
-language sql as $$
+language sql as $fn$
   select pg_temp.ev('run_ended', jsonb_build_object('result', 'won', 'note', p_note), 1, 10);
-$$;
+$fn$;
 
 -- -------------------------------------------------------------------------------------
 -- Challenge und Spieler
 -- -------------------------------------------------------------------------------------
 
-delete from public.challenges where slug = (select slug from demo_settings);
+delete from public.challenges where slug = current_setting('demo.slug');
 
 with c as (
   insert into public.challenges (slug, name, game, visibility)
-  select slug, 'Demo: Platin Soul Link', 'Pokémon Platin', 'private' from demo_settings
+  values (current_setting('demo.slug'), 'Demo: Platin Soul Link', 'Pokémon Platin', 'private')
   returning id
 )
-insert into demo_state (challenge_id, clock) select id, now() from c;
+select set_config('demo.challenge_id', id::text, false) from c;
 
 insert into public.challenge_members (challenge_id, role, display_name, color, seat, link_group)
-select s.challenge_id, case when p.seat = 0 then 'owner' else 'player' end::public.member_role,
-       p.name, p.color, p.seat, p.seat / 2
-from demo_state s,
-     demo_settings d,
-     lateral (values (0, d.players[1], '#2a6fdb'), (1, d.players[2], '#e0457b'),
-                     (2, d.players[3], '#2f9e62'), (3, d.players[4], '#e8890c')) as p(seat, name, color);
+select pg_temp.challenge(), case when p.seat = 0 then 'owner' else 'player' end::public.member_role,
+       trim(p.name), (array['#2a6fdb', '#e0457b', '#2f9e62', '#e8890c'])[p.seat + 1], p.seat, p.seat / 2
+from unnest(string_to_array(current_setting('demo.players'), ',')) with ordinality as p0(name, n),
+     lateral (select p0.name, (p0.n - 1)::smallint as seat) as p
+where p0.n <= 4;
 
 -- -------------------------------------------------------------------------------------
 -- Run 1: endet in der ersten Arena
@@ -374,22 +376,24 @@ select pg_temp.stirbt(3, 'Luxio', 'Champ', 'Cynthia', 55);
 select pg_temp.sieg('Champ Cynthia besiegt! Knakrack fiel im letzten Zug gegen Impoleons Hydrokanone');
 
 -- -------------------------------------------------------------------------------------
--- Persönliche Links (nur die Hashes werden gespeichert)
+-- Persönliche Links (gespeichert werden nur die Hashes)
 -- -------------------------------------------------------------------------------------
 
-create temporary table demo_links as
-select m.seat, m.display_name, m.role, m.id as member_id,
-       'inv_' || translate(encode(extensions.gen_random_bytes(32), 'base64'), '+/=', '-_') as token
-from public.challenge_members m
-where m.challenge_id = (select challenge_id from demo_state);
-
-insert into public.challenge_invites (challenge_id, token_hash, role, member_id, max_uses, expires_at)
-select (select challenge_id from demo_state), sha256(convert_to(l.token, 'UTF8')), l.role, l.member_id, 1,
-       now() + interval '7 days'
-from demo_links l;
-
+with links as materialized (
+  select m.seat, m.display_name, m.role, m.id as member_id,
+         'inv_' || translate(encode(extensions.gen_random_bytes(32), 'base64'), '+/=', '-_') as token
+  from public.challenge_members m
+  where m.challenge_id = pg_temp.challenge()
+),
+saved as (
+  insert into public.challenge_invites (challenge_id, token_hash, role, member_id, max_uses, expires_at)
+  select pg_temp.challenge(), sha256(convert_to(l.token, 'UTF8')), l.role, l.member_id, 1, now() + interval '7 days'
+  from links l
+  returning member_id
+)
 select l.display_name as spieler,
        case l.role when 'owner' then 'Leitung' else 'Spieler' end as rolle,
-       (select site_url from demo_settings) || '/join#' || l.token as link
-from demo_links l
+       current_setting('demo.site_url') || '/join#' || l.token as link
+from links l
+join saved s on s.member_id = l.member_id
 order by l.seat;
