@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { Sprite } from '@/components/Sprite'
+import { AddEncounterDialog, type AddTarget } from '@/components/challenge/AddEncounterDialog'
 import { EncounterDialog } from '@/components/challenge/EncounterDialog'
 import { StateChip } from '@/components/challenge/StateChip'
 import type { ChallengeData } from '@/hooks/useChallenge'
@@ -8,6 +9,7 @@ import { speciesName, type Lookups } from '@/lib/describe'
 import type { SpeciesIndex } from '@/lib/species'
 import type { Encounter, Member } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { Plus } from 'lucide-react'
 
 /** Eine Zeile: eine Route (wild oder static); bei Paaren enthält sie mehrere Soul-Links */
 interface RouteRow {
@@ -64,11 +66,28 @@ function Cell({
   encounter,
   species,
   onOpen,
+  onAdd,
 }: {
   encounter: Encounter | undefined
   species: SpeciesIndex | null
   onOpen: (e: Encounter) => void
+  /** Nur gesetzt, wenn hier nachgetragen werden darf (Spieler, laufender Run) */
+  onAdd?: () => void
 }) {
+  if (!encounter && onAdd) {
+    return (
+      <button
+        type="button"
+        onClick={onAdd}
+        className="group relative z-10 flex flex-col items-center justify-center gap-1 rounded-lg py-3 text-muted-foreground transition-colors hover:bg-secondary/60 hover:text-primary focus-visible:bg-secondary/60"
+      >
+        <span className="flex size-16 items-center justify-center rounded-full border-2 border-dashed border-current/40 transition-transform group-hover:scale-105">
+          <Plus className="size-5" />
+        </span>
+        <span className="label text-[0.6rem]">Nachtragen</span>
+      </button>
+    )
+  }
   if (!encounter) {
     return (
       <div className="flex flex-col items-center justify-center gap-1 py-3 text-muted-foreground/50">
@@ -105,6 +124,19 @@ export function Board({
   onLog: () => void
 }) {
   const [selected, setSelected] = useState<Encounter | null>(null)
+  const [adding, setAdding] = useState<AddTarget | null>(null)
+  const canAdd = data.canWrite && data.shownRun === data.stats.current_run
+  const group = (memberId: string) => lookups.members.get(memberId)?.link_group ?? -1
+
+  // Zu welchem Soul-Link der Zeile gehört ein Spieler, der dort noch fehlt? Der Link seiner Gruppe.
+  const addTarget = (row: RouteRow, member: Member): AddTarget | null => {
+    const route = lookups.routes.get(row.routeId)
+    if (!route) return null
+    const link = row.links.find((l) =>
+      [...row.cells.values()].some((e) => e.link_id === l.linkId && group(e.member_id) === (member.link_group ?? -1)),
+    )
+    return { member, route, kind: row.kind, linkId: link?.linkId ?? null }
+  }
   const players = data.players
 
   const routes = lookups.routes
@@ -203,13 +235,20 @@ export function Board({
                   <LinkBand key={link.linkId} dead={link.dead} columns={players.length} filled={link.columns} lane={lane} />
                 ))}
                 {players.map((p) => (
-                  <Cell key={p.id} encounter={row.cells.get(p.id)} species={species} onOpen={setSelected} />
+                  <Cell
+                    key={p.id}
+                    encounter={row.cells.get(p.id)}
+                    species={species}
+                    onOpen={setSelected}
+                    onAdd={canAdd ? () => setAdding(addTarget(row, p)) : undefined}
+                  />
                 ))}
               </div>
             </motion.div>
           ))}
         </AnimatePresence>
       </div>
+      <AddEncounterDialog target={adding} onOpenChange={(open) => !open && setAdding(null)} data={data} species={species} />
       <EncounterDialog
         encounter={current}
         data={data}

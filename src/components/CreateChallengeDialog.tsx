@@ -15,6 +15,7 @@ export function CreateChallengeDialog() {
   const [slug, setSlug] = useState('')
   const [slugTouched, setSlugTouched] = useState(false)
   const [displayName, setDisplayName] = useState('')
+  const [game, setGame] = useState('')
   const [visibility, setVisibility] = useState<Visibility>('private')
   const [busy, setBusy] = useState(false)
 
@@ -30,6 +31,7 @@ export function CreateChallengeDialog() {
         p_slug: effectiveSlug,
         p_display_name: displayName,
         p_visibility: visibility,
+        p_game: game.trim() || 'Pokémon',
       })
       toast('Challenge angelegt. Lade jetzt deine Mitspieler ein.')
       setOpen(false)
@@ -71,6 +73,9 @@ export function CreateChallengeDialog() {
               maxLength={40}
               pattern="[a-z0-9]+(-[a-z0-9]+)*"
             />
+          </Field>
+          <Field label="Spiel">
+            <Input value={game} onChange={(e) => setGame(e.target.value)} placeholder="Pokémon Platin" required maxLength={40} />
           </Field>
           <Field label="Dein Name">
             <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Moritz" required maxLength={40} />

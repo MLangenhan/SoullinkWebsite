@@ -76,6 +76,7 @@ Challenge ──< Mitglied (Spieler / Zuschauer) ──< Gerät (anonyme Sitzung
 | `encounter_missed` | `member_id`, `route_id?`, `note?` | verpasste Begegnung |
 | `encounter_status_changed` | `encounter_id`, `status` | Team ↔ Box |
 | `encounter_evolved` | `encounter_id`, `species_id` | nur innerhalb derselben Entwicklungsreihe |
+| `encounter_corrected` | `encounter_id`, `species_id` | falsches Pokémon korrigiert: setzt gefangene und aktuelle Art (laufender Run) |
 | `pokemon_died` | `encounter_id`, `route_id?` (Todesort), `cause?`, `opponent?`, `level?` | Tod; Partner werden `linked_dead` |
 | `run_ended` | `result` (wipe/won), `caused_by_member_id?` (nur bei Wipe), `note?` | beendet den Run |
 | `counter_adjusted` | `counter` (deaths/missed_encounters), `member_id`, `delta`, `note?` | Korrektur und Altdaten aus dem Bot |

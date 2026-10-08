@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { motion } from 'motion/react'
-import { Skull } from 'lucide-react'
+import { PencilLine, Skull } from 'lucide-react'
+import { SpeciesPicker } from '@/components/SpeciesPicker'
 import { StateChip } from '@/components/challenge/StateChip'
 import { Sprite } from '@/components/Sprite'
 import { Button } from '@/components/ui/button'
@@ -61,6 +62,7 @@ function EncounterBody({
 }) {
   const [busy, setBusy] = useState(false)
   const [deathOpen, setDeathOpen] = useState(false)
+  const [correcting, setCorrecting] = useState(false)
   const [cause, setCause] = useState('')
   const [opponent, setOpponent] = useState('')
   const [level, setLevel] = useState('')
@@ -68,6 +70,8 @@ function EncounterBody({
 
   const alive = encounter.state === 'team' || encounter.state === 'box'
   const editable = data.canWrite && alive && encounter.run_number === data.stats.current_run
+  // Falsches Pokémon eingetragen? Korrigieren geht auch bei toten Pokémon, aber nur im laufenden Run
+  const correctable = data.canWrite && encounter.run_number === data.stats.current_run
   const name = speciesName(species, encounter.species_id)
   const owner = lookups.members.get(encounter.member_id)?.display_name ?? 'Unbekannt'
   const route = lookups.routes.get(encounter.route_id)?.name ?? 'Route'
@@ -254,6 +258,31 @@ function EncounterBody({
                 Tod bestätigen
               </Button>
             </motion.form>
+          )}
+        </div>
+      )}
+      {correctable && species && (
+        <div className="grid gap-2 border-t pt-4">
+          {!correcting ? (
+            <Button variant="ghost" className="w-fit text-muted-foreground" onClick={() => setCorrecting(true)}>
+              <PencilLine /> Falsches Pokémon? Ändern
+            </Button>
+          ) : (
+            <>
+              <p className="label text-muted-foreground">Richtiges Pokémon</p>
+              <SpeciesPicker
+                index={species}
+                value={null}
+                autoFocus
+                onChange={(id) => {
+                  if (id === null) return
+                  void run(
+                    () => appendEvent(data.challenge.id, 'encounter_corrected', { encounter_id: encounter.encounter_id, species_id: id }),
+                    `Geändert zu ${species.byId.get(id)?.name_de ?? 'Pokémon'} (rückgängig über die Timeline)`,
+                  )
+                }}
+              />
+            </>
           )}
         </div>
       )}
