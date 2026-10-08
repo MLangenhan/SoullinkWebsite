@@ -1,7 +1,8 @@
 -- Demo-Challenge: Pokémon Platin, vier Spieler in zwei Soul-Link-Paaren, drei Wipes, im vierten Run Sieg gegen Cynthia.
 -- Supabase → SQL Editor → New query → alles einfügen → Run. Ergebnis: vier persönliche Links (einmal nutzbar,
 -- 7 Tage gültig); zuerst den Link der Leitung öffnen. Erneutes Ausführen ersetzt die alte Demo.
--- Alle Ereignisse laufen durch private.append_event (dieselben Prüfungen wie die Website). Ablauf in c_story:
+-- Alle Ereignisse laufen durch private.append_event (dieselben Prüfungen wie die Website). Ablauf in c_story,
+-- Schritte durch "/" oder Zeilenumbruch getrennt (bewusst ohne ";", den der SQL Editor als Befehlsende liest):
 --   S|Zeit = Spielsitzung · F|Route|P1|P2|P3|P4 = Begegnung für Platz 1–4 ("-" verpasst), FS = Static
 --   E|Platz|von|zu = Entwicklung · K|Platz|von|zu = Korrektur · B/T|Platz|Pokémon = Box/Team · U|Platz = Undo
 --   D|Platz|Pokémon|Ursache|Gegner|Level[|Route] = Tod (Partner stirbt mit) · W|Platz|Notiz = Wipe · V|Notiz = Sieg
@@ -12,59 +13,59 @@ declare
   c_site constant text := 'https://mlangenhan.github.io/SoullinkWebsite';
   c_players constant text[] := array['Moritz', 'Janne', 'Elsmann', 'Linus'];  -- Paare: 1↔2, 3↔4
   c_colors constant text[] := array['#2a6fdb', '#e0457b', '#2f9e62', '#e8890c'];
-  c_story constant text := $story$
+  c_story constant text := '
 # Run 1: endet in der ersten Arena
-S|2026-08-01T19:30+02; F|Starter|Panflam|Plinfa|Chelast|Panflam; F|Route 201|Staralili|Bidiza|Staralili|Sheinux;
-F|Route 202|Sheinux|Zirpurze|Bidiza|Staralili; F|Route 203|Abra|Zubat|Sheinux|Zirpurze; D|3|Bidiza|Rivalenkampf|Baro|9|Route 203;
-F|Erzelingen-Mine|Kleinstein|Onix|Kleinstein|Onix; E|1|Staralili|Staravia; D|1|Staravia|Arenakampf Erzelingen|Veit|14;
-D|1|Panflam|Arenakampf Erzelingen|Veit|13; D|2|Zubat|Arenakampf Erzelingen|Veit|11;
-W|1|Veits Koknodon räumt mit Kopfnuss das halbe Team ab;
+S|2026-08-01T19:30+02 / F|Starter|Panflam|Plinfa|Chelast|Panflam / F|Route 201|Staralili|Bidiza|Staralili|Sheinux
+F|Route 202|Sheinux|Zirpurze|Bidiza|Staralili / F|Route 203|Abra|Zubat|Sheinux|Zirpurze / D|3|Bidiza|Rivalenkampf|Baro|9|Route 203
+F|Erzelingen-Mine|Kleinstein|Onix|Kleinstein|Onix / E|1|Staralili|Staravia / D|1|Staravia|Arenakampf Erzelingen|Veit|14
+D|1|Panflam|Arenakampf Erzelingen|Veit|13 / D|2|Zubat|Arenakampf Erzelingen|Veit|11
+W|1|Veits Koknodon räumt mit Kopfnuss das halbe Team ab
 # Run 2: scheitert an Silvanas Roserade
-S|2026-08-03T20:00+02; F|Starter|Plinfa|Chelast|Plinfa|Chelast; F|Route 201|Bidiza|Staralili|Staralili|Bidiza;
-F|Route 202|Staralili|Sheinux|Zirpurze|Sheinux; F|Route 203|Abra|Zubat|Sheinux|Abra; F|Erzelingen-Mine|Onix|Kleinstein|Kleinstein|Onix;
-S|2026-08-05T19:45+02; F|Route 204|Knospi|Wadribie|Knospi|-; F|Route 205|Bamelin|Schalellos|Pachirisu|Bamelin; E|1|Plinfa|Pliprin;
-E|2|Chelast|Chelcarain; E|1|Staralili|Staravia; E|4|Chelast|Chelcarain; FS|Windkraftwerk|Driftlon|Driftlon|Driftlon|Driftlon;
-D|4|Bidiza|Team Galaktik|Rüpel|15|Windkraftwerk; F|Ewigwald|Nebulak|Haspiror|Wadribie|Zirpurze;
-S|2026-08-07T20:15+02; D|3|Kleinstein|Arenakampf Ewigenau|Silvana|20; D|3|Plinfa|Arenakampf Ewigenau|Silvana|21;
-D|3|Driftlon|Arenakampf Ewigenau|Silvana|19; W|3|Silvanas Roserade mit Giga-Sauger, gegen Pflanzen hatte keiner was dabei;
+S|2026-08-03T20:00+02 / F|Starter|Plinfa|Chelast|Plinfa|Chelast / F|Route 201|Bidiza|Staralili|Staralili|Bidiza
+F|Route 202|Staralili|Sheinux|Zirpurze|Sheinux / F|Route 203|Abra|Zubat|Sheinux|Abra / F|Erzelingen-Mine|Onix|Kleinstein|Kleinstein|Onix
+S|2026-08-05T19:45+02 / F|Route 204|Knospi|Wadribie|Knospi|- / F|Route 205|Bamelin|Schalellos|Pachirisu|Bamelin / E|1|Plinfa|Pliprin
+E|2|Chelast|Chelcarain / E|1|Staralili|Staravia / E|4|Chelast|Chelcarain / FS|Windkraftwerk|Driftlon|Driftlon|Driftlon|Driftlon
+D|4|Bidiza|Team Galaktik|Rüpel|15|Windkraftwerk / F|Ewigwald|Nebulak|Haspiror|Wadribie|Zirpurze
+S|2026-08-07T20:15+02 / D|3|Kleinstein|Arenakampf Ewigenau|Silvana|20 / D|3|Plinfa|Arenakampf Ewigenau|Silvana|21
+D|3|Driftlon|Arenakampf Ewigenau|Silvana|19 / W|3|Silvanas Roserade mit Giga-Sauger, gegen Pflanzen hatte keiner was dabei
 # Run 3: kommt bis Herzhofen
-S|2026-08-12T19:30+02; F|Starter|Chelast|Panflam|Panflam|Plinfa; F|Route 201|Sheinux|Staralili|Bidiza|Staralili;
-F|Route 202|Staralili|Bidiza|Sheinux|Zirpurze; F|Route 203|Zubat|Abra|Abra|Sheinux; F|Erzelingen-Mine|Kleinstein|Onix|Onix|Kleinstein;
-E|1|Staralili|Staravia; E|2|Panflam|Panpyro; F|Route 204|Knospi|Knospi|Wadribie|Haspiror;
-S|2026-08-14T20:00+02; F|Route 205|Schalellos|Bamelin|Bamelin|Pachirisu; FS|Windkraftwerk|Driftlon|Driftlon|Driftlon|Driftlon;
-F|Ewigwald|Haspiror|Nebulak|Zirpurze|Nebulak; D|4|Staralili|Rivalenkampf|Baro|19; E|1|Chelast|Chelcarain; E|3|Panflam|Panpyro;
-E|4|Plinfa|Pliprin;
-S|2026-08-19T19:30+02; F|Route 206|Ponita|Skorgla|Skunkapuh|Zirpeise; F|Route 207|Machollo|Ponita|Kleinstein|Machollo;
-D|1|Sheinux|Wildes Pokémon|Kleinstein|17|Route 207;
-S|2026-08-22T18:00+02; F|Route 208|Trasla|Roselia|Bidifas|Zubat; FS|Herzhofen|Evoli|Evoli|Evoli|Evoli;
-F|Route 209|Zwirrlicht|Bidifas|Staravia|Roselia; D|3|Wadribie|Wildes Pokémon|Staravia|18|Route 209;
-D|2|Skorgla|Arenakampf Herzhofen|Lamina|25; D|2|Onix|Arenakampf Herzhofen|Lamina|24; D|2|Panpyro|Arenakampf Herzhofen|Lamina|26;
-W|2|Laminas Traunmagil mit Psystrahl und Verwirrung, das war es;
+S|2026-08-12T19:30+02 / F|Starter|Chelast|Panflam|Panflam|Plinfa / F|Route 201|Sheinux|Staralili|Bidiza|Staralili
+F|Route 202|Staralili|Bidiza|Sheinux|Zirpurze / F|Route 203|Zubat|Abra|Abra|Sheinux / F|Erzelingen-Mine|Kleinstein|Onix|Onix|Kleinstein
+E|1|Staralili|Staravia / E|2|Panflam|Panpyro / F|Route 204|Knospi|Knospi|Wadribie|Haspiror
+S|2026-08-14T20:00+02 / F|Route 205|Schalellos|Bamelin|Bamelin|Pachirisu / FS|Windkraftwerk|Driftlon|Driftlon|Driftlon|Driftlon
+F|Ewigwald|Haspiror|Nebulak|Zirpurze|Nebulak / D|4|Staralili|Rivalenkampf|Baro|19 / E|1|Chelast|Chelcarain / E|3|Panflam|Panpyro
+E|4|Plinfa|Pliprin
+S|2026-08-19T19:30+02 / F|Route 206|Ponita|Skorgla|Skunkapuh|Zirpeise / F|Route 207|Machollo|Ponita|Kleinstein|Machollo
+D|1|Sheinux|Wildes Pokémon|Kleinstein|17|Route 207
+S|2026-08-22T18:00+02 / F|Route 208|Trasla|Roselia|Bidifas|Zubat / FS|Herzhofen|Evoli|Evoli|Evoli|Evoli
+F|Route 209|Zwirrlicht|Bidifas|Staravia|Roselia / D|3|Wadribie|Wildes Pokémon|Staravia|18|Route 209
+D|2|Skorgla|Arenakampf Herzhofen|Lamina|25 / D|2|Onix|Arenakampf Herzhofen|Lamina|24 / D|2|Panpyro|Arenakampf Herzhofen|Lamina|26
+W|2|Laminas Traunmagil mit Psystrahl und Verwirrung, das war es
 # Run 4: bis zum Champ
-S|2026-08-26T19:30+02; F|Starter|Plinfa|Chelast|Panflam|Plinfa; F|Route 201|Staralili|Sheinux|Bidiza|Staralili;
-F|Route 202|Bidiza|Staralili|Sheinux|Zirpurze; F|Route 203|Abra|Zubat|Zubat|Abra; F|Erzelingen-Mine|Onix|Kleinstein|Kleinstein|Onix;
-E|1|Staralili|Staravia; F|Route 204|Knospi|Wadribie|Knospi|Haspiror;
-S|2026-08-29T20:00+02; F|Route 205|Bamelin|Pachirisu|Schalellos|Bamelin; K|4|Bamelin|Pachirisu;
-FS|Windkraftwerk|Driftlon|Driftlon|Driftlon|Driftlon; F|Ewigwald|Nebulak|Haspiror|Zirpurze|Nebulak; E|1|Plinfa|Pliprin;
-E|2|Chelast|Chelcarain; E|3|Panflam|Panpyro; E|4|Plinfa|Pliprin; D|3|Zubat|Team Galaktik|Rüpel|16;
-S|2026-09-02T19:30+02; F|Route 206|Ponita|Skorgla|Skunkapuh|Zirpeise; F|Route 207|Machollo|Ponita|Machollo|Kleinstein;
-F|Kraterberg|Bronzel|Meditie|Klingplim|Bronzel; E|2|Sheinux|Luxio; F|Route 208|Trasla|Roselia|Bidifas|Zubat;
-FS|Herzhofen|Evoli|Evoli|Evoli|Evoli;
-S|2026-09-05T20:00+02; F|Route 209|Zwirrlicht|Bidifas|Staravia|Roselia; D|4|Zirpeise|Arenakampf Herzhofen|Lamina|27; B|1|Onix; U|1;
-F|Route 210|Sichlor|Wablu|Ponita|Machollo; E|4|Evoli|Psiana;
-S|2026-09-09T19:30+02; F|Route 215|Schlurp|Abra|Kadabra|Ponita; D|1|Bidiza|Arenakampf Schleiede|Hilda|27; T|1|Bamelin;
-F|Route 212|Glibunkel|Kirlia|Roselia|Glibunkel; F|Großmoor|Pionskora|Venuflibis|Felino|Pionskora;
-D|3|Ponita|Arenakampf Weideburg|Wellenbrecher Marinus|33;
-S|2026-09-13T18:30+02; F|Route 213|Plaudagei|Schalellos|Plaudagei|-; F|Route 214|Rihorn|Skunkapuh|Zirpeise|Rihorn;
-F|Route 218|Finneon|Tentacha|Finneon|Tentacha; FS|Eiseninsel|Riolu|Riolu|Riolu|Riolu; D|2|Roselia|Arenakampf Kanalava|Adam|35;
-S|2026-09-17T20:00+02; E|1|Pliprin|Impoleon; E|2|Chelcarain|Chelterrar; E|3|Panpyro|Panferno; E|4|Pliprin|Impoleon;
-E|1|Staravia|Staraptor; E|2|Luxio|Luxtra; E|3|Riolu|Lucario; F|Route 216|Shnebedeck|-|Quiekel|Schneppke;
-F|Route 217|Schneppke|Shnebedeck|Sniebel|Quiekel; D|4|Rihorn|Arenakampf Blizzach|Frida|37; D|2|Skorgla|Arenakampf Blizzach|Frida|36;
-S|2026-09-24T19:30+02; F|Route 222|Pantimos|Gastrodon|Luxio|Plaudagei; D|3|Finneon|Arenakampf Sonnewik|Volkner|45;
-S|2026-09-30T20:00+02; F|Siegesstraße|Georok|Golbat|Maschock|Rihorn;
-S|2026-10-04T18:00+02; D|4|Pionskora|Top Vier|Ignaz|51; D|1|Glibunkel|Top Vier|Lucian|50; D|3|Luxio|Champ|Cynthia|55;
-V|Champ Cynthia besiegt! Knakrack fiel im letzten Zug gegen Impoleons Hydrokanone;
-$story$;
+S|2026-08-26T19:30+02 / F|Starter|Plinfa|Chelast|Panflam|Plinfa / F|Route 201|Staralili|Sheinux|Bidiza|Staralili
+F|Route 202|Bidiza|Staralili|Sheinux|Zirpurze / F|Route 203|Abra|Zubat|Zubat|Abra / F|Erzelingen-Mine|Onix|Kleinstein|Kleinstein|Onix
+E|1|Staralili|Staravia / F|Route 204|Knospi|Wadribie|Knospi|Haspiror
+S|2026-08-29T20:00+02 / F|Route 205|Bamelin|Pachirisu|Schalellos|Bamelin / K|4|Bamelin|Pachirisu
+FS|Windkraftwerk|Driftlon|Driftlon|Driftlon|Driftlon / F|Ewigwald|Nebulak|Haspiror|Zirpurze|Nebulak / E|1|Plinfa|Pliprin
+E|2|Chelast|Chelcarain / E|3|Panflam|Panpyro / E|4|Plinfa|Pliprin / D|3|Zubat|Team Galaktik|Rüpel|16
+S|2026-09-02T19:30+02 / F|Route 206|Ponita|Skorgla|Skunkapuh|Zirpeise / F|Route 207|Machollo|Ponita|Machollo|Kleinstein
+F|Kraterberg|Bronzel|Meditie|Klingplim|Bronzel / E|2|Sheinux|Luxio / F|Route 208|Trasla|Roselia|Bidifas|Zubat
+FS|Herzhofen|Evoli|Evoli|Evoli|Evoli
+S|2026-09-05T20:00+02 / F|Route 209|Zwirrlicht|Bidifas|Staravia|Roselia / D|4|Zirpeise|Arenakampf Herzhofen|Lamina|27 / B|1|Onix / U|1
+F|Route 210|Sichlor|Wablu|Ponita|Machollo / E|4|Evoli|Psiana
+S|2026-09-09T19:30+02 / F|Route 215|Schlurp|Abra|Kadabra|Ponita / D|1|Bidiza|Arenakampf Schleiede|Hilda|27 / T|1|Bamelin
+F|Route 212|Glibunkel|Kirlia|Roselia|Glibunkel / F|Großmoor|Pionskora|Venuflibis|Felino|Pionskora
+D|3|Ponita|Arenakampf Weideburg|Wellenbrecher Marinus|33
+S|2026-09-13T18:30+02 / F|Route 213|Plaudagei|Schalellos|Plaudagei|- / F|Route 214|Rihorn|Skunkapuh|Zirpeise|Rihorn
+F|Route 218|Finneon|Tentacha|Finneon|Tentacha / FS|Eiseninsel|Riolu|Riolu|Riolu|Riolu / D|2|Roselia|Arenakampf Kanalava|Adam|35
+S|2026-09-17T20:00+02 / E|1|Pliprin|Impoleon / E|2|Chelcarain|Chelterrar / E|3|Panpyro|Panferno / E|4|Pliprin|Impoleon
+E|1|Staravia|Staraptor / E|2|Luxio|Luxtra / E|3|Riolu|Lucario / F|Route 216|Shnebedeck|-|Quiekel|Schneppke
+F|Route 217|Schneppke|Shnebedeck|Sniebel|Quiekel / D|4|Rihorn|Arenakampf Blizzach|Frida|37 / D|2|Skorgla|Arenakampf Blizzach|Frida|36
+S|2026-09-24T19:30+02 / F|Route 222|Pantimos|Gastrodon|Luxio|Plaudagei / D|3|Finneon|Arenakampf Sonnewik|Volkner|45
+S|2026-09-30T20:00+02 / F|Siegesstraße|Georok|Golbat|Maschock|Rihorn
+S|2026-10-04T18:00+02 / D|4|Pionskora|Top Vier|Ignaz|51 / D|1|Glibunkel|Top Vier|Lucian|50 / D|3|Luxio|Champ|Cynthia|55
+V|Champ Cynthia besiegt! Knakrack fiel im letzten Zug gegen Impoleons Hydrokanone
+';
   v_challenge uuid; v_members uuid[] := '{}'; v_clock timestamptz; v_step text; f text[]; v_seat integer;
   v_encounter uuid; v_route uuid; v_species integer; v_team integer; v_events jsonb[]; v_event jsonb;
 begin
@@ -83,7 +84,7 @@ begin
   end loop;
 
   for v_step in
-    select trim(s) from regexp_split_to_table(c_story, '[;\n]') s where trim(s) <> '' and trim(s) not like '#%'
+    select trim(s) from regexp_split_to_table(c_story, '[/\n]') s where trim(s) <> '' and trim(s) not like '#%'
   loop
     f := string_to_array(v_step, '|');
     v_seat := case when f[1] in ('E', 'K', 'B', 'T', 'U', 'D', 'W') then f[2]::integer end;
