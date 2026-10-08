@@ -28,3 +28,12 @@ export function revertEvent(challengeId: string, eventId: number) {
 export function inviteUrl(token: string) {
   return `${window.location.origin}${withBase('/join')}#${token}`
 }
+
+/** Mehrere Team/Box-Wechsel als eine Aktion (ganz oder gar nicht); liefert die Ereignis-IDs */
+export function changeTeam(challengeId: string, groupId: string, moves: { encounter_id: string; status: 'team' | 'box'; slot?: number }[]) {
+  return rpc<number[]>('change_team', { p_challenge_id: challengeId, p_group_id: groupId, p_moves: moves })
+}
+
+export function undoTeamChange(challengeId: string, groupId: string) {
+  return rpc<number[]>('undo_team_change', { p_challenge_id: challengeId, p_group_id: groupId })
+}

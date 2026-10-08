@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react'
-import { CircleAlert, CircleCheck, X } from 'lucide-react'
+import { ArrowLeftRight, CircleAlert, CircleCheck, X } from 'lucide-react'
 import { dismiss, useToasts } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
@@ -19,15 +19,28 @@ export function Toaster() {
             role={t.kind === 'error' ? 'alert' : 'status'}
             className={cn(
               'pointer-events-auto flex max-w-md items-start gap-3 rounded-lg border bg-popover px-4 py-3 text-sm shadow-xl',
-              t.kind === 'error' ? 'border-destructive/60' : 'border-ok/50',
+              t.kind === 'error' ? 'border-destructive/60' : t.kind === 'info' ? 'border-primary/50' : 'border-ok/50',
             )}
           >
             {t.kind === 'error' ? (
               <CircleAlert className="mt-0.5 size-4 shrink-0 text-destructive" />
+            ) : t.kind === 'info' ? (
+              <ArrowLeftRight className="mt-0.5 size-4 shrink-0 text-primary" />
             ) : (
               <CircleCheck className="mt-0.5 size-4 shrink-0 text-ok" />
             )}
             <span className="flex-1">{t.text}</span>
+            {t.action && (
+              <button
+                onClick={() => {
+                  dismiss(t.id)
+                  t.action!.run()
+                }}
+                className="font-medium whitespace-nowrap text-primary hover:underline"
+              >
+                {t.action.label}
+              </button>
+            )}
             <button onClick={() => dismiss(t.id)} aria-label="Meldung schließen" className="text-muted-foreground hover:text-foreground">
               <X className="size-4" />
             </button>

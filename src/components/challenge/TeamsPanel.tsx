@@ -14,22 +14,23 @@ import {
   useSensors,
   type CollisionDetection,
   type DragEndEvent,
+  type DragOverEvent,
   type DragStartEvent,
   type Modifier,
 } from '@dnd-kit/core'
 import { getEventCoordinates } from '@dnd-kit/utilities'
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from 'motion/react'
-import { ArrowLeftRight, Hand, Info, MapPin } from 'lucide-react'
+import { ArrowDown, ArrowLeftRight, ArrowUp, Hand, Info, Link2, Link2Off, MapPin, TriangleAlert } from 'lucide-react'
 import { Sprite } from '@/components/Sprite'
 import { EncounterDialog } from '@/components/challenge/EncounterDialog'
 import { StateChip } from '@/components/challenge/StateChip'
 import { Button } from '@/components/ui/button'
 import type { ChallengeData } from '@/hooks/useChallenge'
-import { appendEvent } from '@/lib/actions'
+import { changeTeam, undoTeamChange } from '@/lib/actions'
 import { formatTime, speciesName, type Lookups } from '@/lib/describe'
 import type { SpeciesIndex } from '@/lib/species'
-import { arrange, TEAM_SIZE, type Arrangement } from '@/lib/team'
-import { toastError } from '@/lib/toast'
+import { arrange, mirror, TEAM_SIZE, unsynced, type Arrangement, type Effect, type Move } from '@/lib/team'
+import { toast, toastError } from '@/lib/toast'
 import type { Encounter, Member } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -38,7 +39,6 @@ const spring = { type: 'spring', stiffness: 380, damping: 30 } as const
 
 type DragData = { encounter: Encounter; from: 'team' | 'box'; slot: number }
 type DropData = { kind: 'slot'; index: number } | { kind: 'box' } | { kind: 'box-pokemon'; encounter: Encounter }
-type Move = { encounter: Encounter; status: 'team' | 'box'; slot?: number }
 
 /** Konkrete Ziele (Platz, Box-Pokémon) vor der Box-Fläche; sonst die überlappende Fläche */
 const collision: CollisionDetection = (args) => {
@@ -86,6 +86,21 @@ export function TeamsPanel({
   const [pending, setPending] = useState<number[] | null>(null)
   const busy = override !== null
   const editable = data.canWrite && data.shownRun === data.stats.current_run
+  // Fail-Safe: "Nur mein Team" (Schalter) oder Shift beim Ablegen
+  const [mineOnly, setMineOnly] = useState(false)
+  const [shift, setShift] = useState(false)
+  const [preview, setPreview] = useState<{ moves: Move[]; effects: Effect[] } | null>(null)
+  const syncOn = data.challenge.team_sync && !mineOnly && !shift
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => setShift(event.shiftKey)
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('keyup', onKey)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('keyup', onKey)
+    }
+  }, [])
 
   const arrangements = useMemo(
     () => new Map(players.map((p) => [p.id, arrange(p.id, data.encounters, data.events)])),
@@ -114,18 +129,15 @@ export function TeamsPanel({
   const routeName = (e: Encounter) => lookups.routes.get(e.route_id)?.name ?? 'Route'
   const selected = selectedId ? (lookups.encounters.get(selectedId) ?? null) : null
   const teamCount = arrangement.slots.filter(Boolean).length
+  // Soul-Link-Partner in anderem Zustand (nur wenn Angleichen an ist)
+  const warn = (e: Encounter | null) => !!e && data.challenge.team_sync && unsynced(e, data.encounters).length > 0
 
-  const onDragStart = (event: DragStartEvent) => {
-    setDragging(event.active.data.current as DragData)
-    setSelectedId((event.active.data.current as DragData).encounter.encounter_id)
-  }
+  const memberIds = players.map((p) => p.id)
+  const effectsOf = (moves: Move[]) => mirror(moves, player.id, memberIds, data.encounters, data.events, routeName)
 
-  const onDragEnd = async (event: DragEndEvent) => {
-    setDragging(null)
-    const from = event.active.data.current as DragData | undefined
-    const to = event.over?.data.current as DropData | undefined
-    if (!from || !to || busy) return
-
+  /** Was ein Ablegen bewirkt: eigene Wechsel und die neue Anordnung (für die sofortige Anzeige) */
+  const plan = (from: DragData | undefined, to: DropData | undefined): { moves: Move[]; arrangement: Arrangement } | null => {
+    if (!from || !to) return null
     const slots = [...arrangement.slots]
     let box = [...arrangement.box]
     const moves: Move[] = []
@@ -133,14 +145,14 @@ export function TeamsPanel({
 
     if (to.kind === 'slot' && from.from === 'box') {
       const occupant = slots[to.index]
-      if (!occupant && teamCount >= TEAM_SIZE) return
+      if (!occupant && teamCount >= TEAM_SIZE) return null
       if (occupant) moves.push({ encounter: occupant, status: 'box' })
       moves.push({ encounter: from.encounter, status: 'team', slot: to.index + 1 })
       slots[to.index] = from.encounter
       box = box.filter((e) => e.encounter_id !== id)
       if (occupant) box.push(occupant)
     } else if (to.kind === 'slot' && from.from === 'team') {
-      if (to.index === from.slot) return
+      if (to.index === from.slot) return null
       moves.push({ encounter: from.encounter, status: 'team', slot: to.index + 1 })
       slots[from.slot] = slots[to.index]
       slots[to.index] = from.encounter
@@ -155,23 +167,41 @@ export function TeamsPanel({
       box = box.filter((e) => e.encounter_id !== to.encounter.encounter_id)
       box.push(from.encounter)
     } else {
-      return
+      return null
     }
+    box.sort((x, y) => x.logged_at.localeCompare(y.logged_at))
+    return { moves, arrangement: { slots, box } }
+  }
 
-    box.sort((a, b) => a.logged_at.localeCompare(b.logged_at))
-    setOverride({ memberId: player.id, arrangement: { slots, box } })
-    const written: number[] = []
+  const undo = async (groupId: string) => {
     try {
-      // Erst in die Box, dann ins Team: So ist beim Tauschen immer ein Platz frei
-      for (const move of moves) {
-        const event = await appendEvent(data.challenge.id, 'encounter_status_changed', {
-          encounter_id: move.encounter.encounter_id,
-          status: move.status,
-          ...(move.slot ? { slot: move.slot } : {}),
+      await undoTeamChange(data.challenge.id, groupId)
+      toast('Teamwechsel rückgängig gemacht')
+    } catch (error) {
+      toastError(error)
+    }
+    void onChanged().catch(() => undefined)
+  }
+
+  /** Wechsel schreiben (eine Aktion für alle betroffenen Teams) */
+  const commit = async (moves: Move[], effects: Effect[], arrangementAfter: Arrangement | null) => {
+    if (arrangementAfter) setOverride({ memberId: player.id, arrangement: arrangementAfter })
+    const groupId = crypto.randomUUID()
+    const all = [...moves, ...effects.flatMap((e) => [...e.out, ...e.in])]
+    try {
+      const ids = await changeTeam(
+        data.challenge.id,
+        groupId,
+        all.map((m) => ({ encounter_id: m.encounter.encounter_id, status: m.status, ...(m.slot ? { slot: m.slot } : {}) })),
+      )
+      if (arrangementAfter) setPending(ids)
+      const others = effects.filter((e) => e.in.length || e.out.length).map((e) => lookups.members.get(e.memberId)?.display_name)
+      if (others.length) {
+        toast(`Team geändert, angeglichen bei ${others.join(', ')}`, 'ok', {
+          duration: 8000,
+          action: { label: 'Rückgängig', run: () => void undo(groupId) },
         })
-        written.push(event.id)
       }
-      setPending(written)
     } catch (error) {
       toastError(error)
       setOverride(null)
@@ -179,12 +209,60 @@ export function TeamsPanel({
     void onChanged().catch(() => undefined)
   }
 
+  const onDragStart = (event: DragStartEvent) => {
+    setDragging(event.active.data.current as DragData)
+    setSelectedId((event.active.data.current as DragData).encounter.encounter_id)
+  }
+
+  const onDragOver = (event: DragOverEvent) => {
+    const planned = plan(event.active.data.current as DragData | undefined, event.over?.data.current as DropData | undefined)
+    setPreview(planned ? { moves: planned.moves, effects: effectsOf(planned.moves) } : null)
+  }
+
+  const onDragEnd = (event: DragEndEvent) => {
+    setDragging(null)
+    setPreview(null)
+    if (busy) return
+    const planned = plan(event.active.data.current as DragData | undefined, event.over?.data.current as DropData | undefined)
+    if (!planned) return
+    void commit(planned.moves, syncOn ? effectsOf(planned.moves) : [], planned.arrangement)
+  }
+
   return (
     <LayoutGroup id={`teams-${player.id}`}>
-      <PlayerTabs players={players} active={player.id} arrangements={arrangements} onSelect={(id) => {
-        setMemberId(id)
-        setSelectedId(null)
-      }} />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <PlayerTabs
+          players={players}
+          active={player.id}
+          arrangements={arrangements}
+          onSelect={(id) => {
+            setMemberId(id)
+            setSelectedId(null)
+          }}
+        />
+        {editable && players.length > 1 && (
+          data.challenge.team_sync ? (
+            <button
+              type="button"
+              role="switch"
+              aria-checked={!mineOnly}
+              onClick={() => setMineOnly((v) => !v)}
+              className={cn(
+                'flex items-center gap-2 rounded-full border px-3.5 py-2 text-sm transition-colors',
+                mineOnly ? 'border-destructive/40 text-destructive' : 'border-primary/40 text-primary',
+              )}
+              title="Schalter oder Shift beim Ablegen: nur das eigene Team ändern"
+            >
+              {mineOnly ? <Link2Off className="size-4" /> : <Link2 className="size-4" />}
+              {mineOnly ? 'Nur dieses Team' : 'Teams angleichen'}
+            </button>
+          ) : (
+            <span className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Link2Off className="size-4" /> Angleichen ist in den Einstellungen aus
+            </span>
+          )
+        )}
+      </div>
 
       <DndContext
         sensors={sensors}
@@ -192,8 +270,12 @@ export function TeamsPanel({
         // Erst ganz am Rand scrollen, damit Ziele oben und unten erreichbar bleiben
         autoScroll={{ threshold: { x: 0, y: 0.1 } }}
         onDragStart={onDragStart}
-        onDragEnd={(event) => void onDragEnd(event)}
-        onDragCancel={() => setDragging(null)}
+        onDragOver={onDragOver}
+        onDragEnd={onDragEnd}
+        onDragCancel={() => {
+          setDragging(null)
+          setPreview(null)
+        }}
         accessibility={{
           screenReaderInstructions: {
             draggable: 'Leertaste zum Aufnehmen, Pfeiltasten zum Bewegen, Leertaste zum Ablegen, Escape zum Abbrechen.',
@@ -219,6 +301,7 @@ export function TeamsPanel({
                   editable={editable && !busy}
                   selected={!!encounter && encounter.encounter_id === selectedId}
                   dragging={dragging}
+                  warn={warn(encounter)}
                   onSelect={setSelectedId}
                 />
               ))}
@@ -229,6 +312,7 @@ export function TeamsPanel({
               routeName={routeName}
               species={species}
               selectedId={selectedId}
+              warn={warn}
               onSelect={setSelectedId}
             />
           </section>
@@ -240,6 +324,7 @@ export function TeamsPanel({
               editable={editable && !busy}
               selectedId={selectedId}
               dragging={dragging}
+              warn={warn}
               onSelect={setSelectedId}
             />
             <Details
@@ -251,10 +336,38 @@ export function TeamsPanel({
               name={name}
               routeName={routeName}
               onMore={setDetail}
+              sync={
+                data.challenge.team_sync && editable && !busy
+                  ? (e) => {
+                      // Partner auf den Zustand dieses Pokémon bringen
+                      const effects = effectsOf([{ encounter: { ...e, state: e.state === 'team' ? 'box' : 'team' }, status: e.state as 'team' | 'box' }])
+                      const blocked = effects.filter((x) => !x.in.length && !x.out.length && x.notes.length)
+                      if (blocked.length) {
+                        toast(blocked.map((x) => `${lookups.members.get(x.memberId)?.display_name}: ${x.notes.join(', ')}`).join(' · '), 'error')
+                      }
+                      if (effects.some((x) => x.in.length || x.out.length)) void commit([], effects, null)
+                    }
+                  : undefined
+              }
             />
           </div>
         </div>
 
+        {createPortal(
+          <AnimatePresence>
+            {dragging && preview && (
+              <ImpactBar
+                key="impact"
+                preview={preview}
+                syncOn={syncOn}
+                reason={!data.challenge.team_sync ? 'Angleichen ist aus' : mineOnly ? 'Nur dieses Team' : 'Shift gedrückt'}
+                lookups={lookups}
+                name={name}
+              />
+            )}
+          </AnimatePresence>,
+          document.body,
+        )}
         {/* Im body, damit animierte Vorfahren (transform) die Position nicht verschieben */}
         {createPortal(
           <DragOverlay dropAnimation={null} modifiers={[centerOnPointer]} zIndex={60}>
@@ -266,8 +379,8 @@ export function TeamsPanel({
 
       {editable && (
         <p className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-          <Hand className="size-4" /> Pokémon ziehen: zwischen Team und Box wechseln, auf einen belegten Platz ziehen
-          zum Tauschen. Am Handy kurz gedrückt halten.
+          <Hand className="size-4 shrink-0" /> Pokémon ziehen: zwischen Team und Box wechseln, auf einen belegten Platz
+          ziehen zum Tauschen. Am Handy kurz gedrückt halten. Shift beim Ablegen ändert nur dieses Team.
         </p>
       )}
 
@@ -338,6 +451,7 @@ function TeamSlot({
   editable,
   selected,
   dragging,
+  warn,
   onSelect,
 }: {
   index: number
@@ -347,6 +461,7 @@ function TeamSlot({
   editable: boolean
   selected: boolean
   dragging: DragData | null
+  warn: boolean
   onSelect: (id: string) => void
 }) {
   const { setNodeRef: dropRef, isOver } = useDroppable({ id: `slot:${index}`, data: { kind: 'slot', index } satisfies DropData, disabled: !editable })
@@ -371,6 +486,7 @@ function TeamSlot({
       )}
     >
       <span className="label absolute top-2 left-2.5 text-[0.6rem] text-muted-foreground">{index + 1}</span>
+      {warn && <SyncWarning className="absolute top-1.5 right-1.5 z-10" />}
       {encounter ? (
         <motion.button
           key={encounter.encounter_id}
@@ -425,6 +541,7 @@ function Origins({
   routeName,
   species,
   selectedId,
+  warn,
   onSelect,
 }: {
   slots: (Encounter | null)[]
@@ -432,6 +549,7 @@ function Origins({
   routeName: (e: Encounter) => string
   species: SpeciesIndex | null
   selectedId: string | null
+  warn: (e: Encounter | null) => boolean
   onSelect: (id: string) => void
 }) {
   return (
@@ -459,6 +577,7 @@ function Origins({
                   )}
                 </span>
                 <span className="flex items-center gap-1.5 text-muted-foreground">
+                  {warn(e) && <TriangleAlert className="size-3.5 text-highlight" aria-label="nicht angeglichen" />}
                   {routeName(e)}
                   {e.kind === 'static' && <span className="label text-[0.55rem] text-primary">Static</span>}
                 </span>
@@ -483,6 +602,7 @@ function PcBox({
   editable,
   selectedId,
   dragging,
+  warn,
   onSelect,
 }: {
   box: Encounter[]
@@ -490,6 +610,7 @@ function PcBox({
   editable: boolean
   selectedId: string | null
   dragging: DragData | null
+  warn: (e: Encounter | null) => boolean
   onSelect: (id: string) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: 'box', data: { kind: 'box' } satisfies DropData, disabled: !editable })
@@ -521,6 +642,7 @@ function PcBox({
               editable={editable}
               selected={e.encounter_id === selectedId}
               dragging={dragging}
+              warn={warn(e)}
               onSelect={onSelect}
             />
           ) : (
@@ -538,6 +660,7 @@ function BoxCell({
   editable,
   selected,
   dragging,
+  warn,
   onSelect,
 }: {
   encounter: Encounter
@@ -545,6 +668,7 @@ function BoxCell({
   editable: boolean
   selected: boolean
   dragging: DragData | null
+  warn: boolean
   onSelect: (id: string) => void
 }) {
   const { setNodeRef: dragRef, listeners, attributes } = useDraggable({
@@ -583,6 +707,7 @@ function BoxCell({
       )}
     >
       <Sprite id={encounter.species_id} name={name} state={encounter.state} size="sm" idle={false} />
+      {warn && !isOver && <SyncWarning className="absolute -top-1.5 -right-1.5" />}
       {isOver && (
         <span className="absolute -top-1.5 -right-1.5 rounded-full bg-primary p-1 text-primary-foreground">
           <ArrowLeftRight className="size-3" />
@@ -608,6 +733,80 @@ function Lifted({ encounter, name }: { encounter: Encounter; name: string }) {
   )
 }
 
+function SyncWarning({ className }: { className?: string }) {
+  return (
+    <span className={cn('rounded-full bg-highlight p-1 text-foreground shadow', className)} title="Soul-Link-Partner nicht angeglichen">
+      <TriangleAlert className="size-3" />
+    </span>
+  )
+}
+
+/** Beim Ziehen: was der Wechsel bei den anderen Spielern auslöst */
+function ImpactBar({
+  preview,
+  syncOn,
+  reason,
+  lookups,
+  name,
+}: {
+  preview: { moves: Move[]; effects: Effect[] }
+  syncOn: boolean
+  reason: string
+  lookups: Lookups
+  name: (e: Encounter) => string
+}) {
+  const changes = preview.moves.some((m) => m.encounter.state !== m.status)
+  const chip = (move: Move) => (
+    <span key={move.encounter.encounter_id} className="flex items-center gap-1">
+      {move.status === 'team' ? <ArrowUp className="size-3.5 text-ok" /> : <ArrowDown className="size-3.5 text-box" />}
+      <Sprite id={move.encounter.species_id} name="" size="xs" idle={false} />
+      <span className="hidden sm:inline">{name(move.encounter)}</span>
+      {move.slot && <span className="label text-[0.55rem] text-muted-foreground">Platz {move.slot}</span>}
+    </span>
+  )
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 16 }}
+      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+      className="pointer-events-none fixed inset-x-0 bottom-4 z-[70] mx-auto w-fit max-w-[calc(100vw-2rem)] rounded-2xl border bg-popover/95 px-4 py-3 text-sm shadow-2xl backdrop-blur"
+      role="status"
+    >
+      {!changes ? (
+        <span className="text-muted-foreground">Platzwechsel im Team, betrifft nur dieses Team</span>
+      ) : !syncOn ? (
+        <span className="flex items-center gap-2 text-destructive">
+          <Link2Off className="size-4" /> {reason}: Die anderen Teams bleiben, wie sie sind
+        </span>
+      ) : preview.effects.length === 0 ? (
+        <span className="text-muted-foreground">Keine Soul-Link-Partner betroffen</span>
+      ) : (
+        <div className="grid gap-1.5">
+          <span className="label text-[0.6rem] text-muted-foreground">Wird angeglichen</span>
+          {preview.effects.map((effect) => {
+            const member = lookups.members.get(effect.memberId)
+            return (
+              <div key={effect.memberId} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="flex min-w-20 items-center gap-1.5 font-medium">
+                  <span className="size-2 rounded-full" style={{ background: member?.color ?? 'var(--primary)' }} />
+                  {member?.display_name}
+                </span>
+                {[...effect.in, ...effect.out].map(chip)}
+                {effect.notes.map((note) => (
+                  <span key={note} className="text-muted-foreground">
+                    {note}
+                  </span>
+                ))}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </motion.div>
+  )
+}
+
 /** Herkunft und Soul-Link des ausgewählten Pokémon */
 function Details({
   encounter,
@@ -618,6 +817,7 @@ function Details({
   name,
   routeName,
   onMore,
+  sync,
 }: {
   encounter: Encounter | null
   arrangement: Arrangement
@@ -627,6 +827,8 @@ function Details({
   name: (e: Encounter) => string
   routeName: (e: Encounter) => string
   onMore: (e: Encounter) => void
+  /** Partner angleichen; nur gesetzt, wenn erlaubt */
+  sync?: (e: Encounter) => void
 }) {
   if (!encounter) {
     return (
@@ -637,6 +839,7 @@ function Details({
   }
   const slot = arrangement.slots.findIndex((e) => e?.encounter_id === encounter.encounter_id)
   const partners = data.encounters.filter((e) => e.link_id === encounter.link_id && e.encounter_id !== encounter.encounter_id)
+  const off = data.challenge.team_sync ? unsynced(encounter, data.encounters) : []
   return (
     <AnimatePresence mode="wait">
       <motion.section
@@ -688,6 +891,20 @@ function Details({
                 )
               })}
             </ul>
+          </div>
+        )}
+        {off.length > 0 && (
+          <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-highlight/15 px-3 py-2.5 text-sm">
+            <TriangleAlert className="size-4 shrink-0" />
+            <span className="flex-1">
+              Nicht angeglichen:{' '}
+              {off.map((p) => `${lookups.members.get(p.member_id)?.display_name} hat ${name(p)} ${p.state === 'team' ? 'im Team' : 'in der Box'}`).join(', ')}
+            </span>
+            {sync && (
+              <Button size="sm" onClick={() => sync(encounter)}>
+                Partner angleichen
+              </Button>
+            )}
           </div>
         )}
         <Button variant="outline" size="sm" className="mt-4" onClick={() => onMore(encounter)}>
