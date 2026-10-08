@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Field, Input } from '@/components/ui/input'
 import { SpeciesPicker } from '@/components/SpeciesPicker'
 import { Pokeball } from '@/components/Pokeball'
+import { Sprite } from '@/components/Sprite'
 import type { ChallengeData } from '@/hooks/useChallenge'
 import { appendEvent, createRoute } from '@/lib/actions'
 import type { SpeciesIndex } from '@/lib/species'
@@ -63,19 +64,24 @@ function LogForm({ data, species, close }: { data: ChallengeData; species: Speci
   const [routeName, setRouteName] = useState('')
   const [kind, setKind] = useState<EncounterKind>('wild')
   const [entries, setEntries] = useState(() => freshEntries(data))
-  // Ein Soul-Link pro Gruppe (alle zusammen oder Paare); feste IDs pro geöffnetem Dialog
-  const [linkIds] = useState(() => new Map<number, string>())
-  const linkFor = (group: number | null) => {
-    const key = group ?? -1
-    if (!linkIds.has(key)) linkIds.set(key, crypto.randomUUID())
-    return linkIds.get(key)!
-  }
   const [busy, setBusy] = useState(false)
+
+  // Gibt es die Route schon, zeigen wir, wer dort (wild) bereits eingetragen ist; nur die Fehlenden
+  // werden ergänzt. Den passenden Soul-Link (alle oder Paar) wählt die Datenbank selbst.
+  const existingRoute = data.routes.find((r) => r.name.trim().toLowerCase() === routeName.trim().toLowerCase())
+  const existing = new Map(
+    kind === 'wild' && existingRoute
+      ? data.encounters
+          .filter((e) => e.route_id === existingRoute.id && e.kind === 'wild')
+          .map((e) => [e.member_id, e] as const)
+      : [],
+  )
 
   const update = (memberId: string, patch: Partial<Entry>) =>
     setEntries((all) => ({ ...all, [memberId]: { ...all[memberId], ...patch } }))
 
-  const filled = data.players.filter((p) => entries[p.id]?.speciesId !== null || entries[p.id]?.missed)
+  const open = data.players.filter((p) => !existing.has(p.id))
+  const filled = open.filter((p) => entries[p.id]?.speciesId !== null || entries[p.id]?.missed)
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -83,7 +89,7 @@ function LogForm({ data, species, close }: { data: ChallengeData; species: Speci
     setBusy(true)
     try {
       const route = await createRoute(data.challenge.id, routeName)
-      for (const player of data.players) {
+      for (const player of open) {
         const entry = entries[player.id]
         if (entry.missed) {
           await appendEvent(data.challenge.id, 'encounter_missed', { member_id: player.id, route_id: route.id }, entry.clientEventId)
@@ -93,7 +99,6 @@ function LogForm({ data, species, close }: { data: ChallengeData; species: Speci
             'encounter_logged',
             {
               encounter_id: entry.encounterId,
-              link_id: linkFor(player.link_group),
               member_id: player.id,
               route_id: route.id,
               species_id: entry.speciesId,
@@ -151,6 +156,20 @@ function LogForm({ data, species, close }: { data: ChallengeData; species: Speci
       <div className="grid gap-3">
         {data.players.map((player) => {
           const entry = entries[player.id]
+          const already = existing.get(player.id)
+          if (already) {
+            const name = already.nickname ?? species.byId.get(already.species_id)?.name_de ?? `#${already.species_id}`
+            return (
+              <div key={player.id} className="flex items-center gap-3 rounded-xl border border-dashed p-3 text-sm text-muted-foreground">
+                <span className="size-2 rounded-full" style={{ background: player.color ?? 'var(--primary)' }} />
+                <span className="font-medium text-foreground">{player.display_name}</span>
+                <span className="ml-auto flex items-center gap-2">
+                  <Sprite id={already.species_id} name={name} size="sm" state={already.state} idle={false} />
+                  {name} · schon eingetragen
+                </span>
+              </div>
+            )
+          }
           return (
             <div key={player.id} className="grid gap-2 rounded-xl border bg-background/60 p-3">
               <div className="flex items-center justify-between gap-2">
@@ -198,7 +217,7 @@ function LogForm({ data, species, close }: { data: ChallengeData; species: Speci
       </div>
 
       <Button type="submit" size="lg" disabled={busy || filled.length === 0 || !routeName.trim()}>
-        {busy ? 'Speichere …' : `Speichern (${filled.length}/${data.players.length})`}
+        {busy ? 'Speichere …' : `Speichern (${filled.length}/${open.length})`}
       </Button>
     </form>
   )

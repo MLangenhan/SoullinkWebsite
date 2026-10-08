@@ -155,6 +155,13 @@ select test.put('enc_janne', (public.append_event(
 select test.ok((select count(distinct link_id) = 1 from public.encounters where route_id = test.get('route201')::uuid),
                'Zweite Begegnung derselben Route tritt automatisch dem Soul-Link bei');
 
+-- Später nachgetragen: Elsmanns Pokémon landet im bestehenden Soul-Link der Route
+select test.ok((select payload ->> 'link_id' = (select link_id::text from public.encounters
+                  where encounter_id = test.get('enc_moritz')::uuid)
+                from public.append_event(test.get('ch')::uuid, 'encounter_logged',
+                  jsonb_build_object('member_id', test.get('elsmann'), 'route_id', test.get('route201'), 'species_id', 396))),
+               'Nachgetragene Begegnung tritt dem bestehenden Soul-Link bei');
+
 -- Static-Begegnung auf derselben Route bildet einen eigenen Soul-Link
 select test.put('static_janne', (public.append_event(
   test.get('ch')::uuid, 'encounter_logged',
@@ -187,6 +194,18 @@ select test.fails(format($$ select public.append_event(%L, 'encounter_evolved', 
   jsonb_build_object('encounter_id', test.get('enc_moritz'), 'species_id', 64)),
   'PT400', 'Entwicklung in fremde Reihe wird abgelehnt');
 
+-- Falsches Pokémon eingetragen: korrigieren und wieder rückgängig machen
+select test.put('corr1', (public.append_event(test.get('ch')::uuid, 'encounter_corrected',
+  jsonb_build_object('encounter_id', test.get('enc_moritz'), 'species_id', 393))).id::text);
+select test.ok((select species_id = 393 and caught_species_id = 393 from public.encounters
+                where encounter_id = test.get('enc_moritz')::uuid), 'Korrektur ändert gefangene und aktuelle Art');
+select test.fails(format($$ select public.append_event(%L, 'encounter_corrected', %L) $$, test.get('ch'),
+  jsonb_build_object('encounter_id', test.get('enc_moritz'), 'species_id', 393)),
+  'PT409', 'Korrektur auf dieselbe Art wird abgelehnt');
+select public.append_event(test.get('ch')::uuid, 'event_reverted', jsonb_build_object('event_id', test.get('corr1')::bigint));
+select test.ok((select species_id = 25 and caught_species_id = 172 from public.encounters
+                where encounter_id = test.get('enc_moritz')::uuid), 'Undo der Korrektur stellt Fang und Entwicklung wieder her');
+
 select test.put('missed1', (public.append_event(test.get('ch')::uuid, 'encounter_missed',
   jsonb_build_object('member_id', test.get('janne'), 'route_id', test.get('route202')))).id::text);
 
@@ -199,7 +218,7 @@ select test.ok((select state = 'dead' from public.encounters where encounter_id 
 select test.ok((select state = 'linked_dead' and lost_with_encounter_id = test.get('enc_janne')::uuid
                 from public.encounters where encounter_id = test.get('enc_moritz')::uuid),
                'Soul-Link-Partner stirbt sichtbar mit');
-select test.ok((select jsonb_array_length(partners) = 1 from public.graveyard), 'Friedhof zeigt die Partner');
+select test.ok((select jsonb_array_length(partners) = 2 from public.graveyard), 'Friedhof zeigt die Partner (Moritz und der nachgetragene Elsmann)');
 select test.ok((select deaths_run = 1 and missed_run = 1 from public.member_stats
                 where member_id = test.get('janne')::uuid), 'Zähler für Janne stimmen');
 select test.ok((select deaths_run = 0 from public.member_stats where member_id = test.get('moritz')::uuid),

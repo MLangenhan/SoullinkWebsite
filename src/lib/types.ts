@@ -10,6 +10,7 @@ export type EventType =
   | 'encounter_missed'
   | 'encounter_status_changed'
   | 'encounter_evolved'
+  | 'encounter_corrected'
   | 'pokemon_died'
   | 'run_ended'
   | 'counter_adjusted'

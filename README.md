@@ -57,6 +57,8 @@ Gerät verbinden** selbst einen neuen Link.
 | Was | Wo |
 |---|---|
 | Begegnung eintragen | **Begegnung eintragen**: Route wählen oder neu eingeben, Wild oder Static, für jeden Spieler das Pokémon (Suche nach deutschem oder englischem Namen oder Pokédex-Nummer) oder **Verpasst** |
+| Später nachtragen | im Tab **Routen** in der eigenen Spalte auf **Nachtragen** klicken; das Pokémon kommt automatisch in den richtigen Soul-Link. Alternativ **Begegnung eintragen** mit derselben Route: Wer schon eingetragen ist, wird angezeigt, nur die Fehlenden werden ergänzt |
+| Falsches Pokémon eingetragen | Pokémon anklicken → **Falsches Pokémon? Ändern** (rückgängig über die Timeline) |
 | Ins Team / in die Box, Entwicklung, Tod | Pokémon im Tab **Routen** anklicken |
 | Tod mit Ursache, Gegner, Level, Ort | im selben Dialog unter **Tod eintragen**; der Soul-Link-Partner stirbt automatisch mit |
 | Verpasste Begegnung ohne Route | Tab **Zähler** → **Verpasste Begegnung** |
@@ -92,9 +94,14 @@ Supabase ist die Datenbank. Der Free Tier reicht; Dauer etwa 10 Minuten.
    Region **Central EU (Frankfurt)**, Datenbank-Passwort erzeugen und speichern.
 2. **Schema einspielen:** Links **SQL Editor** → **New query** → den kompletten Inhalt von
    [`supabase/migrations/20261008120000_init.sql`](supabase/migrations/20261008120000_init.sql)
-   einfügen → **Run**. Danach in einer neuen Abfrage genauso
+   einfügen → **Run**. Danach in jeweils einer neuen Abfrage genauso
    [`supabase/migrations/20261008120100_species.sql`](supabase/migrations/20261008120100_species.sql)
-   (die 1025 Pokémon). Reihenfolge beachten, jede Datei nur einmal.
+   (die 1025 Pokémon) und
+   [`supabase/migrations/20261009120000_encounter_corrections.sql`](supabase/migrations/20261009120000_encounter_corrections.sql)
+   (Pokémon korrigieren). Reihenfolge beachten, jede Datei nur einmal.
+
+   **Später neue Dateien in `supabase/migrations/`?** Nur die neuen, in der Reihenfolge ihres
+   Datums, ebenso im SQL Editor ausführen. Bestehende Daten bleiben erhalten.
    *Alternative mit der CLI:* `npx supabase login`, `npx supabase link --project-ref <ref>`,
    `npx supabase db push`.
 3. **Anmeldung ohne Konten einschalten:** **Authentication → Sign In / Providers → Allow anonymous

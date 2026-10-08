@@ -61,6 +61,12 @@ export function describeEvent(
         speciesId: num(p.species_id),
         tone: 'catch',
       }
+    case 'encounter_corrected':
+      return {
+        text: `${owner}: korrigiert zu ${speciesName(species, num(p.species_id))}`,
+        speciesId: num(p.species_id),
+        tone: 'neutral',
+      }
     case 'pokemon_died': {
       const details = [str(p.cause), str(p.opponent) && `gegen ${str(p.opponent)}`, route(p.route_id) && `auf ${route(p.route_id)}`]
         .filter(Boolean)
