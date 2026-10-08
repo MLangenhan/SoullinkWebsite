@@ -60,7 +60,9 @@ Gerät verbinden** selbst einen neuen Link.
 | Begegnung eintragen | **Begegnung eintragen**: Route wählen oder neu eingeben, Wild oder Static, für jeden Spieler das Pokémon (Suche nach deutschem oder englischem Namen oder Pokédex-Nummer) oder **Verpasst** |
 | Später nachtragen | im Tab **Routen** in der eigenen Spalte auf **Nachtragen** klicken; das Pokémon kommt automatisch in den richtigen Soul-Link. Alternativ **Begegnung eintragen** mit derselben Route: Wer schon eingetragen ist, wird angezeigt, nur die Fehlenden werden ergänzt |
 | Falsches Pokémon eingetragen | Pokémon anklicken → **Falsches Pokémon? Ändern** (rückgängig über die Timeline) |
-| Ins Team / in die Box, Entwicklung, Tod | Pokémon im Tab **Routen** anklicken |
+| Team und Box | Tab **Teams**: Spieler oben wählen, links das Team (6 Plätze), rechts die Box. Pokémon per **Drag and Drop** verschieben; ein Box-Pokémon auf einen belegten Platz tauscht beide, wie im Spiel. Am Handy kurz gedrückt halten. Unter dem Team steht immer, von welcher Route jedes Teammitglied kommt; ein Klick zeigt Herkunft und Soul-Link |
+| Pokémon suchen | Tab **Routen**: Suchfeld (oder Taste `/`) nach Pokémon (deutsch, englisch, Nummer, Spitzname, auch die gefangene Vorstufe) oder Route |
+| Entwicklung, Tod | Pokémon im Tab **Routen** anklicken (oder im Tab **Teams** auf „Entwicklung, Tod und mehr“) |
 | Tod mit Ursache, Gegner, Level, Ort | im selben Dialog unter **Tod eintragen**; der Soul-Link-Partner stirbt automatisch mit |
 | Verpasste Begegnung ohne Route | Tab **Zähler** → **Verpasste Begegnung** |
 | Wipe oder Sieg | **Run beenden**, beim Wipe optional, wer schuld war |
@@ -99,7 +101,9 @@ Supabase ist die Datenbank. Der Free Tier reicht; Dauer etwa 10 Minuten.
    [`supabase/migrations/20261008120100_species.sql`](supabase/migrations/20261008120100_species.sql)
    (die 1025 Pokémon) und
    [`supabase/migrations/20261009120000_encounter_corrections.sql`](supabase/migrations/20261009120000_encounter_corrections.sql)
-   (Pokémon korrigieren). Reihenfolge beachten, jede Datei nur einmal.
+   (Pokémon korrigieren) und
+   [`supabase/migrations/20261010120000_team_slots.sql`](supabase/migrations/20261010120000_team_slots.sql)
+   (Team-Plätze, höchstens sechs im Team). Reihenfolge beachten, jede Datei nur einmal.
 
    **Später neue Dateien in `supabase/migrations/`?** Nur die neuen, in der Reihenfolge ihres
    Datums, ebenso im SQL Editor ausführen. Bestehende Daten bleiben erhalten.
@@ -245,9 +249,13 @@ Partner-Toden, verpasste Begegnungen, Statics, Entwicklungen, eine Korrektur und
 3. Auf der Challenge-Seite mit den Pfeilen zwischen den Runs wechseln. Nach dem Sieg läuft Run 5,
    der noch leer ist.
 
+Eine zweite Demo, [`supabase/demo/demo_soulsilver.sql`](supabase/demo/demo_soulsilver.sql), zeigt den
+Modus **alle verbunden**: Pokémon SoulSilver, alle vier Spieler in einem Soul-Link (stirbt eins, sterben
+alle drei Partner mit). Run 1 endet an Biankas Miltank, Run 2 läuft noch und lässt sich direkt weiterspielen.
+
 Erneutes Ausführen löscht die alte Demo und legt sie neu an. Spielernamen und Website-Adresse stehen
 oben in der Datei. Loswerden: **Einstellungen → Challenge löschen** oder
-`delete from public.challenges where slug = 'demo-platin-soullink';`.
+`delete from public.challenges where slug = 'demo-platin-soullink';` (bzw. `'demo-soulsilver-alle'`).
 
 ---
 
@@ -306,7 +314,7 @@ src/
 supabase/
   migrations/            Schema, Views, Funktionen, RLS; Pokémon-Stammdaten
   tests/                 Supabase-Attrappe und Szenario-Tests
-  demo/                  Demo-Challenge (3 Wipes, 1 Sieg) für den SQL Editor
+  demo/                  Demo-Challenges für den SQL Editor (Platin in Paaren, SoulSilver alle verbunden)
   config.toml            lokaler Supabase-Stack
 tools/
   generate_species.py    Stammdaten aus PokeAPI

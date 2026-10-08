@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { Sprite } from '@/components/Sprite'
 import { AddEncounterDialog, type AddTarget } from '@/components/challenge/AddEncounterDialog'
@@ -6,10 +6,10 @@ import { EncounterDialog } from '@/components/challenge/EncounterDialog'
 import { StateChip } from '@/components/challenge/StateChip'
 import type { ChallengeData } from '@/hooks/useChallenge'
 import { speciesName, type Lookups } from '@/lib/describe'
-import type { SpeciesIndex } from '@/lib/species'
+import { normalize, type SpeciesIndex } from '@/lib/species'
 import type { Encounter, Member } from '@/lib/types'
 import { cn } from '@/lib/utils'
-import { Plus } from 'lucide-react'
+import { Plus, Search, X } from 'lucide-react'
 
 /** Eine Zeile: eine Route (wild oder static); bei Paaren enthält sie mehrere Soul-Links */
 interface RouteRow {
@@ -67,10 +67,13 @@ function Cell({
   species,
   onOpen,
   onAdd,
+  match,
 }: {
   encounter: Encounter | undefined
   species: SpeciesIndex | null
   onOpen: (e: Encounter) => void
+  /** Bei aktiver Suche: Treffer hervorheben, den Rest abblenden */
+  match?: boolean
   /** Nur gesetzt, wenn hier nachgetragen werden darf (Spieler, laufender Run) */
   onAdd?: () => void
 }) {
@@ -101,7 +104,11 @@ function Cell({
     <button
       type="button"
       onClick={() => onOpen(encounter)}
-      className="group relative z-10 flex flex-col items-center gap-1 rounded-lg py-3 transition-colors hover:bg-secondary/60 focus-visible:bg-secondary/60"
+      className={cn(
+        'group relative z-10 flex flex-col items-center gap-1 rounded-lg py-3 transition-[background-color,opacity,box-shadow] hover:bg-secondary/60 focus-visible:bg-secondary/60',
+        match === true && 'bg-highlight/15 ring-2 ring-highlight',
+        match === false && 'opacity-35',
+      )}
     >
       <Sprite id={encounter.species_id} name={name} state={encounter.state} size="md" />
       <span className={cn('max-w-full truncate px-1 text-sm font-medium', encounter.state === 'dead' && 'line-through decoration-destructive/70')}>
@@ -125,6 +132,8 @@ export function Board({
 }) {
   const [selected, setSelected] = useState<Encounter | null>(null)
   const [adding, setAdding] = useState<AddTarget | null>(null)
+  const [query, setQuery] = useState('')
+  const searchRef = useRef<HTMLInputElement>(null)
   const canAdd = data.canWrite && data.shownRun === data.stats.current_run
   const group = (memberId: string) => lookups.members.get(memberId)?.link_group ?? -1
 
@@ -179,6 +188,31 @@ export function Board({
     return result.sort((a, b) => order(a) - order(b) || (a.kind === b.kind ? 0 : a.kind === 'wild' ? -1 : 1))
   }, [data.encounters, routes, players])
 
+  // Suche nach Pokémon (aktuelle oder gefangene Art, deutsch, englisch, Nummer, Spitzname) oder Route
+  const q = normalize(query)
+  const number = /^\d+$/.test(query.trim()) ? Number(query.trim()) : null
+  const matches = (e: Encounter) =>
+    [e.species_id, e.caught_species_id].some((id) => {
+      if (id === number) return true
+      const s = species?.byId.get(id)
+      return !!s && (normalize(s.name_de).includes(q) || normalize(s.name_en).includes(q))
+    }) || (!!e.nickname && normalize(e.nickname).includes(q))
+  const routeMatches = (row: RouteRow) => normalize(lookups.routes.get(row.routeId)?.name ?? '').includes(q)
+  const visible = q ? rows.filter((row) => routeMatches(row) || [...row.cells.values()].some(matches)) : rows
+  const hits = q ? visible.reduce((n, row) => n + [...row.cells.values()].filter(matches).length, 0) : 0
+
+  // "/" springt in die Suche
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement
+      if (event.key !== '/' || target.closest('input, textarea, [contenteditable]')) return
+      event.preventDefault()
+      searchRef.current?.focus()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   const columns = `minmax(7rem, 11rem) repeat(${players.length}, minmax(6.5rem, 1fr))`
   const current = selected ? (lookups.encounters.get(selected.encounter_id) ?? selected) : null
 
@@ -202,6 +236,41 @@ export function Board({
 
   return (
     <div className="-mx-4 overflow-x-auto px-4 pb-2">
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <label className="relative flex w-full max-w-sm items-center">
+          <Search className="pointer-events-none absolute left-3 size-4 text-muted-foreground" />
+          <input
+            ref={searchRef}
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
+            placeholder="Pokémon oder Route suchen …"
+            aria-label="Pokémon oder Route suchen"
+            className="h-10 w-full rounded-full border bg-card/70 pr-9 pl-9 text-sm shadow-sm outline-none transition-shadow placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/40 [&::-webkit-search-cancel-button]:hidden"
+          />
+          {query ? (
+            <button type="button" onClick={() => setQuery('')} className="absolute right-3 text-muted-foreground hover:text-foreground" aria-label="Suche leeren">
+              <X className="size-4" />
+            </button>
+          ) : (
+            <kbd className="label pointer-events-none absolute right-3 rounded border px-1.5 text-[0.6rem] text-muted-foreground">/</kbd>
+          )}
+        </label>
+        <AnimatePresence>
+          {q && (
+            <motion.span
+              key="hits"
+              initial={{ opacity: 0, x: -6 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0 }}
+              className="label text-[0.65rem] text-muted-foreground"
+            >
+              {hits === 1 ? '1 Pokémon' : `${hits} Pokémon`} · {visible.length === 1 ? '1 Route' : `${visible.length} Routen`}
+            </motion.span>
+          )}
+        </AnimatePresence>
+      </div>
       <div className="min-w-fit">
         <div className="label grid gap-2 border-b pb-3 text-muted-foreground" style={{ gridTemplateColumns: columns }}>
           <span>Route</span>
@@ -213,7 +282,7 @@ export function Board({
           ))}
         </div>
         <AnimatePresence initial={false}>
-          {rows.map((row, i) => (
+          {visible.map((row, i) => (
             <motion.div
               key={row.key}
               layout
@@ -240,13 +309,17 @@ export function Board({
                     encounter={row.cells.get(p.id)}
                     species={species}
                     onOpen={setSelected}
-                    onAdd={canAdd ? () => setAdding(addTarget(row, p)) : undefined}
+                    onAdd={canAdd && !q ? () => setAdding(addTarget(row, p)) : undefined}
+                    match={q && !routeMatches(row) ? (row.cells.has(p.id) ? matches(row.cells.get(p.id)!) : undefined) : undefined}
                   />
                 ))}
               </div>
             </motion.div>
           ))}
         </AnimatePresence>
+        {q && visible.length === 0 && (
+          <p className="py-12 text-center text-muted-foreground">Kein Pokémon und keine Route passt zu „{query.trim()}“.</p>
+        )}
       </div>
       <AddEncounterDialog target={adding} onOpenChange={(open) => !open && setAdding(null)} data={data} species={species} />
       <EncounterDialog

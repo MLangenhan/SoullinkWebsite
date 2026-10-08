@@ -193,7 +193,7 @@ export function ChallengePage({ slug }: { slug: string }) {
           transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
         >
           {tab === 'routen' && <Board data={d} species={species} lookups={lookups} onLog={() => setLogOpen(true)} />}
-          {tab === 'teams' && <TeamsPanel data={d} species={species} lookups={lookups} />}
+          {tab === 'teams' && <TeamsPanel data={d} species={species} lookups={lookups} onChanged={state.refresh} />}
           {tab === 'friedhof' && <Graveyard data={d} species={species} lookups={lookups} />}
           {tab === 'timeline' && <Timeline data={d} species={species} lookups={lookups} />}
           {tab === 'zaehler' && <StatsPanel data={d} />}

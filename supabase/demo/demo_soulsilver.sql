@@ -1,84 +1,56 @@
--- Demo-Challenge: Pokémon Platin, vier Spieler in zwei Soul-Link-Paaren, drei Wipes, im vierten Run Sieg gegen Cynthia.
+-- Demo-Challenge: Pokémon SoulSilver, alle vier Spieler gemeinsam verbunden. Run 1 endet an Bianka, Run 2 läuft noch.
 -- Supabase → SQL Editor → New query → alles einfügen → Run. Ergebnis: vier persönliche Links (einmal nutzbar,
 -- 7 Tage gültig); zuerst den Link der Leitung öffnen. Erneutes Ausführen ersetzt die alte Demo.
 -- Alle Ereignisse laufen durch private.append_event (dieselben Prüfungen wie die Website). Ablauf in c_story,
 -- Schritte durch "/" oder Zeilenumbruch getrennt (bewusst ohne ";", den der SQL Editor als Befehlsende liest):
 --   S|Zeit = Spielsitzung · F|Route|P1|P2|P3|P4 = Begegnung für Platz 1–4 ("-" verpasst), FS = Static
 --   E|Platz|von|zu = Entwicklung · K|Platz|von|zu = Korrektur · B/T|Platz|Pokémon = Box/Team · U|Platz = Undo
---   D|Platz|Pokémon|Ursache|Gegner|Level[|Route] = Tod (Partner stirbt mit) · W|Platz|Notiz = Wipe · V|Notiz = Sieg
+--   D|Platz|Pokémon|Ursache|Gegner|Level[|Route] = Tod (alle Partner sterben mit) · W|Platz|Notiz = Wipe · V|Notiz = Sieg
 
 do $demo$
 declare
-  c_slug constant text := 'demo-platin-soullink';
+  c_slug constant text := 'demo-soulsilver-alle';
   c_site constant text := 'https://mlangenhan.github.io/SoullinkWebsite';
-  c_players constant text[] := array['Moritz', 'Janne', 'Elsmann', 'Linus'];  -- Paare: 1↔2, 3↔4
+  c_players constant text[] := array['Moritz', 'Janne', 'Elsmann', 'Linus'];  -- alle miteinander verbunden
   c_colors constant text[] := array['#2a6fdb', '#e0457b', '#2f9e62', '#e8890c'];
   c_story constant text := '
-# Run 1: endet in der ersten Arena
-S|2026-08-01T19:30+02 / F|Starter|Panflam|Plinfa|Chelast|Panflam / F|Route 201|Staralili|Bidiza|Staralili|Sheinux
-F|Route 202|Sheinux|Zirpurze|Bidiza|Staralili / F|Route 203|Abra|Zubat|Sheinux|Zirpurze / D|3|Bidiza|Rivalenkampf|Baro|9|Route 203
-F|Erzelingen-Mine|Kleinstein|Onix|Kleinstein|Onix / E|1|Staralili|Staravia / D|1|Staravia|Arenakampf Erzelingen|Veit|14
-D|1|Panflam|Arenakampf Erzelingen|Veit|13 / D|2|Zubat|Arenakampf Erzelingen|Veit|11
-W|1|Veits Koknodon räumt mit Kopfnuss das halbe Team ab
-# Run 2: scheitert an Silvanas Roserade
-S|2026-08-03T20:00+02 / F|Starter|Plinfa|Chelast|Plinfa|Chelast / F|Route 201|Bidiza|Staralili|Staralili|Bidiza
-F|Route 202|Staralili|Sheinux|Zirpurze|Sheinux / F|Route 203|Abra|Zubat|Sheinux|Abra / F|Erzelingen-Mine|Onix|Kleinstein|Kleinstein|Onix
-S|2026-08-05T19:45+02 / F|Route 204|Knospi|Wadribie|Knospi|- / F|Route 205|Bamelin|Schalellos|Pachirisu|Bamelin / E|1|Plinfa|Pliprin
-E|2|Chelast|Chelcarain / E|1|Staralili|Staravia / E|4|Chelast|Chelcarain / FS|Windkraftwerk|Driftlon|Driftlon|Driftlon|Driftlon
-D|4|Bidiza|Team Galaktik|Rüpel|15|Windkraftwerk / F|Ewigwald|Nebulak|Haspiror|Wadribie|Zirpurze
-S|2026-08-07T20:15+02 / D|3|Kleinstein|Arenakampf Ewigenau|Silvana|20 / D|3|Plinfa|Arenakampf Ewigenau|Silvana|21
-D|3|Driftlon|Arenakampf Ewigenau|Silvana|19 / W|3|Silvanas Roserade mit Giga-Sauger, gegen Pflanzen hatte keiner was dabei
-# Run 3: kommt bis Herzhofen
-S|2026-08-12T19:30+02 / F|Starter|Chelast|Panflam|Panflam|Plinfa / F|Route 201|Sheinux|Staralili|Bidiza|Staralili
-F|Route 202|Staralili|Bidiza|Sheinux|Zirpurze / F|Route 203|Zubat|Abra|Abra|Sheinux / F|Erzelingen-Mine|Kleinstein|Onix|Onix|Kleinstein
-E|1|Staralili|Staravia / E|2|Panflam|Panpyro / F|Route 204|Knospi|Knospi|Wadribie|Haspiror
-S|2026-08-14T20:00+02 / F|Route 205|Schalellos|Bamelin|Bamelin|Pachirisu / FS|Windkraftwerk|Driftlon|Driftlon|Driftlon|Driftlon
-F|Ewigwald|Haspiror|Nebulak|Zirpurze|Nebulak / D|4|Staralili|Rivalenkampf|Baro|19 / E|1|Chelast|Chelcarain / E|3|Panflam|Panpyro
-E|4|Plinfa|Pliprin
-S|2026-08-19T19:30+02 / F|Route 206|Ponita|Skorgla|Skunkapuh|Zirpeise / F|Route 207|Machollo|Ponita|Kleinstein|Machollo
-D|1|Sheinux|Wildes Pokémon|Kleinstein|17|Route 207
-S|2026-08-22T18:00+02 / F|Route 208|Trasla|Roselia|Bidifas|Zubat / FS|Herzhofen|Evoli|Evoli|Evoli|Evoli
-F|Route 209|Zwirrlicht|Bidifas|Staravia|Roselia / D|3|Wadribie|Wildes Pokémon|Staravia|18|Route 209
-D|2|Skorgla|Arenakampf Herzhofen|Lamina|25 / D|2|Onix|Arenakampf Herzhofen|Lamina|24 / D|2|Panpyro|Arenakampf Herzhofen|Lamina|26
-W|2|Laminas Traunmagil mit Psystrahl und Verwirrung, das war es
-# Run 4: bis zum Champ
-S|2026-08-26T19:30+02 / F|Starter|Plinfa|Chelast|Panflam|Plinfa / F|Route 201|Staralili|Sheinux|Bidiza|Staralili
-F|Route 202|Bidiza|Staralili|Sheinux|Zirpurze / F|Route 203|Abra|Zubat|Zubat|Abra / F|Erzelingen-Mine|Onix|Kleinstein|Kleinstein|Onix
-E|1|Staralili|Staravia / F|Route 204|Knospi|Wadribie|Knospi|Haspiror
-S|2026-08-29T20:00+02 / F|Route 205|Bamelin|Pachirisu|Schalellos|Bamelin / K|4|Bamelin|Pachirisu
-FS|Windkraftwerk|Driftlon|Driftlon|Driftlon|Driftlon / F|Ewigwald|Nebulak|Haspiror|Zirpurze|Nebulak / E|1|Plinfa|Pliprin
-E|2|Chelast|Chelcarain / E|3|Panflam|Panpyro / E|4|Plinfa|Pliprin / D|3|Zubat|Team Galaktik|Rüpel|16
-S|2026-09-02T19:30+02 / F|Route 206|Ponita|Skorgla|Skunkapuh|Zirpeise / F|Route 207|Machollo|Ponita|Machollo|Kleinstein
-F|Kraterberg|Bronzel|Meditie|Klingplim|Bronzel / E|2|Sheinux|Luxio / F|Route 208|Trasla|Roselia|Bidifas|Zubat
-FS|Herzhofen|Evoli|Evoli|Evoli|Evoli
-S|2026-09-05T20:00+02 / F|Route 209|Zwirrlicht|Bidifas|Staravia|Roselia / D|4|Zirpeise|Arenakampf Herzhofen|Lamina|27 / B|1|Onix / U|1
-F|Route 210|Sichlor|Wablu|Ponita|Machollo / E|4|Evoli|Psiana
-S|2026-09-09T19:30+02 / F|Route 215|Schlurp|Abra|Kadabra|Ponita / D|1|Bidiza|Arenakampf Schleiede|Hilda|27 / T|1|Bamelin
-F|Route 212|Glibunkel|Kirlia|Roselia|Glibunkel / F|Großmoor|Pionskora|Venuflibis|Felino|Pionskora
-D|3|Ponita|Arenakampf Weideburg|Wellenbrecher Marinus|33
-S|2026-09-13T18:30+02 / F|Route 213|Plaudagei|Schalellos|Plaudagei|- / F|Route 214|Rihorn|Skunkapuh|Zirpeise|Rihorn
-F|Route 218|Finneon|Tentacha|Finneon|Tentacha / FS|Eiseninsel|Riolu|Riolu|Riolu|Riolu / D|2|Roselia|Arenakampf Kanalava|Adam|35
-S|2026-09-17T20:00+02 / E|1|Pliprin|Impoleon / E|2|Chelcarain|Chelterrar / E|3|Panpyro|Panferno / E|4|Pliprin|Impoleon
-E|1|Staravia|Staraptor / E|2|Luxio|Luxtra / E|3|Riolu|Lucario / F|Route 216|Shnebedeck|-|Quiekel|Schneppke
-F|Route 217|Schneppke|Shnebedeck|Sniebel|Quiekel / D|4|Rihorn|Arenakampf Blizzach|Frida|37 / D|2|Skorgla|Arenakampf Blizzach|Frida|36
-S|2026-09-24T19:30+02 / F|Route 222|Pantimos|Gastrodon|Luxio|Plaudagei / D|3|Finneon|Arenakampf Sonnewik|Volkner|45
-S|2026-09-30T20:00+02 / F|Siegesstraße|Georok|Golbat|Maschock|Rihorn
-S|2026-10-04T18:00+02 / D|4|Pionskora|Top Vier|Ignaz|51 / D|1|Glibunkel|Top Vier|Lucian|50 / D|3|Luxio|Champ|Cynthia|55
-V|Champ Cynthia besiegt! Knakrack fiel im letzten Zug gegen Impoleons Hydrokanone
+# Run 1: endet in Dukatia City an Biankas Miltank
+S|2026-09-12T19:00+02 / F|Starter|Feurigel|Endivie|Karnimani|Feurigel / F|Route 29|Taubsi|Wiesor|Rattfratz|Hoothoot
+F|Route 30|Raupy|Hornliu|Ledyba|Webarak / F|Route 31|Knofensa|Knofensa|Quapsel|Taubsi
+F|Knofensa-Turm|Nebulak|Rattfratz|Nebulak|Rattfratz / E|1|Taubsi|Tauboga
+F|Route 32|Voltilamm|Hoppspross|Felino|Voltilamm / F|Einheitstunnel|Onix|Sandan|Kleinstein|Quapsel
+D|3|Felino|Wildes Pokémon|Onix|9|Einheitstunnel
+S|2026-09-15T20:00+02 / F|Flegmon-Brunnen|Flegmon|Flegmon|Zubat|Flegmon / F|Steineichenwald|Myrapla|Raupy|Hornliu|Knofensa
+F|Route 34|Abra|Traumato|Pummeluff|Abra / FS|Dukatia City|Evoli|Evoli|Evoli|Evoli
+D|2|Rattfratz|Arenakampf Dukatia City|Bianka|19 / D|1|Tauboga|Arenakampf Dukatia City|Bianka|20
+D|4|Feurigel|Arenakampf Dukatia City|Bianka|18
+W|2|Biankas Miltank: Walzer, Milchgetränk, Walzer. Der Klassiker
+# Run 2: läuft noch
+S|2026-09-20T19:00+02 / F|Starter|Karnimani|Feurigel|Endivie|Karnimani / F|Route 29|Wiesor|Taubsi|Hoothoot|Rattfratz
+F|Route 30|Ledyba|Webarak|Taubsi|Hornliu / F|Route 31|Quapsel|Knofensa|Knofensa|Taubsi
+F|Knofensa-Turm|Rattfratz|Nebulak|Rattfratz|Nebulak / FS|Viola City|Togepi|Togepi|Togepi|Togepi / E|2|Taubsi|Tauboga
+F|Route 32|Voltilamm|Hoppspross|Felino|Voltilamm / F|Einheitstunnel|Onix|Quapsel|Sandan|Kleinstein
+S|2026-09-26T20:00+02 / F|Flegmon-Brunnen|Flegmon|Zubat|Flegmon|Flegmon / D|1|Wiesor|Arenakampf Azalea City|Kai|15
+F|Steineichenwald|Myrapla|Hornliu|Raupy|Knofensa / E|1|Karnimani|Tyracroc / E|2|Feurigel|Igelavar / E|3|Endivie|Lorblatt
+E|4|Karnimani|Tyracroc
+S|2026-10-03T19:30+02 / F|Route 34|Abra|Traumato|Pummeluff|Abra / FS|Dukatia City|Evoli|Evoli|Evoli|Evoli
+F|Route 35|Fukano|Hoothoot|Fukano|Pummeluff / F|Nationalpark|Sichlor|Pinsir|Hornliu|Raupy
+E|1|Voltilamm|Waaty / D|4|Voltilamm|Trainerkampf|Käfersammler|22|Route 35 / FS|Route 36|Mogelbaum|Mogelbaum|Mogelbaum|Mogelbaum
+B|2|Webarak / T|2|Zubat
 ';
   v_challenge uuid; v_members uuid[] := '{}'; v_clock timestamptz; v_step text; f text[]; v_seat integer;
   v_encounter uuid; v_route uuid; v_species integer; v_team integer; v_events jsonb[]; v_event jsonb;
 begin
   delete from public.challenges where slug = c_slug;  -- alte Demo
   insert into public.challenges (slug, name, game, visibility)
-  values (c_slug, 'Demo: Platin Soul Link', 'Pokémon Platin', 'private')
+  values (c_slug, 'Demo: SoulSilver, alle verbunden', 'Pokémon SoulSilver', 'private')
   returning id into v_challenge;
   perform set_config('demo.challenge_id', v_challenge::text, false), set_config('demo.site_url', c_site, false);
 
   for i in 1..4 loop
     insert into public.challenge_members (challenge_id, role, display_name, color, seat, link_group)
     values (v_challenge, case when i = 1 then 'owner' else 'player' end::public.member_role,
-            c_players[i], c_colors[i], i - 1, (i - 1) / 2)
+            c_players[i], c_colors[i], i - 1, null)  -- keine Gruppe: alle bilden einen Soul-Link
     returning id into v_encounter;
     v_members := v_members || v_encounter;
   end loop;

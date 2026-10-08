@@ -74,7 +74,7 @@ Challenge ──< Mitglied (Spieler / Zuschauer) ──< Gerät (anonyme Sitzung
 |---|---|---|
 | `encounter_logged` | `member_id`, `route_id`, `species_id`, `kind` (wild/static), `status` (team/box), `nickname?`, `link_id?`, `encounter_id?` | Pokémon gefangen. Ohne `link_id` tritt es dem jüngsten Soul-Link derselben Route und Art bei, in dem der Spieler noch fehlt |
 | `encounter_missed` | `member_id`, `route_id?`, `note?` | verpasste Begegnung |
-| `encounter_status_changed` | `encounter_id`, `status` | Team ↔ Box |
+| `encounter_status_changed` | `encounter_id`, `status`, optional `slot` (1–6) | Team ↔ Box, Platz im Team; höchstens sechs im Team, Teammitglied mit `slot` wechselt den Platz |
 | `encounter_evolved` | `encounter_id`, `species_id` | nur innerhalb derselben Entwicklungsreihe |
 | `encounter_corrected` | `encounter_id`, `species_id` | falsches Pokémon korrigiert: setzt gefangene und aktuelle Art (laufender Run) |
 | `pokemon_died` | `encounter_id`, `route_id?` (Todesort), `cause?`, `opponent?`, `level?` | Tod; Partner werden `linked_dead` |
@@ -84,6 +84,11 @@ Challenge ──< Mitglied (Spieler / Zuschauer) ──< Gerät (anonyme Sitzung
 
 Jedes Ereignis speichert zusätzlich: fortlaufende Nummer pro Challenge (`seq`), Run-Nummer, Quelle
 (`web`/`bot`/`migration`), wer es ausgelöst hat, Zeitpunkt und optional eine `client_event_id`.
+
+Die Team-Plätze sind keine eigene Spalte, sondern werden im Frontend aus den Ereignissen des Runs
+nachgespielt (`src/lib/team.ts`): Fang ins Team → erster freier Platz, Wechsel ins Team → gewünschter
+`slot`, Platzwechsel im Team → Tausch mit dem Inhaber, Box oder Tod → Platz frei. Tauschen mit der
+Box sind zwei Ereignisse: erst `box`, dann `team` mit dem frei gewordenen Platz.
 
 Regeln, die die Datenbank erzwingt:
 

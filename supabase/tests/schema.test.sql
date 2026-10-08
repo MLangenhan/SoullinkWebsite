@@ -373,5 +373,41 @@ select public.delete_challenge(test.get('ch')::uuid, 'platin-soullink');
 reset role;
 select test.ok((select count(*) = 0 from public.events), 'Löschen der Challenge entfernt auch alle Ereignisse');
 
+-- ---------------------------------------------------------------- Team-Plätze und Teamgröße
+reset role;
+insert into public.challenges (id, slug, name) values ('00000000-0000-0000-0000-0000000000a1', 'team-test', 'Team');
+insert into public.challenge_members (id, challenge_id, role, display_name, seat)
+values ('00000000-0000-0000-0000-0000000000b1', '00000000-0000-0000-0000-0000000000a1', 'owner', 'Moritz', 0);
+insert into public.routes (id, challenge_id, name, sort_order)
+select ('00000000-0000-0000-0000-0000000000c' || i)::uuid, '00000000-0000-0000-0000-0000000000a1', 'Route ' || i, i
+from generate_series(1, 8) i;
+create function test.catch(p_route integer, p_status text default 'team') returns jsonb
+language sql as $$
+  select (private.append_event('00000000-0000-0000-0000-0000000000a1', 'encounter_logged',
+    jsonb_build_object('member_id', '00000000-0000-0000-0000-0000000000b1',
+                       'route_id', '00000000-0000-0000-0000-0000000000c' || p_route, 'species_id', 25, 'status', p_status),
+    'web', null, null)).payload;
+$$;
+create function test.status(p_encounter text, p_status text, p_slot integer default null) returns jsonb
+language sql as $$
+  select (private.append_event('00000000-0000-0000-0000-0000000000a1', 'encounter_status_changed',
+    jsonb_strip_nulls(jsonb_build_object('encounter_id', p_encounter, 'status', p_status, 'slot', p_slot)),
+    'web', null, null)).payload;
+$$;
+select test.put('t' || i, test.catch(i) ->> 'encounter_id') from generate_series(1, 6) i;
+select test.ok(test.catch(7) ->> 'status' = 'box', 'Neuer Fang landet bei vollem Team in der Box');
+select test.put('t7', (select encounter_id::text from public.encounters
+                       where route_id = '00000000-0000-0000-0000-0000000000c7'));
+select test.fails($$ select test.status(test.get('t7'), 'team') $$, 'PT409', 'Ins volle Team wechseln wird abgelehnt');
+select test.ok(test.status(test.get('t2'), 'box') ->> 'status' = 'box', 'Tauschen, Schritt 1: Pokémon in die Box');
+select test.ok(test.status(test.get('t7'), 'team', 2) ->> 'slot' = '2', 'Tauschen, Schritt 2: Box-Pokémon auf den freien Platz');
+select test.ok(test.status(test.get('t1'), 'team', 5) = jsonb_build_object('encounter_id', test.get('t1'), 'status', 'team', 'slot', 5),
+               'Platzwechsel innerhalb des Teams');
+select test.fails($$ select test.status(test.get('t1'), 'team') $$, 'PT409', 'Ins Team ohne Platz bleibt für Teammitglieder ein Fehler');
+select test.fails($$ select test.status(test.get('t1'), 'team', 7) $$, 'PT400', 'Platz außerhalb von 1–6 wird abgelehnt');
+select test.ok((select count(*) = 6 from public.encounters
+                where challenge_id = '00000000-0000-0000-0000-0000000000a1' and state = 'team'), 'Team hat weiter sechs Pokémon');
+delete from public.challenges where slug = 'team-test';
+
 \o
 \echo 'Alle Tests bestanden.'
