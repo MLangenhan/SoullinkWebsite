@@ -10,9 +10,13 @@ schreibt nichts in die Datenbank. Es erzeugt
 Die SQL-Datei enthält nur die Hashes der Einladungslinks, keine Geheimnisse. Alle Ereignisse laufen
 über private.append_event mit Quelle "migration", also durch dieselbe Validierung wie neue Eingaben.
 
-Beispiel:
-  python3 tools/migration/migrate_bot_data.py --run-dir ../Soullinkbot/data/runs/1a2b3c4d \\
-      --slug platin-soullink --owner Moritz --site-url https://mlangenhan.github.io/SoullinkWebsite
+Beispiel (Windows, PowerShell; --run-dir darf auch der ganze runs-Ordner sein, dann fragt das Skript):
+  py tools\\migration\\migrate_bot_data.py --run-dir "C:\\Users\\...\\Soullink Bot\\data\\runs"
+
+Beispiel (Linux/macOS):
+  python3 tools/migration/migrate_bot_data.py --run-dir ../Soullinkbot/data/runs/1a2b3c4d --owner Moritz
+
+Fehlende Angaben (welcher Run, wer die Leitung ist) fragt das Skript in der Konsole ab.
 
 Abbildung:
   - meta.json: Name, Spiel und Spieler (in dieser Reihenfolge). Status "completed" → der laufende Run
@@ -252,6 +256,67 @@ def build_plan(args, meta: dict, routes: dict, stats: dict, index: SpeciesIndex)
     return plan
 
 
+def ask(prompt: str) -> str:
+    """Eingabe in der Konsole; ohne Konsole (z. B. in Skripten) mit klarer Fehlermeldung."""
+    if not sys.stdin.isatty():
+        raise MigrationError(f"{prompt.strip()} – bitte als Option angeben (siehe --help)")
+    try:
+        return input(prompt).strip()
+    except EOFError as error:
+        raise MigrationError("Abgebrochen") from error
+
+
+def choose(title: str, options: list[str]) -> int:
+    """Nummerierte Auswahl in der Konsole, gibt den Index zurück."""
+    print(title)
+    for number, option in enumerate(options, start=1):
+        print(f"  [{number}] {option}")
+    while True:
+        answer = ask(f"Nummer (1–{len(options)}): ")
+        if answer.isdigit() and 1 <= int(answer) <= len(options):
+            return int(answer) - 1
+        print("Bitte eine der Nummern eingeben.")
+
+
+def clean_path(path: Path) -> Path:
+    """Pfad aus der Konsole: Anführungszeichen entfernen, ~ auflösen (Leerzeichen sind erlaubt)."""
+    return Path(str(path).strip().strip('"').strip("'")).expanduser()
+
+
+def pick_run_dir(path: Path) -> Path:
+    """Akzeptiert einen einzelnen Run-Ordner oder den ganzen runs-Ordner des Bots (dann Auswahl)."""
+    path = clean_path(path)
+    if not path.is_dir():
+        raise MigrationError(f"Ordner nicht gefunden: {path}")
+    if (path / "stats.json").exists():
+        return path
+    runs = sorted((d for d in path.iterdir() if d.is_dir() and (d / "stats.json").exists()), key=lambda d: d.name)
+    if not runs:
+        raise MigrationError(f"In {path} liegt weder eine stats.json noch ein Run-Ordner mit stats.json")
+    if len(runs) == 1:
+        return runs[0]
+
+    def describe(run: Path) -> str:
+        meta = load_json(run / "meta.json", {})
+        status = "abgeschlossen" if meta.get("status") == "completed" else "aktiv"
+        players = ", ".join(meta.get("players") or [])
+        return f"{meta.get('name') or run.name} ({meta.get('game') or '?'}) · {players} · {status} · {run.name}"
+
+    return runs[choose(f"In {path} liegen mehrere Runs. Welcher soll übernommen werden?", [describe(r) for r in runs])]
+
+
+def candidate_players(meta: dict, stats: dict) -> list[str]:
+    names: list[str] = []
+    for name in meta.get("players") or []:
+        if name not in names:
+            names.append(name)
+    for key in ("deaths", "alldeaths", "missed_encounters", "overall_missed_encounters"):
+        for name in stats.get(key) or {}:
+            if name not in names:
+                names.append(name)
+    return names
+
+
 def new_invite_token() -> str:
     """Gleiches Format wie private.new_token('inv_') in der Datenbank."""
     return "inv_" + base64.urlsafe_b64encode(secrets.token_bytes(32)).decode("ascii").rstrip("=")
@@ -382,6 +447,30 @@ def report(plan: Plan) -> dict:
     }
 
 
+def summary_text(plan: Plan) -> str:
+    """Kurze, lesbare Zusammenfassung für die Konsole (Details stehen im JSON-Bericht)."""
+    if any(group is not None for group in plan.groups.values()):
+        pairs: dict[int, list[str]] = {}
+        for player, group in plan.groups.items():
+            pairs.setdefault(group if group is not None else -1, []).append(player)
+        links = " · ".join(" ↔ ".join(names) for names in pairs.values())
+    else:
+        links = "alle gemeinsam"
+    lines = [
+        "",
+        f"Challenge:    {plan.name} ({plan.game})",
+        f"Spieler:      {', '.join(plan.players)}",
+        f"Soul-Links:   {links}",
+        f"Laufender Run {len(plan.finished_runs) + 1}: {len(plan.routes)} Routen, {len(plan.encounters)} Begegnungen, "
+        f"{len(plan.deaths)} Tode" + (" · danach als gewonnen abgeschlossen" if plan.completed else ""),
+        f"Frühere Runs: {len(plan.finished_runs)}",
+    ]
+    if plan.unresolved:
+        names = ", ".join(str(u.get("name") or u.get("dead")) for u in plan.unresolved)
+        lines.append(f"Nicht erkannt: {names}")
+    return "\n".join(lines) + "\n"
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     source = parser.add_mutually_exclusive_group(required=True)
@@ -393,10 +482,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--slug", help="Adresse der Challenge (Standard: aus dem Namen)")
     parser.add_argument("--game", help="Spiel (Standard: aus meta.json)")
     parser.add_argument("--visibility", choices=("public", "private"), default="private")
-    parser.add_argument("--owner", required=True, help="Spielername der Challenge-Leitung")
+    parser.add_argument("--owner", help="Spielername der Challenge-Leitung (sonst Abfrage)")
     parser.add_argument("--links", choices=("pairs", "all"), default="pairs",
                         help="Soul-Links paarweise nach Reihenfolge (wie im Bot) oder alle gemeinsam")
-    parser.add_argument("--site-url", default="http://localhost:5173",
+    parser.add_argument("--site-url", default="https://mlangenhan.github.io/SoullinkWebsite",
                         help="Adresse der Website inkl. Pfad, z. B. https://<name>.github.io/SoullinkWebsite")
     parser.add_argument("--invite-days", type=int, default=14, help="Gültigkeit der Einladungslinks in Tagen")
     parser.add_argument("--alias", action="append", default=[], metavar="ALT=NEU", help="Spielernamen vereinheitlichen")
@@ -412,11 +501,18 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         if args.run_dir:
-            meta = load_json(args.run_dir / "meta.json", {})
-            routes = load_json(args.run_dir / "routes.json", {})
-            stats = load_json(args.run_dir / "stats.json")
+            run_dir = pick_run_dir(args.run_dir)
+            print(f"Run-Ordner: {run_dir}")
+            meta = load_json(run_dir / "meta.json", {})
+            routes = load_json(run_dir / "routes.json", {})
+            stats = load_json(run_dir / "stats.json")
         else:
-            meta, routes, stats = {}, {}, load_json(args.stats)
+            meta, routes, stats = {}, {}, load_json(clean_path(args.stats))
+        if not args.owner:
+            players = candidate_players(meta, stats)
+            if not players:
+                raise MigrationError("Keine Spieler gefunden")
+            args.owner = players[choose("Wer wird Leitung der Challenge (bekommt alle Rechte)?", players)]
         index = SpeciesIndex(load_json(args.species), load_json(args.mapping))
         plan = build_plan(args, meta, routes, stats, index)
     except MigrationError as error:
@@ -434,7 +530,7 @@ def main(argv: list[str] | None = None) -> int:
     args.report.write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     args.out.write_text(render_sql(args, plan, member_ids, tokens), encoding="utf-8")
 
-    print(json.dumps({k: v for k, v in summary.items() if k != "hinweise"}, ensure_ascii=False, indent=2))
+    print(summary_text(plan))
     for warning in plan.warnings:
         print(f"Hinweis: {warning}")
     site = args.site_url.rstrip("/")
@@ -444,9 +540,19 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {player}: {link}")
     if args.links_out:
         args.links_out.write_text(json.dumps(links, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    print(f"\nSQL: {args.out}  Bericht: {args.report}  Adresse: /c/{args.slug}")
+    print(f"\nSQL-Datei:  {args.out.resolve()}")
+    print(f"Bericht:    {args.report.resolve()}")
+    print(f"Adresse:    {site}/c/{args.slug}")
+    print("\nNächste Schritte:")
+    print("  1. Hinweise oben prüfen.")
+    print("  2. Inhalt der SQL-Datei im Supabase-Dashboard unter SQL Editor einfügen und ausführen.")
+    print(f"  3. Zuerst den Link von {args.owner} öffnen (damit wird man Leitung), danach die anderen verschicken.")
     return 0
 
 
 if __name__ == "__main__":
+    # Windows-Konsolen nutzen teils noch alte Codepages; Umlaute und Pfeile sicher ausgeben
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
     sys.exit(main())

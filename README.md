@@ -151,15 +151,27 @@ Datenbank-Tests (Schema, RLS, Import) sowie Lint, Typprüfung und Build der Webs
 Jeder Run des Bots liegt in einem eigenen Ordner `data/runs/<id>/` mit `meta.json`, `routes.json`
 und `stats.json`. Ein solcher Ordner wird eine Challenge.
 
-```bash
-python3 tools/migration/migrate_bot_data.py \
-  --run-dir ../Soullinkbot/data/runs/<id> \
-  --owner Moritz \
-  --site-url https://mlangenhan.github.io/SoullinkWebsite
+**Windows (PowerShell)**, im Ordner der Website; den Pfad zum `runs`-Ordner des Bots in
+Anführungszeichen, weil er Leerzeichen enthält:
+
+```powershell
+py tools\migration\migrate_bot_data.py --run-dir "C:\Users\bymot\Documents\Projekte\Discord Bot\Soullink Bot\data\runs"
 ```
 
-Das Skript (nur Python 3.10+, keine Pakete) schreibt **nichts** in die Datenbank, sondern zeigt einen
-Bericht und erzeugt:
+Das Skript listet die Runs des Bots auf und fragt, welcher übernommen werden soll und wer die
+Leitung bekommt. Falls `py` nicht gefunden wird: `python` statt `py`.
+
+**Linux/macOS:**
+
+```bash
+python3 tools/migration/migrate_bot_data.py --run-dir ../Soullinkbot/data/runs
+```
+
+Alles lässt sich auch direkt angeben, dann fragt das Skript nichts: `--run-dir` auf einen einzelnen
+Run-Ordner, `--owner Moritz`, `--site-url` (Standard: `https://mlangenhan.github.io/SoullinkWebsite`).
+
+Das Skript (nur Python 3.10+, keine Pakete) schreibt **nichts** in die Datenbank, sondern zeigt eine
+Zusammenfassung und erzeugt:
 
 - `migration.sql`: der Import, in einer Transaktion,
 - `migration-report.json`: was übernommen wurde und was nicht zugeordnet werden konnte,
