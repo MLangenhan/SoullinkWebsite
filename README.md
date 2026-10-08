@@ -59,6 +59,11 @@ Gerät verbinden** selbst einen neuen Link.
 |---|---|
 | Begegnung eintragen | **Begegnung eintragen**: Route wählen oder neu eingeben, Wild oder Static, für jeden Spieler das Pokémon (Suche nach deutschem oder englischem Namen oder Pokédex-Nummer) oder **Verpasst** |
 | Später nachtragen | im Tab **Routen** in der eigenen Spalte auf **Nachtragen** klicken; das Pokémon kommt automatisch in den richtigen Soul-Link. Alternativ **Begegnung eintragen** mit derselben Route: Wer schon eingetragen ist, wird angezeigt, nur die Fehlenden werden ergänzt |
+| Team oder Box | ergibt sich von selbst: Ein Soul-Link kommt ins Team, sobald alle seine Pokémon da sind und jeder Beteiligte weniger als sechs im Team hat (die schon Gefangenen rücken dann mit nach); sonst in die Box. Unvollständige Soul-Links tauchen in der Box nicht auf |
+| Soul-Link verfallen | Hat nicht jeder auf einer Route etwas gefangen: in der Routen-Zeile **Verfallen lassen**. Die Fehlenden gelten als „verpasst“ (zählt und hakt die Route ab), die Route wird ausgeblendet (**Verfallene Routen zeigen** blendet sie wieder ein) |
+| Level-Cap | im Kopf der Challenge mit − und + zum vorherigen bzw. nächsten Cap des Spiels; ein neuer Run beginnt wieder beim ersten. Das Spiel wird am Namen erkannt oder unter **Einstellungen → Spielregeln** gewählt |
+| Dupes | Suche im Tab **Routen** findet ganze Entwicklungsreihen und sagt, ob die Reihe in diesem Run schon gefangen wurde; beim Eintragen warnt der Dialog. Gilt für alle Spieler zusammen, abschaltbar unter **Spielregeln** |
+| Pokédex | Tab **Pokédex**: gegnerisches oder eigenes Pokémon nachschlagen. Typen, Schwächen, Basiswerte, Attacken per Level der gespielten Edition (über dem Level-Cap abgeblendet), wie das eigene Team dagegen steht, Entwicklungen mit Bedingungen, Link ins PokéWiki |
 | Falsches Pokémon eingetragen | Pokémon anklicken → **Falsches Pokémon? Ändern** (rückgängig über die Timeline) |
 | Team und Box | Tab **Teams**: Spieler oben wählen, links das Team (6 Plätze), rechts die Box. Pokémon per **Drag and Drop** verschieben; ein Box-Pokémon auf einen belegten Platz tauscht beide, wie im Spiel. Am Handy kurz gedrückt halten. Unter dem Team steht immer, von welcher Route jedes Teammitglied kommt; ein Klick zeigt Herkunft und Soul-Link |
 | Teams angleichen | Kommt ein Pokémon ins Team oder in die Box, wechseln seine Soul-Link-Partner bei den anderen automatisch mit (wild und Static getrennt, bei Paaren nur der Partner). Beim Ziehen zeigt eine Vorschau, was bei wem passiert; die anderen bekommen einen Hinweis mit „Rückgängig“. Nur das eigene Team ändern: Schalter „Teams angleichen“ oder Shift beim Ablegen. Nicht angeglichene Pokémon tragen ein gelbes Warnsymbol; in den Details gleicht „Partner angleichen“ sie nach. Ganz ausschalten: **Einstellungen → Teams angleichen** |
@@ -106,7 +111,9 @@ Supabase ist die Datenbank. Der Free Tier reicht; Dauer etwa 10 Minuten.
    [`supabase/migrations/20261010120000_team_slots.sql`](supabase/migrations/20261010120000_team_slots.sql)
    (Team-Plätze, höchstens sechs im Team) und
    [`supabase/migrations/20261011120000_team_sync.sql`](supabase/migrations/20261011120000_team_sync.sql)
-   (Teams angleichen). Reihenfolge beachten, jede Datei nur einmal.
+   (Teams angleichen) und
+   [`supabase/migrations/20261012120000_rules.sql`](supabase/migrations/20261012120000_rules.sql)
+   (Level-Cap, Dupes, verfallene Soul-Links). Reihenfolge beachten, jede Datei nur einmal.
 
    **Später neue Dateien in `supabase/migrations/`?** Nur die neuen, in der Reihenfolge ihres
    Datums, ebenso im SQL Editor ausführen. Bestehende Daten bleiben erhalten.
@@ -321,8 +328,11 @@ supabase/
   config.toml            lokaler Supabase-Stack
 tools/
   generate_species.py    Stammdaten aus PokeAPI
+  generate_dex.py        Pokédex-Daten pro Edition (public/dex/) aus PokeAPI
   migration/             Import eines Bot-Runs (mit Testdaten im Bot-Format)
 data/species.json        Stammdaten als JSON
+public/dex/              Attacken, Werte, Typen, Entwicklungen pro Edition (generiert)
+src/data/levelCaps.ts    Level-Caps pro Spiel (aus dem Discord-Bot)
 scripts/test-db.sh       Datenbank-Tests
 .github/workflows/       CI und Veröffentlichung auf GitHub Pages
 docs/architektur.md      Architektur und Entscheidungen

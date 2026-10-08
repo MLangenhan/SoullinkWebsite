@@ -37,6 +37,12 @@ export interface Challenge {
   bot_allow_unlinked: boolean
   /** Teamwechsel ziehen die Soul-Link-Partner der anderen mit */
   team_sync: boolean
+  /** Level-Cap-Vorlage (src/data/levelCaps.ts); null = am Spielnamen erkennen, 'none' = keine */
+  level_cap_preset: string | null
+  level_cap_index: number
+  /** Run, für den level_cap_index gesetzt wurde; in einem neuen Run beginnt der Cap von vorn */
+  level_cap_run: number
+  dupes_clause: boolean
   last_seq: number
   created_at: string
 }

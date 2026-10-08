@@ -6,15 +6,16 @@ import { SpeciesPicker } from '@/components/SpeciesPicker'
 import { Pokeball } from '@/components/Pokeball'
 import { Sprite } from '@/components/Sprite'
 import type { ChallengeData } from '@/hooks/useChallenge'
-import { appendEvent, createRoute } from '@/lib/actions'
+import { DupeWarning } from '@/components/challenge/DupeWarning'
+import { appendEvent, changeTeam, createRoute } from '@/lib/actions'
+import { autoStatus } from '@/lib/links'
 import type { SpeciesIndex } from '@/lib/species'
 import { toast, toastError } from '@/lib/toast'
-import type { EncounterKind, EncounterStatus } from '@/lib/types'
+import type { EncounterKind } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 interface Entry {
   speciesId: number | null
-  status: EncounterStatus
   missed: boolean
   /** Feste IDs pro geöffnetem Dialog: Erneutes Absenden nach einem Fehler erzeugt keine Duplikate */
   encounterId: string
@@ -25,7 +26,7 @@ function freshEntries(data: ChallengeData): Record<string, Entry> {
   return Object.fromEntries(
     data.players.map((p) => [
       p.id,
-      { speciesId: null, status: 'team', missed: false, encounterId: crypto.randomUUID(), clientEventId: crypto.randomUUID() },
+      { speciesId: null, missed: false, encounterId: crypto.randomUUID(), clientEventId: crypto.randomUUID() },
     ]),
   )
 }
@@ -88,11 +89,14 @@ function LogForm({ data, species, close }: { data: ChallengeData; species: Speci
     if (filled.length === 0) return
     setBusy(true)
     try {
+      // Team oder Box: Team nur, wenn der Soul-Link damit vollständig ist und alle Platz haben
+      const caught = open.filter((p) => entries[p.id].speciesId !== null && !entries[p.id].missed).map((p) => p.id)
+      const plan = autoStatus(data.players, data.encounters, existingRoute?.id ?? null, kind, caught)
       const route = await createRoute(data.challenge.id, routeName)
       for (const player of open) {
         const entry = entries[player.id]
         if (entry.missed) {
-          await appendEvent(data.challenge.id, 'encounter_missed', { member_id: player.id, route_id: route.id }, entry.clientEventId)
+          await appendEvent(data.challenge.id, 'encounter_missed', { member_id: player.id, route_id: route.id, kind }, entry.clientEventId)
         } else if (entry.speciesId !== null) {
           await appendEvent(
             data.challenge.id,
@@ -103,11 +107,18 @@ function LogForm({ data, species, close }: { data: ChallengeData; species: Speci
               route_id: route.id,
               species_id: entry.speciesId,
               kind,
-              status: entry.status,
+              status: plan.status.get(player.id) ?? 'box',
             },
             entry.clientEventId,
           )
         }
+      }
+      if (plan.promote.length) {
+        await changeTeam(
+          data.challenge.id,
+          crypto.randomUUID(),
+          plan.promote.map((e) => ({ encounter_id: e.encounter_id, status: 'team' as const })),
+        )
       }
       toast(`${route.name}: ${filled.length} ${filled.length === 1 ? 'Eintrag' : 'Einträge'} gespeichert`)
       close()
@@ -178,20 +189,6 @@ function LogForm({ data, species, close }: { data: ChallengeData; species: Speci
                   {player.display_name}
                 </span>
                 <div className="flex items-center gap-1 text-xs">
-                  {(['team', 'box'] as const).map((status) => (
-                    <button
-                      key={status}
-                      type="button"
-                      disabled={entry.missed}
-                      onClick={() => update(player.id, { status })}
-                      className={cn(
-                        'label rounded border px-2 py-1 text-[0.6rem] transition-colors disabled:opacity-40',
-                        entry.status === status ? 'border-primary text-primary' : 'text-muted-foreground',
-                      )}
-                    >
-                      {status === 'team' ? 'Team' : 'Box'}
-                    </button>
-                  ))}
                   <button
                     type="button"
                     onClick={() => update(player.id, { missed: !entry.missed, speciesId: null })}
@@ -209,13 +206,19 @@ function LogForm({ data, species, close }: { data: ChallengeData; species: Speci
                   Begegnung verpasst – zählt bei {player.display_name}.
                 </p>
               ) : (
-                <SpeciesPicker index={species} value={entry.speciesId} onChange={(id) => update(player.id, { speciesId: id })} />
+                <>
+                  <SpeciesPicker index={species} value={entry.speciesId} onChange={(id) => update(player.id, { speciesId: id })} />
+                  <DupeWarning speciesId={entry.speciesId} data={data} species={species} />
+                </>
               )}
             </div>
           )
         })}
       </div>
 
+      <p className="text-xs text-muted-foreground">
+        Team oder Box ergibt sich von selbst: ins Team, sobald alle Pokémon des Soul-Links da sind und jeder noch Platz hat.
+      </p>
       <Button type="submit" size="lg" disabled={busy || filled.length === 0 || !routeName.trim()}>
         {busy ? 'Speichere …' : `Speichern (${filled.length}/${open.length})`}
       </Button>
