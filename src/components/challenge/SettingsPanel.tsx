@@ -204,6 +204,7 @@ function OwnerSettings({ data, onChanged }: { data: ChallengeData; onChanged: ()
       </Section>
 
       <LinkGroupsSection data={data} onChanged={onChanged} />
+      <TeamSyncSection data={data} onChanged={onChanged} />
 
       <Section
         title="Mitglieder & Geräte"
@@ -423,6 +424,51 @@ function OwnerSettings({ data, onChanged }: { data: ChallengeData; onChanged: ()
         </form>
       </Section>
     </>
+  )
+}
+
+/** Teams angleichen: zieht ein Teamwechsel die Soul-Link-Partner der anderen mit? */
+function TeamSyncSection({ data, onChanged }: { data: ChallengeData; onChanged: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false)
+  const set = async (enabled: boolean) => {
+    setBusy(true)
+    const ok = await attempt(() => rpc('set_team_sync', { p_challenge_id: data.challenge.id, p_enabled: enabled }).then(() => true))
+    await onChanged()
+    setBusy(false)
+    if (ok) toast(enabled ? 'Teams werden automatisch angeglichen' : 'Teams werden nicht mehr angeglichen')
+  }
+  return (
+    <Section
+      title="Teams angleichen"
+      description="Kommt ein Pokémon ins Team oder in die Box, wechseln seine Soul-Link-Partner bei den anderen mit (wild und Static getrennt). Einzelne Wechsel lassen sich trotzdem nur für ein Team machen: Schalter „Teams angleichen“ im Tab Teams oder Shift beim Ablegen."
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        {(
+          [
+            { enabled: true, title: 'Automatisch', text: 'Teamwechsel gelten für alle verbundenen Teams. Die anderen bekommen einen Hinweis.' },
+            { enabled: false, title: 'Aus', text: 'Jeder ändert nur sein eigenes Team.' },
+          ] as const
+        ).map((option) => {
+          const active = data.challenge.team_sync === option.enabled
+          return (
+            <button
+              key={option.title}
+              type="button"
+              disabled={busy || active}
+              onClick={() => void set(option.enabled)}
+              className={
+                active
+                  ? 'rounded-xl border-2 border-primary bg-primary/5 p-4 text-left'
+                  : 'rounded-xl border-2 border-border p-4 text-left transition-colors hover:border-primary/50 disabled:opacity-60'
+              }
+            >
+              <span className="font-display tracking-tight text-xl font-bold">{option.title}</span>
+              <span className="mt-1 block text-sm text-muted-foreground">{option.text}</span>
+            </button>
+          )
+        })}
+      </div>
+    </Section>
   )
 }
 

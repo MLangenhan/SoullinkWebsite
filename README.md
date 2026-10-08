@@ -61,6 +61,7 @@ Gerät verbinden** selbst einen neuen Link.
 | Später nachtragen | im Tab **Routen** in der eigenen Spalte auf **Nachtragen** klicken; das Pokémon kommt automatisch in den richtigen Soul-Link. Alternativ **Begegnung eintragen** mit derselben Route: Wer schon eingetragen ist, wird angezeigt, nur die Fehlenden werden ergänzt |
 | Falsches Pokémon eingetragen | Pokémon anklicken → **Falsches Pokémon? Ändern** (rückgängig über die Timeline) |
 | Team und Box | Tab **Teams**: Spieler oben wählen, links das Team (6 Plätze), rechts die Box. Pokémon per **Drag and Drop** verschieben; ein Box-Pokémon auf einen belegten Platz tauscht beide, wie im Spiel. Am Handy kurz gedrückt halten. Unter dem Team steht immer, von welcher Route jedes Teammitglied kommt; ein Klick zeigt Herkunft und Soul-Link |
+| Teams angleichen | Kommt ein Pokémon ins Team oder in die Box, wechseln seine Soul-Link-Partner bei den anderen automatisch mit (wild und Static getrennt, bei Paaren nur der Partner). Beim Ziehen zeigt eine Vorschau, was bei wem passiert; die anderen bekommen einen Hinweis mit „Rückgängig“. Nur das eigene Team ändern: Schalter „Teams angleichen“ oder Shift beim Ablegen. Nicht angeglichene Pokémon tragen ein gelbes Warnsymbol; in den Details gleicht „Partner angleichen“ sie nach. Ganz ausschalten: **Einstellungen → Teams angleichen** |
 | Pokémon suchen | Tab **Routen**: Suchfeld (oder Taste `/`) nach Pokémon (deutsch, englisch, Nummer, Spitzname, auch die gefangene Vorstufe) oder Route |
 | Entwicklung, Tod | Pokémon im Tab **Routen** anklicken (oder im Tab **Teams** auf „Entwicklung, Tod und mehr“) |
 | Tod mit Ursache, Gegner, Level, Ort | im selben Dialog unter **Tod eintragen**; der Soul-Link-Partner stirbt automatisch mit |
@@ -103,7 +104,9 @@ Supabase ist die Datenbank. Der Free Tier reicht; Dauer etwa 10 Minuten.
    [`supabase/migrations/20261009120000_encounter_corrections.sql`](supabase/migrations/20261009120000_encounter_corrections.sql)
    (Pokémon korrigieren) und
    [`supabase/migrations/20261010120000_team_slots.sql`](supabase/migrations/20261010120000_team_slots.sql)
-   (Team-Plätze, höchstens sechs im Team). Reihenfolge beachten, jede Datei nur einmal.
+   (Team-Plätze, höchstens sechs im Team) und
+   [`supabase/migrations/20261011120000_team_sync.sql`](supabase/migrations/20261011120000_team_sync.sql)
+   (Teams angleichen). Reihenfolge beachten, jede Datei nur einmal.
 
    **Später neue Dateien in `supabase/migrations/`?** Nur die neuen, in der Reihenfolge ihres
    Datums, ebenso im SQL Editor ausführen. Bestehende Daten bleiben erhalten.

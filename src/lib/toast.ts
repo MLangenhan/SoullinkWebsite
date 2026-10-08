@@ -2,8 +2,9 @@ import { useSyncExternalStore } from 'react'
 
 export interface Toast {
   id: number
-  kind: 'ok' | 'error'
+  kind: 'ok' | 'error' | 'info'
   text: string
+  action?: { label: string; run: () => void }
 }
 
 let toasts: Toast[] = []
@@ -14,11 +15,15 @@ function emit() {
   for (const listener of listeners) listener()
 }
 
-export function toast(text: string, kind: Toast['kind'] = 'ok') {
+export function toast(
+  text: string,
+  kind: Toast['kind'] = 'ok',
+  options: { action?: Toast['action']; duration?: number } = {},
+) {
   const id = nextId++
-  toasts = [...toasts, { id, kind, text }].slice(-4)
+  toasts = [...toasts, { id, kind, text, action: options.action }].slice(-4)
   emit()
-  setTimeout(() => dismiss(id), kind === 'error' ? 6000 : 3500)
+  setTimeout(() => dismiss(id), options.duration ?? (kind === 'ok' ? 3500 : 6000))
 }
 
 export function toastError(error: unknown) {

@@ -407,6 +407,62 @@ select test.fails($$ select test.status(test.get('t1'), 'team') $$, 'PT409', 'In
 select test.fails($$ select test.status(test.get('t1'), 'team', 7) $$, 'PT400', 'Platz außerhalb von 1–6 wird abgelehnt');
 select test.ok((select count(*) = 6 from public.encounters
                 where challenge_id = '00000000-0000-0000-0000-0000000000a1' and state = 'team'), 'Team hat weiter sechs Pokémon');
+
+-- ---------------------------------------------------------------- Teams angleichen (change_team)
+insert into public.challenge_members (id, challenge_id, role, display_name, seat)
+values ('00000000-0000-0000-0000-0000000000b2', '00000000-0000-0000-0000-0000000000a1', 'player', 'Janne', 1);
+create function test.catch_janne(p_route integer) returns jsonb
+language sql as $$
+  select (private.append_event('00000000-0000-0000-0000-0000000000a1', 'encounter_logged',
+    jsonb_build_object('member_id', '00000000-0000-0000-0000-0000000000b2',
+                       'route_id', '00000000-0000-0000-0000-0000000000c' || p_route, 'species_id', 25, 'status', 'team'),
+    'web', null, null)).payload;
+$$;
+select test.put('j' || i, test.catch_janne(i) ->> 'encounter_id') from generate_series(1, 7) i;
+select test.ok((select count(distinct link_id) = 7 and count(*) = 14 from public.encounters
+                where challenge_id = '00000000-0000-0000-0000-0000000000a1' and route_id::text like '%c_'),
+               'Janne tritt den Soul-Links von Moritz bei');
+-- Ausgangslage: beide mit Route 1–6 im Team, Route 7 in der Box
+select test.status(test.get('t7'), 'box'), test.status(test.get('t2'), 'team', 2);
+insert into public.member_devices (user_id, challenge_id, member_id)
+values ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-0000000000a1', '00000000-0000-0000-0000-0000000000b1');
+create function test.state(p_key text) returns text
+language sql stable as $$ select state::text from public.encounters where encounter_id = test.get(p_key)::uuid $$;
+
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000001';
+-- Moritz tauscht Route 3 (Team) gegen Route 7 (Box), Jannes Partner werden mitgezogen
+select test.put('g1', gen_random_uuid()::text);
+select test.ok(cardinality(public.change_team('00000000-0000-0000-0000-0000000000a1', test.get('g1')::uuid, jsonb_build_array(
+    jsonb_build_object('encounter_id', test.get('t7'), 'status', 'team', 'slot', 3),
+    jsonb_build_object('encounter_id', test.get('j7'), 'status', 'team', 'slot', 3),
+    jsonb_build_object('encounter_id', test.get('t3'), 'status', 'box'),
+    jsonb_build_object('encounter_id', test.get('j3'), 'status', 'box')))) = 4,
+  'Teamwechsel für beide Spieler in einer Aktion (Box zuerst, auch wenn anders sortiert)');
+select test.ok(test.state('t7') = 'team' and test.state('j7') = 'team' and test.state('t3') = 'box' and test.state('j3') = 'box',
+               'Beide Teams sind angeglichen');
+select test.ok((select count(*) = 4 from public.events where payload ->> 'group_id' = test.get('g1')),
+               'Alle Wechsel tragen dieselbe group_id');
+select test.ok(cardinality(public.change_team('00000000-0000-0000-0000-0000000000a1', test.get('g1')::uuid,
+    jsonb_build_array(jsonb_build_object('encounter_id', test.get('t3'), 'status', 'team')))) = 4,
+  'Wiederholte Anfrage liefert die vorhandenen Ereignisse');
+select test.ok((select count(*) = 4 from public.events where payload ->> 'group_id' = test.get('g1')),
+               'Wiederholte Anfrage schreibt nichts doppelt');
+select test.fails(format($$ select public.change_team(%L, gen_random_uuid(), %L) $$, '00000000-0000-0000-0000-0000000000a1',
+    jsonb_build_array(jsonb_build_object('encounter_id', test.get('t4'), 'status', 'box'),
+                      jsonb_build_object('encounter_id', test.get('j3'), 'status', 'team'))),
+  'PT409', 'Ein unmöglicher Wechsel bricht die ganze Aktion ab');
+select test.ok(test.state('t4') = 'team', 'Nach dem Abbruch ist nichts geschrieben');
+select test.ok(cardinality(public.undo_team_change('00000000-0000-0000-0000-0000000000a1', test.get('g1')::uuid)) = 4,
+               'Rückgängig schreibt ein Undo pro Wechsel');
+select test.ok(test.state('t7') = 'box' and test.state('j7') = 'box' and test.state('t3') = 'team' and test.state('j3') = 'team',
+               'Rückgängig macht die ganze Aktion für alle zurück');
+select test.fails(format($$ select public.undo_team_change(%L, %L) $$, '00000000-0000-0000-0000-0000000000a1', test.get('g1')),
+  'PT404', 'Zweites Rückgängig findet nichts mehr');
+select test.ok(not (public.set_team_sync('00000000-0000-0000-0000-0000000000a1', false)).team_sync, 'Leitung schaltet Angleichen aus');
+reset role;
+select test.ok((select team_sync from public.challenges where slug = 'platin-soullink') is null
+               and (select not team_sync from public.challenges where slug = 'team-test'), 'Einstellung gilt pro Challenge');
 delete from public.challenges where slug = 'team-test';
 
 \o

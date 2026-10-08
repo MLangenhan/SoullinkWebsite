@@ -35,6 +35,8 @@ export interface Challenge {
   game: string
   visibility: Visibility
   bot_allow_unlinked: boolean
+  /** Teamwechsel ziehen die Soul-Link-Partner der anderen mit */
+  team_sync: boolean
   last_seq: number
   created_at: string
 }

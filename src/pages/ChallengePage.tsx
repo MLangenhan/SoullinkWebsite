@@ -15,6 +15,7 @@ import { SplitReveal } from '@/components/fx/SplitReveal'
 import { Pokeball } from '@/components/Pokeball'
 import { Button } from '@/components/ui/button'
 import { useChallenge, useLookups } from '@/hooks/useChallenge'
+import { useTeamNotices } from '@/hooks/useTeamNotices'
 import { useSessionUserId } from '@/hooks/useSession'
 import { useSpecies } from '@/hooks/useSpecies'
 import { linkProps } from '@/lib/router'
@@ -45,6 +46,7 @@ export function ChallengePage({ slug }: { slug: string }) {
   const state = useChallenge(slug, run, userId)
   const data = state.status === 'ready' ? state.data : null
   const lookups = useLookups(data)
+  useTeamNotices(data, lookups, species, state.status === 'ready' ? state.refresh : undefined)
 
   useEffect(() => {
     const url = new URL(window.location.href)

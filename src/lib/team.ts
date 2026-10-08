@@ -85,3 +85,92 @@ export function arrange(memberId: string, encounters: Encounter[], events: Chall
     box: own.filter((e) => e.state === 'box'),
   }
 }
+
+export interface Move {
+  encounter: Encounter
+  status: 'team' | 'box'
+  /** Platz 1–6 */
+  slot?: number
+}
+
+/** Was ein Teamwechsel bei einem anderen Spieler auslöst */
+export interface Effect {
+  memberId: string
+  in: Move[]
+  out: Move[]
+  /** Warum etwas nicht angeglichen wird (kein Partner, Team voll) */
+  notes: string[]
+}
+
+const alive = (e: Encounter) => e.state === 'team' || e.state === 'box'
+
+/**
+ * Soul-Link-Partner der anderen Spieler nachziehen: Geht ein Pokémon in die Box, folgen seine Partner;
+ * kommt eines ins Team, folgen sie auch und nehmen den Platz ein, den ihr ausgetauschter Partner frei macht.
+ * Wild und Static sind getrennte Soul-Links und bleiben es; bei Paaren betrifft es nur den Partner.
+ * Platzwechsel innerhalb des Teams bleiben persönlich.
+ */
+export function mirror(
+  primary: Move[],
+  ownerId: string,
+  memberIds: string[],
+  encounters: Encounter[],
+  events: ChallengeEvent[],
+  routeName: (e: Encounter) => string,
+): Effect[] {
+  const changes = primary.filter((m) => m.encounter.state !== m.status)
+  const effects: Effect[] = []
+  for (const memberId of memberIds) {
+    if (memberId === ownerId) continue
+    const effect: Effect = { memberId, in: [], out: [], notes: [] }
+    const arrangement = arrange(memberId, encounters, events)
+    const partnerOf = (move: Move) =>
+      encounters.find((e) => e.member_id === memberId && e.link_id === move.encounter.link_id && alive(e))
+    const linked = (move: Move) => encounters.some((e) => e.member_id === memberId && e.link_id === move.encounter.link_id)
+
+    const freed: number[] = []
+    for (const move of changes.filter((m) => m.status === 'box')) {
+      const partner = partnerOf(move)
+      if (partner?.state === 'team') {
+        effect.out.push({ encounter: partner, status: 'box' })
+        freed.push(arrangement.slots.findIndex((e) => e?.encounter_id === partner.encounter_id))
+      }
+    }
+    const taken = new Set(arrangement.slots.flatMap((e, i) => (e && !effect.out.some((o) => o.encounter.encounter_id === e.encounter_id) ? [i] : [])))
+    let teamSize = taken.size
+    for (const move of changes.filter((m) => m.status === 'team')) {
+      const partner = partnerOf(move)
+      if (!partner) {
+        if (!linked(move)) effect.notes.push(`kein Pokémon von ${routeName(move.encounter)}`)
+        continue
+      }
+      if (partner.state === 'team') continue
+      if (teamSize >= TEAM_SIZE) {
+        effect.notes.push('Team voll')
+        continue
+      }
+      // Platz des ausgetauschten Partners, sonst der erste freie
+      let slot = freed.shift()
+      if (slot === undefined || slot < 0 || taken.has(slot)) {
+        slot = Array.from({ length: TEAM_SIZE }, (_, i) => i).find((i) => !taken.has(i) && !freed.includes(i))
+      }
+      if (slot === undefined) {
+        effect.notes.push('Team voll')
+        continue
+      }
+      taken.add(slot)
+      teamSize++
+      effect.in.push({ encounter: partner, status: 'team', slot: slot + 1 })
+    }
+    if (effect.in.length || effect.out.length || effect.notes.length) effects.push(effect)
+  }
+  return effects
+}
+
+/** Lebende Soul-Link-Partner, die nicht im selben Zustand (Team/Box) sind wie dieses Pokémon */
+export function unsynced(encounter: Encounter, encounters: Encounter[]): Encounter[] {
+  if (!alive(encounter)) return []
+  return encounters.filter(
+    (e) => e.link_id === encounter.link_id && e.encounter_id !== encounter.encounter_id && alive(e) && e.state !== encounter.state,
+  )
+}
