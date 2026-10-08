@@ -1,0 +1,9 @@
+{
+  "id": "1a2b3c4d",
+  "name": "Platin Soul Link",
+  "game": "Pokemon Platin",
+  "players": ["Moritz", "Janne", "Elsmann", "Linus"],
+  "status": "active",
+  "created_at": "2026-09-01",
+  "completed_at": null
+}
