@@ -1,48 +1,36 @@
 # Architektur: Soul-Link-Plattform
 
 Umgesetzt: Datenbankschema ([`supabase/migrations/`](../supabase/migrations/)), Pokémon-Stammdaten
-([`tools/generate_species.py`](../tools/generate_species.py)), Import der Bot-Altdaten
-([`tools/migration/`](../tools/migration/)) und Tests für alles davon. Als Nächstes: das Frontend.
+([`tools/generate_species.py`](../tools/generate_species.py)), Import der Bot-Zähler
+([`tools/migration/`](../tools/migration/)), Frontend ([`src/`](../src/)) und Tests.
+Einrichtung Schritt für Schritt: [`setup.md`](setup.md). Offen: Bot auf die neue Datenbank umbauen,
+danach die Sicherheitsphase (Threat Model, Header/CSP, CI-Scans, Pentest-Bericht).
 
 ## 1. Ausgangslage: was der Bot heute speichert
 
-`data.json` (Routen des laufenden Runs, wird bei `/resetall` geleert):
-
-```json
-{
-  "Route 201": [
-    "Moritz: Pichu, Pikachu, Raichu\nJanne: Abra, Kadabra, Simsala\nElsmann: …\nLinus: …"
-  ]
-}
-```
-
-Pro Route eine Liste von Einträgen (mehrere bei Static-Begegnungen), jeder Eintrag ein
-mehrzeiliger String mit der kompletten Entwicklungslinie pro Spieler. Welches Pokémon tatsächlich
-gefangen wurde, steht nirgends.
-
-`deaths.json` (alles andere):
+Pro Run eine `stats.json` mit den Zählern:
 
 | Schlüssel | Inhalt |
 |---|---|
-| `dead` | Liste von Pokémon-Namen ohne Bezug zu Route oder Spieler; wird nie geleert |
 | `deaths` / `alldeaths` | Tode pro Spieler, laufender Run („Session“) und gesamt |
 | `missed_encounters` / `overall_missed_encounters` | verpasste Begegnungen, laufender Run und gesamt |
+| `wipes` | Wipes pro Spieler |
 | `resets` | Zahl abgeschlossener Runs |
-| `whipes` | Wipes pro Spieler (Schreibweise wie im Code, Spielername nicht normalisiert) |
+| `dead_pokemon` | Namen toter Pokémon, ohne Spieler oder Route |
+| `soul_links` | Soul-Links (bisher leer, Format noch unbekannt) |
 
 Probleme, die das neue Modell direkt löst:
 
-- `/whereis` und `/islogged` suchen per Teilstring: „Abra“ findet auch „Kadabra“.
-- Zähler und Daten können auseinanderlaufen (`/adddeath` ist unabhängig von `/logdeath`).
-- `/resetall` erhöht `resets` nur, wenn der Schlüssel schon existiert; `/removedeath` läuft nach
-  einem Fehler weiter.
+- Zähler und Daten können auseinanderlaufen (Tode werden gezählt, ohne dass klar ist, welches Pokémon starb).
+- Tote Pokémon haben keinen Bezug zu Spieler, Route oder Soul-Link-Partnern.
+- Die ältere Bot-Version suchte per Teilstring („Abra“ fand auch „Kadabra“) und fragte PokeAPI bei
+  jedem Befehl live ab.
 - `pokemonMapping.json` wird gebraucht, liegt aber nicht im Bot-Repo.
-- Jede Abfrage ruft PokeAPI live auf (bei `/add` bis zu 16 Requests).
 
 ## 2. Domänenmodell
 
 ```
-Challenge ──< Mitglied (Spieler / Zuschauer, evtl. Platzhalter ohne Konto)
+Challenge ──< Mitglied (Spieler / Zuschauer) ──< Gerät (anonyme Sitzung)
     │
     ├──< Route
     │
@@ -67,10 +55,10 @@ Challenge ──< Mitglied (Spieler / Zuschauer, evtl. Platzhalter ohne Konto)
 
 | Tabelle | Zweck |
 |---|---|
-| `profiles` | 1:1 zu `auth.users`, wird beim ersten Discord-Login per Trigger angelegt (Discord-ID, Name, Avatar) |
 | `species` | 1025 Pokémon: Dex-Nr., englischer und deutscher Name, Generation, Entwicklungsreihe und -stufe, Sprite-URL |
 | `challenges` | Challenge mit Sichtbarkeit, Bot-Einstellung und `last_seq` (Nummer des letzten Ereignisses) |
-| `challenge_members` | Spieler und Zuschauer. `user_id` leer = Platzhalter (z. B. migrierte Spieler), wird per Einladung übernommen |
+| `challenge_members` | Spieler und Zuschauer mit Name, Farbe, Sitzplatz und optionaler Discord-ID (für den Bot) |
+| `member_devices` | Geräte eines Mitglieds: anonyme Supabase-Sitzung (`auth.users`) → Mitglied, pro Challenge eindeutig |
 | `routes` | Routen pro Challenge (über alle Runs gleich), frei benennbar, sortierbar |
 | `events` | **die eine Wahrheit**, siehe unten |
 | `challenge_invites` | Einladungslinks (nur SHA-256-Hash gespeichert, Ablaufdatum, Nutzungslimit) |
@@ -96,7 +84,7 @@ Regeln, die die Datenbank erzwingt:
 
 - **Unveränderlich**: Ein Trigger verbietet `UPDATE`/`DELETE` auf `events`, auch für den DB-Owner.
   Ausnahmen: Löschen zusammen mit der ganzen Challenge und das Anonymisieren der Urheber-Spalten,
-  wenn ein Konto gelöscht wird.
+  wenn eine Sitzung gelöscht wird.
 - **Lückenlose Reihenfolge**: Beim Anhängen wird die Challenge-Zeile gesperrt; `seq` ist eindeutig
   und lückenlos. Damit erkennt der Client, ob er etwas verpasst hat.
 - **Idempotenz**: Gleiche `client_event_id` → dasselbe Ereignis statt eines Duplikats
@@ -130,13 +118,28 @@ materialisieren, ohne dass sich die API ändert.
 
 ## 3. Sicherheit
 
+### Anmeldung ohne Konten
+
+Es gibt keine Benutzerkonten und keine Passwörter. Öffnet jemand einen Einladungslink, legt die
+Website eine **anonyme Supabase-Sitzung** an (`signInAnonymously`) und bindet sie per `join_challenge`
+als Gerät an einen Platz (`member_devices`). Die Sitzung liegt im Browser; Rechte ergeben sich
+ausschließlich aus dieser Bindung.
+
+- Einladungslinks enthalten 256 Bit Zufall, in der Datenbank steht nur der SHA-256-Hash. Der Token
+  steht im `#`-Teil der Adresse und wird deshalb nie an einen Server oder in Logs übertragen.
+- Gerätelinks (an einen bestehenden Platz gebunden) sind einmal nutzbar und laufen ab. Die Leitung
+  erstellt sie für jeden Platz, jedes Mitglied für sich selbst (zweites Gerät).
+- Gerät verloren: Die Leitung meldet alle Geräte eines Platzes ab (`remove_member_devices`).
+- `invite_preview` zeigt vor dem Beitritt, wohin ein Link führt, und antwortet bei ungültigen Links
+  immer gleich (kein Orakel).
+
 ### Lesen: Row Level Security
 
 | Wer | sieht |
 |---|---|
-| anonym (Zuschauerseite) | öffentliche Challenges mit Mitgliedern, Routen, Ereignissen, Views; Stammdaten |
-| angemeldet | zusätzlich private Challenges, in denen er Mitglied ist (auch als Zuschauer); eigenes Profil |
-| Leitung (`owner`) | zusätzlich Einladungen und Bot-Tokens der Challenge, aber nie deren Hashes (Spaltenrechte) |
+| anonym ohne Sitzung (Zuschauerseite) | öffentliche Challenges mit Mitgliedern, Routen, Ereignissen, Views; Stammdaten |
+| verbundenes Gerät | zusätzlich die privaten Challenges, mit denen es verbunden ist (auch als Zuschauer); eigene Gerätebindungen |
+| Leitung (`owner`) | zusätzlich Einladungen, Bot-Tokens und Geräte der Challenge, aber nie Token-Hashes (Spaltenrechte) |
 
 ### Schreiben: nur über Funktionen
 
@@ -147,11 +150,13 @@ drei Schreibwege (Website, Bot, Migration) münden in derselben internen Funktio
 
 | RPC | wer |
 |---|---|
-| `create_challenge` | jeder Angemeldete (wird `owner`) |
-| `update_challenge`, `delete_challenge`, `add_player`, `create_invite`, `revoke_invite`, `create_bot_token`, `revoke_bot_token` | Leitung |
+| `create_challenge` | jedes Gerät mit Sitzung (wird `owner`) |
+| `update_challenge`, `delete_challenge`, `add_player`, `revoke_invite`, `remove_member_devices`, `create_bot_token`, `revoke_bot_token` | Leitung |
+| `create_invite` | Leitung; mit `p_member_id` des eigenen Platzes auch das Mitglied selbst (Gerätelink) |
 | `append_event`, `create_route`, `update_route` | Spieler (`owner`/`player`) |
 | `update_member` | das Mitglied selbst oder die Leitung |
-| `join_challenge` | jeder Angemeldete mit gültigem Einladungstoken |
+| `join_challenge` | jedes Gerät mit Sitzung und gültigem Einladungstoken |
+| `invite_preview` | alle (auch ohne Sitzung) |
 | `bot_state`, `bot_create_route`, `bot_append_event` | nur mit gültigem Bot-Token (Rolle `anon`) |
 
 Supabase vergibt in `public` standardmäßig alle Rechte an `anon`/`authenticated`, und PostgreSQL gibt
@@ -167,8 +172,8 @@ Der Bot bekommt **nicht** den Service-Role-Key. Er nutzt den öffentlichen `anon
 Challenge-Token (`slb_…`, 256 Bit Zufall), das die Leitung auf der Website erzeugt und jederzeit
 widerrufen kann. Damit kann er genau drei Funktionen aufrufen und sieht nur seine Challenge.
 
-- Der Bot übergibt die Discord-ID des Aufrufers. Ist sie mit einem Spieler verknüpft (der Spieler hat
-  sich einmal per Discord auf der Website angemeldet), wird das Ereignis ihm zugeschrieben.
+- Der Bot übergibt die Discord-ID des Aufrufers. Hat ein Spieler diese ID auf der Website hinterlegt,
+  wird das Ereignis ihm zugeschrieben.
 - Unverknüpfte Discord-Nutzer dürfen schreiben (Standard, `bot_allow_unlinked = true`); ihre
   Discord-ID wird am Ereignis protokolliert. Die Leitung kann das pro Challenge abschalten.
 
@@ -205,41 +210,25 @@ werden). Deutsche Namen sind die offiziellen aus PokeAPI (z. B. „Nidoran♀“
 Bots („nidoranf“) löst das Migrationsskript über `pokemonMapping.json` auf. Alle 1025 Einträge der
 Mapping-Datei werden eindeutig zugeordnet.
 
-## 6. Migration der Altdaten
+## 6. Übernahme der Bot-Zähler
 
-`tools/migration/migrate_bot_data.py` (nur Python-Standardbibliothek) liest `data.json` und
-`deaths.json` und schreibt **nichts** in die Datenbank. Es erzeugt einen Bericht und eine SQL-Datei,
-die erst nach Prüfung ausgeführt wird (Supabase-SQL-Editor oder `psql`), komplett in einer
-Transaktion.
+`tools/migration/migrate_bot_data.py` (nur Python-Standardbibliothek) liest `stats.json` und schreibt
+**nichts** in die Datenbank. Es erzeugt einen Bericht, eine SQL-Datei (Ausführung im Supabase-SQL-Editor,
+eine Transaktion) und pro Spieler einen persönlichen Einladungslink. Die SQL-Datei enthält nur die
+Hashes der Links.
 
-Abbildung:
-
-1. Challenge mit allen Spielern anlegen. Die Leitung (`--owner`, braucht ein Profil, also einmal per
-   Discord anmelden) bekommt ihr Konto, alle anderen werden Platzhalter und übernehmen ihren Platz
-   per Einladungslink.
-2. `resets` bzw. die Summe aus `whipes` ergibt die abgeschlossenen Runs, jeweils als Wipe mit
-   Verursacher. Was `alldeaths` und `overall_missed_encounters` über den laufenden Run hinaus zählen,
-   wird als `counter_adjusted` („Altdaten Bot: Summe aller früheren Runs“) im ersten Run verbucht.
-3. `data.json` wird der laufende Run: pro Route ist der erste Eintrag die wilde Begegnung, weitere
-   Einträge sind Static-Begegnungen, jeder Eintrag ein Soul-Link. Gefangene Art = erste Stufe der
-   gespeicherten Linie.
-4. `dead` wird über die Entwicklungsreihe einer Begegnung im laufenden Run zugeordnet (bei Bedarf mit
-   Entwicklung auf die Stufe, mit der das Pokémon starb). Mehrdeutige Namen lassen sich mit
-   `--assign NAME=SPIELER` auflösen; Namen ohne passende Begegnung stammen aus früheren Runs und
-   werden nur berichtet; Tode von Partnern eines schon toten Soul-Links zählen als mitgestorben.
-5. Was die Ereignisse bei `deaths`/`missed_encounters` nicht erklären, wird im laufenden Run als
-   `counter_adjusted` („Altdaten Bot“) ergänzt. Ergebnis: Alle Zähler pro Spieler entsprechen exakt
-   dem Bot.
+1. Challenge mit allen Spielern als freie Plätze anlegen; `--owner` bekommt die Rolle Leitung und
+   übernimmt sie, indem er als Erster seinen Link öffnet.
+2. `resets` bzw. die Summe aus `wipes` ergibt die abgeschlossenen Runs, jeweils als Wipe mit
+   Verursacher. Was die Gesamtzähler über den laufenden Run hinaus zählen, wird als `counter_adjusted`
+   („Altdaten Bot: Summe aller früheren Runs“) im ersten Run verbucht.
+3. Die Zähler des laufenden Runs werden als `counter_adjusted` („Altdaten Bot“) übernommen. Ergebnis:
+   Alle Zähler pro Spieler entsprechen exakt dem Bot.
+4. `dead_pokemon` erscheint nur im Bericht: Ohne Spieler und Route lässt sich kein Pokémon zuordnen.
+5. Ist `soul_links` nicht leer, bricht das Skript ab, bis das Format bekannt ist.
 
 Alle Ereignisse laufen über `private.append_event` mit Quelle `migration`, also durch dieselbe
-Validierung wie neue Eingaben.
-
-```bash
-python3 tools/migration/migrate_bot_data.py --data data.json --deaths deaths.json \
-  --name "Platin Soul Link" --slug platin-soullink \
-  --owner Moritz --owner-discord-id <deine Discord-ID>
-# Bericht prüfen, dann migration.sql im Supabase-SQL-Editor ausführen
-```
+Validierung wie neue Eingaben. Aufruf: siehe [`setup.md`](setup.md#7-loslegen).
 
 ## 7. Tests
 
@@ -249,11 +238,10 @@ alle Migrationen und die Tests in eine Wegwerf-Datenbank:
 - `supabase/tests/schema.test.sql`: RLS (Fremde und Anonyme sehen keine privaten Challenges, direkte
   Tabellenzugriffe werden abgewiesen, Token-Hashes sind nicht lesbar), Einladungen, Unveränderlichkeit,
   Soul-Link-Tod, Static-Begegnungen, Undo-Regeln, Wipe und Sieg, Zähler über Runs hinweg, Bot-Zuordnung
-  und strikter Modus, Kontolöschung anonymisiert statt zu blockieren.
-- `tools/migration/tests/`: Testdaten im Bot-Format mit allen Sonderfällen (Static-Eintrag, Evoli mit
-  verzweigter Linie, „Typ:Null“, leere Zeile, unbekannter Name, mehrdeutiger Tod, Partner-Tod,
-  kleingeschriebener Name in `whipes`). Das erzeugte SQL wird eingespielt und die Zähler werden gegen
-  `deaths.json` geprüft.
+  und strikter Modus, Geräte (zweites Gerät, Gerätelinks nur für den eigenen Platz, Abmelden),
+  gelöschte Sitzung anonymisiert statt zu blockieren.
+- `tools/migration/tests/`: eine `stats.json` im Bot-Format. Das erzeugte SQL wird eingespielt, die
+  Zähler werden gegen die Datei geprüft, und zwei Geräte treten mit den erzeugten Links bei.
 
 ```bash
 DATABASE_URL=postgres://postgres@localhost:5432/postgres scripts/test-db.sh
@@ -261,15 +249,36 @@ DATABASE_URL=postgres://postgres@localhost:5432/postgres scripts/test-db.sh
 
 Später als CI-Job (Postgres-Service-Container in GitHub Actions).
 
-## 8. Frontend (nächster Schritt)
+## 8. Frontend
 
-Stack wie im Portfolio: Vite, React 19, TypeScript, Tailwind CSS v4, shadcn/ui, Motion, Lenis,
-oxlint, Deployment auf Vercel. Dazu kommen `@supabase/supabase-js` und ein Router. Animationsansatz
-übernommen: Split-Reveal-Überschriften, hochzählende Zähler, Vorhang-Übergänge, `prefers-reduced-motion`
-überall. Neu dazu, passend zum Thema: Begegnungskarten, die bei Live-Updates einfliegen, ein
-Soul-Link-Band, das bei einem Tod für alle Partner gleichzeitig reißt, und ein Friedhof mit
-gestaffeltem Einblenden.
+Stack wie im Portfolio: Vite, React 19, TypeScript, Tailwind CSS v4, shadcn/ui (Radix), Motion, Lenis,
+oxlint, Deployment auf Vercel; dazu `@supabase/supabase-js`. Kein Router-Paket: drei Seiten
+(`/`, `/join`, `/c/<adresse>`) erledigt ein kleiner Router über die History-API (`src/lib/router.ts`).
 
-Live-Updates: Der Client abonniert `events` gefiltert auf die Challenge (Realtime prüft RLS pro
-Abonnent) und lädt bei jedem neuen Ereignis die Views nach. Über `seq` merkt er, ob er nach einem
-Verbindungsabbruch etwas verpasst hat.
+| Seite / Bereich | Inhalt |
+|---|---|
+| Start | Hero mit Split-Reveal, Sprite-Laufband (Tempo folgt der Scroll-Geschwindigkeit), „Meine Challenges“ dieses Geräts, neue Challenge |
+| Einladung | Vorschau (welche Challenge, welcher Platz), Beitritt ohne Konto |
+| Routen | pro Soul-Link eine Zeile, Spieler als Spalten; Static-Begegnungen als eigene Zeile; das Soul-Link-Band schimmert, solange alle leben, und reißt bei einem Tod |
+| Teams | Team und Box je Spieler; Wechsel fliegen animiert an den neuen Platz (Shared Layout) |
+| Friedhof | Grabsteine mit Ursache, Gegner, Level, Ort und den mitgerissenen Partnern |
+| Timeline | alle Ereignisse des Runs, Undo direkt am Eintrag, Undos durchgestrichen |
+| Zähler | alle Bot-Zähler (Run/gesamt) mit hochzählenden Zahlen, verpasste Begegnung per Klick |
+| Einstellungen | eigener Name, Farbe, Discord-ID, zweites Gerät; für die Leitung Mitglieder, Gerätelinks, Einladungen, Bot-Token, Löschen |
+
+- **Sprites überall**: animierte Showdown-GIFs aus dem PokeAPI-Sprite-Repo (für 1011 der 1025 Arten),
+  sonst das statische Sprite. Lebende Pokémon wippen versetzt, hüpfen beim Überfahren; tote sind grau.
+- **Run-Archiv**: Über den Run-Umschalter lassen sich frühere Runs mit Board, Friedhof und Timeline ansehen.
+- **Live**: Der Client abonniert `events`, `challenge_members`, `routes` und `challenges` gefiltert auf
+  die Challenge (Realtime prüft RLS pro Abonnent) und lädt gebündelt neu. Nur die jüngste Anfrage darf
+  den Zustand setzen, damit schnelle Wechsel keine veralteten Daten anzeigen.
+- **Zuschauermodus**: Wer nicht Spieler ist (öffentliche Challenge oder Rolle Zuschauer), sieht alles
+  ohne Schreibknöpfe.
+- **Idempotenz im Client**: Der Begegnungsdialog vergibt `client_event_id`s einmal pro Öffnen; erneutes
+  Absenden nach einem Netzwerkfehler erzeugt keine Duplikate.
+- Alle Animationen respektieren „Bewegung reduzieren“.
+
+Getestet wurde der komplette Ablauf mit Playwright gegen den lokalen Supabase-Stack (`supabase start`)
+mit zwei Browsern: Challenge anlegen, Spieler einladen, Beitritt per Link, Begegnung mit Live-Update
+beim zweiten Gerät, Static-Begegnung, Entwicklung, Tod mit Soul-Link, Undo, Run beenden, fremdes Gerät
+ohne Zugriff, Import aus `stats.json` mit Übernahme der Leitung.

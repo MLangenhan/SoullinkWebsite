@@ -1,0 +1,136 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+  Farbwelt wie im Portfolio: tiefes Nachtblau als Grund, Bernstein als Akzent.
+  Dazu Zustandsfarben für Pokémon: Team (grün), Box (blau), tot (rot).
+*/
+:root {
+  --radius: 0.5rem;
+
+  --background: #0a0f16;
+  --foreground: #e8edf2;
+  --card: #111a26;
+  --card-foreground: #e8edf2;
+  --popover: #0d141e;
+  --popover-foreground: #e8edf2;
+  --primary: #ffb547;
+  --primary-foreground: #0a0f16;
+  --secondary: #172233;
+  --secondary-foreground: #e8edf2;
+  --muted: #172233;
+  --muted-foreground: #8394aa;
+  --accent: #172233;
+  --accent-foreground: #ffb547;
+  --destructive: #ff6b5b;
+  --border: #1f2b3b;
+  --input: #1f2b3b;
+  --ring: #ffb547;
+
+  --ok: #7fd1a8;
+  --box: #7aa7ff;
+  --grave: #0d1219;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ok: var(--ok);
+  --color-box: var(--box);
+  --color-grave: var(--grave);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-display: 'Big Shoulders Display', 'Arial Narrow', 'Roboto Condensed', Impact, sans-serif;
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/60;
+  }
+  html {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+  ::selection {
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+  }
+}
+
+/* Lenis Smooth-Scroll */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+@utility label {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+/* Pixel-Sprites scharf skalieren */
+@utility pixelated {
+  image-rendering: pixelated;
+}
+
+/* Feines Raster im Hintergrund, wie ein Pokédex-Display */
+@utility grid-bg {
+  background-image:
+    linear-gradient(to right, color-mix(in oklab, var(--border) 55%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in oklab, var(--border) 55%, transparent) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

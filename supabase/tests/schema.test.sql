@@ -84,6 +84,9 @@ set role anon;
 reset request.jwt.claim.sub;
 select test.ok((select count(*) = 0 from public.challenges), 'Anonym sieht private Challenges nicht');
 select test.ok((select count(*) >= 1025 from public.species), 'Stammdaten sind öffentlich');
+select test.ok((select public.invite_preview(test.get('invite_janne')) ->> 'member_name' = 'Janne'),
+               'Einladungsvorschau zeigt den Spielerplatz, auch ohne Sitzung');
+select test.fails($$ select public.invite_preview('inv_falsch') $$, 'PT404', 'Vorschau falscher Links verrät nichts');
 select test.fails($$ select public.create_challenge('X', 'xyz', 'X') $$, '42501', 'Anonym darf keine Website-RPCs aufrufen');
 
 reset role;

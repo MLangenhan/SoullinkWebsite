@@ -1136,6 +1136,37 @@ begin
 end;
 $$;
 
+-- Vorschau eines Einladungslinks (vor dem Beitritt, auch ohne Sitzung): wohin führt er?
+create function public.invite_preview(p_token text) returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_preview jsonb;
+begin
+  select jsonb_build_object(
+    'challenge_name', c.name,
+    'challenge_slug', c.slug,
+    'role', coalesce(m.role, i.role),
+    'member_name', m.display_name,
+    'expires_at', i.expires_at
+  ) into v_preview
+  from public.challenge_invites i
+  join public.challenges c on c.id = i.challenge_id
+  left join public.challenge_members m on m.id = i.member_id
+  where i.token_hash = private.token_hash(p_token)
+    and i.revoked_at is null
+    and i.expires_at > now()
+    and i.uses < i.max_uses;
+  if v_preview is null then
+    raise exception using errcode = 'PT404', message = 'Einladung ungültig oder abgelaufen';
+  end if;
+  return v_preview;
+end;
+$$;
+
 -- Einladungslink einlösen. Das Gerät (anonyme Sitzung) muss vorher angemeldet sein.
 create function public.join_challenge(p_token text, p_display_name text default null) returns public.challenge_members
 language plpgsql
@@ -1536,6 +1567,8 @@ grant execute on function
   public.create_bot_token(uuid, text),
   public.revoke_bot_token(uuid)
   to authenticated;
+
+grant execute on function public.invite_preview(text) to anon, authenticated;
 
 grant execute on function
   public.bot_state(text),
