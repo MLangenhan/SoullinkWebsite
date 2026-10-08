@@ -1,0 +1,18 @@
+node_modules
+dist
+dist-ssr
+*.local
+.env
+.env.*
+!.env.example
+
+# Altdaten des Bots (nur lokal, für die Migration)
+data.json
+deaths.json
+migration-report*.json
+
+.DS_Store
+.idea
+.vscode/*
+!.vscode/extensions.json
+*.log
