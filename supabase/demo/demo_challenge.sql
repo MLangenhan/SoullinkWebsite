@@ -84,7 +84,9 @@ begin
   end loop;
 
   for v_step in
-    select trim(s) from regexp_split_to_table(c_story, '[/\n]') s where trim(s) <> '' and trim(s) not like '#%'
+    -- \r: unter Windows eingefügter Text hat CRLF-Zeilenenden
+    select btrim(s, E' \t\r') from regexp_split_to_table(c_story, '[/\r\n]') s
+    where btrim(s, E' \t\r') <> '' and btrim(s, E' \t\r') not like '#%'
   loop
     f := string_to_array(v_step, '|');
     v_seat := case when f[1] in ('E', 'K', 'B', 'T', 'U', 'D', 'W') then f[2]::integer end;
@@ -159,6 +161,8 @@ begin
       when 'V' then
         v_events := array[jsonb_build_object('type', 'run_ended', 'seat', 1, 'payload',
           jsonb_build_object('result', 'won', 'note', f[2]))];
+      else
+        raise exception 'Unbekannter Schritt: "%"', v_step;
     end case;
 
     foreach v_event in array v_events loop
