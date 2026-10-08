@@ -245,9 +245,13 @@ Partner-Toden, verpasste Begegnungen, Statics, Entwicklungen, eine Korrektur und
 3. Auf der Challenge-Seite mit den Pfeilen zwischen den Runs wechseln. Nach dem Sieg läuft Run 5,
    der noch leer ist.
 
+Eine zweite Demo, [`supabase/demo/demo_soulsilver.sql`](supabase/demo/demo_soulsilver.sql), zeigt den
+Modus **alle verbunden**: Pokémon SoulSilver, alle vier Spieler in einem Soul-Link (stirbt eins, sterben
+alle drei Partner mit). Run 1 endet an Biankas Miltank, Run 2 läuft noch und lässt sich direkt weiterspielen.
+
 Erneutes Ausführen löscht die alte Demo und legt sie neu an. Spielernamen und Website-Adresse stehen
 oben in der Datei. Loswerden: **Einstellungen → Challenge löschen** oder
-`delete from public.challenges where slug = 'demo-platin-soullink';`.
+`delete from public.challenges where slug = 'demo-platin-soullink';` (bzw. `'demo-soulsilver-alle'`).
 
 ---
 
@@ -306,7 +310,7 @@ src/
 supabase/
   migrations/            Schema, Views, Funktionen, RLS; Pokémon-Stammdaten
   tests/                 Supabase-Attrappe und Szenario-Tests
-  demo/                  Demo-Challenge (3 Wipes, 1 Sieg) für den SQL Editor
+  demo/                  Demo-Challenges für den SQL Editor (Platin in Paaren, SoulSilver alle verbunden)
   config.toml            lokaler Supabase-Stack
 tools/
   generate_species.py    Stammdaten aus PokeAPI

@@ -49,6 +49,9 @@ PGOPTIONS='--client-min-messages=notice' psql "$TEST_URL" -qX -v ON_ERROR_STOP=1
 
 # Demo-Challenge: muss in einer Transaktion durchlaufen (wie im SQL Editor) und mit 3 Wipes und 1 Sieg enden
 psql "$TEST_URL" -qX -1 -v ON_ERROR_STOP=1 -f "$ROOT/supabase/demo/demo_challenge.sql" >/dev/null
+# SoulSilver-Demo mit Windows-Zeilenenden (wie aus dem SQL Editor unter Windows): alle vier in einem Soul-Link
+sed 's/$/\r/' "$ROOT/supabase/demo/demo_soulsilver.sql" > "$WORK/demo_soulsilver_crlf.sql"
+psql "$TEST_URL" -qX -1 -v ON_ERROR_STOP=1 -f "$WORK/demo_soulsilver_crlf.sql" >/dev/null
 psql "$TEST_URL" -qX -v ON_ERROR_STOP=1 -c "
 do \$\$
 declare
@@ -60,5 +63,14 @@ begin
     raise exception 'Demo-Challenge: % Wipes, % Siege', v.wipes_total, v.wins_total;
   end if;
   raise notice 'ok - Demo-Challenge: 3 Wipes, 1 Sieg';
+  select s.* into v from public.challenge_stats s join public.challenges c on c.id = s.challenge_id
+  where c.slug = 'demo-soulsilver-alle';
+  if v.wipes_total <> 1 or v.current_run <> 2 or exists (
+    select 1 from public.encounters e join public.challenges c on c.id = e.challenge_id
+    where c.slug = 'demo-soulsilver-alle' and e.kind = 'wild' group by e.link_id having count(*) <> 4
+  ) then
+    raise exception 'SoulSilver-Demo: unerwarteter Stand';
+  end if;
+  raise notice 'ok - SoulSilver-Demo: alle vier pro Soul-Link, Run 2 läuft';
 end;
 \$\$;" 2>&1 | sed -E 's/^NOTICE:  //'
