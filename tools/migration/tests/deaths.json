@@ -1,0 +1,9 @@
+{
+  "dead": ["Raichu", "Kadabra", "Zubat", "Glumanda", "Luxio"],
+  "deaths": {"Moritz": 3, "Janne": 1, "Linus": 1},
+  "alldeaths": {"Moritz": 7, "Janne": 4, "Elsmann": 2, "Linus": 1},
+  "missed_encounters": {"Elsmann": 2},
+  "overall_missed_encounters": {"Elsmann": 5, "Moritz": 1},
+  "resets": 3,
+  "whipes": {"moritz": 1, "janne": 1}
+}

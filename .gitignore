@@ -10,6 +10,10 @@ dist-ssr
 data.json
 deaths.json
 migration-report*.json
+migration.sql
+# … außer den erfundenen Testdaten
+!tools/migration/tests/data.json
+!tools/migration/tests/deaths.json
 
 .DS_Store
 .idea
