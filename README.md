@@ -19,9 +19,10 @@ Wie es gebaut ist und warum: [`docs/architektur.md`](docs/architektur.md)
 3. [Veröffentlichen auf GitHub Pages](#veröffentlichen-auf-github-pages)
 4. [Daten aus dem Discord-Bot übernehmen](#daten-aus-dem-discord-bot-übernehmen)
 5. [Discord-Bot verbinden](#discord-bot-verbinden)
-6. [Notfall: Zugang der Leitung](#notfall-zugang-der-leitung)
-7. [Lokal entwickeln und testen](#lokal-entwickeln-und-testen)
-8. [Aufbau des Repositorys](#aufbau-des-repositorys)
+6. [Demo-Challenge zum Ausprobieren](#demo-challenge-zum-ausprobieren)
+7. [Notfall: Zugang der Leitung](#notfall-zugang-der-leitung)
+8. [Lokal entwickeln und testen](#lokal-entwickeln-und-testen)
+9. [Aufbau des Repositorys](#aufbau-des-repositorys)
 
 ---
 
@@ -231,6 +232,25 @@ fertig und getestet; der Umbau des Bots selbst folgt.
 
 ---
 
+## Demo-Challenge zum Ausprobieren
+
+[`supabase/demo/demo_challenge.sql`](supabase/demo/demo_challenge.sql) legt eine vollständig
+gespielte Challenge an: **Pokémon Platin**, vier Spieler in zwei Soul-Link-Paaren, drei Wipes (Veit,
+Silvana, Lamina) und ein vierter Run, der gegen Champ Cynthia gewinnt. Dabei sind Tode mit
+Partner-Toden, verpasste Begegnungen, Statics, Entwicklungen, eine Korrektur und ein Undo.
+
+1. Inhalt der Datei im Supabase-**SQL Editor** ausführen.
+2. Das Ergebnis sind vier persönliche Links (einmal nutzbar, 7 Tage gültig). Den Link der Leitung
+   öffnen, die anderen bei Bedarf in einem privaten Fenster oder auf dem Handy.
+3. Auf der Challenge-Seite mit den Pfeilen zwischen den Runs wechseln. Nach dem Sieg läuft Run 5,
+   der noch leer ist.
+
+Erneutes Ausführen löscht die alte Demo und legt sie neu an. Spielernamen und Website-Adresse stehen
+oben in der Datei. Loswerden: **Einstellungen → Challenge löschen** oder
+`delete from public.challenges where slug = 'demo-platin-soullink';`.
+
+---
+
 ## Notfall: Zugang der Leitung
 
 Hat die Leitung kein verbundenes Gerät mehr, erzeugt dieses Snippet im Supabase-**SQL Editor** einen
@@ -286,6 +306,7 @@ src/
 supabase/
   migrations/            Schema, Views, Funktionen, RLS; Pokémon-Stammdaten
   tests/                 Supabase-Attrappe und Szenario-Tests
+  demo/                  Demo-Challenge (3 Wipes, 1 Sieg) für den SQL Editor
   config.toml            lokaler Supabase-Stack
 tools/
   generate_species.py    Stammdaten aus PokeAPI
