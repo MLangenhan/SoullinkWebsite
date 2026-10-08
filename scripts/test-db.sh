@@ -35,14 +35,15 @@ run_test() {
 
 run_test "$ROOT/supabase/tests/schema.test.sql"
 
-# Migration der Bot-Altdaten mit Testdaten: SQL erzeugen, einspielen, Zähler prüfen
+# Import der Bot-Zähler mit Testdaten: SQL erzeugen, einspielen, Zähler und Einladungslinks prüfen
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"; cleanup' EXIT
-psql "$TEST_URL" -qX -v ON_ERROR_STOP=1 -c \
-  "insert into auth.users (raw_user_meta_data) values ('{\"provider_id\": \"999999\", \"full_name\": \"Moritz\"}')"
 python3 "$ROOT/tools/migration/migrate_bot_data.py" \
-  --data "$ROOT/tools/migration/tests/data.json" --deaths "$ROOT/tools/migration/tests/deaths.json" \
-  --name "Platin Soul Link" --slug bot-import --owner moritz --owner-discord-id 999999 \
-  --assign Zubat=Linus --out "$WORK/migration.sql" --report "$WORK/report.json" >/dev/null
+  --stats "$ROOT/tools/migration/tests/stats.json" \
+  --name "Platin Soul Link" --slug bot-import --owner moritz \
+  --out "$WORK/migration.sql" --report "$WORK/report.json" --links-out "$WORK/links.json" >/dev/null
 run_sql "$WORK/migration.sql"
-run_test "$ROOT/tools/migration/tests/check.sql"
+token() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]].split("#", 1)[1])' "$WORK/links.json" "$1"; }
+PGOPTIONS='--client-min-messages=notice' psql "$TEST_URL" -qX -v ON_ERROR_STOP=1 \
+  -v owner_token="$(token Moritz)" -v player_token="$(token Janne)" \
+  -f "$ROOT/tools/migration/tests/check.sql" 2>&1 | sed -E 's/^psql:[^:]+:[0-9]+: NOTICE:  //'

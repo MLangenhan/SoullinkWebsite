@@ -12,6 +12,10 @@
 --
 -- Schreiben geht ausschließlich über Funktionen (RPC). Clients haben auf keine Tabelle
 -- INSERT-, UPDATE- oder DELETE-Rechte. Lesen ist per Row Level Security beschränkt.
+--
+-- Anmeldung: Es gibt keine Konten. Wer einen Einladungslink öffnet, bekommt im Browser eine
+-- anonyme Supabase-Sitzung (auth.users mit is_anonymous) und wird als Gerät an einen
+-- Spielerplatz gebunden (member_devices). Ein Spieler kann mehrere Geräte haben.
 -- =====================================================================================
 
 -- Supabase vergibt in "public" standardmäßig alle Rechte an anon/authenticated und
@@ -51,14 +55,6 @@ create type public.event_type as enum (
 -- Tabellen
 -- -------------------------------------------------------------------------------------
 
-create table public.profiles (
-  id uuid primary key references auth.users (id) on delete cascade,
-  discord_id text unique,
-  display_name text not null check (char_length(display_name) between 1 and 40),
-  avatar_url text,
-  created_at timestamptz not null default now()
-);
-
 -- Pokémon-Stammdaten, einmalig aus PokeAPI geladen (Seed-Skript)
 create table public.species (
   id integer primary key check (id > 0),          -- nationale Pokédex-Nummer
@@ -84,28 +80,40 @@ create table public.challenges (
   bot_allow_unlinked boolean not null default true,
   -- Fortlaufende Nummer des letzten Ereignisses; dient als Sperre und Synchronisationsmarke
   last_seq integer not null default 0,
-  created_by uuid references public.profiles (id) on delete set null,
+  created_by uuid references auth.users (id) on delete set null,
   created_at timestamptz not null default now()
 );
 
--- Spieler und Zuschauer einer Challenge. user_id ist bei Platzhaltern (z. B. migrierte Spieler,
--- die sich noch nicht angemeldet haben) leer und wird über einen Einladungslink übernommen.
+-- Spieler und Zuschauer einer Challenge. Ein Platz ohne Gerät (z. B. migrierte Spieler) wird
+-- über einen Einladungslink übernommen.
 create table public.challenge_members (
   id uuid primary key default gen_random_uuid(),
   challenge_id uuid not null references public.challenges (id) on delete cascade,
-  user_id uuid references public.profiles (id) on delete set null,
   role public.member_role not null,
   display_name text not null check (char_length(display_name) between 1 and 40),
   color text check (color ~ '^#[0-9a-f]{6}$'),
   seat smallint check (seat >= 0),
-  joined_at timestamptz,
+  -- Für den Bot: Discord-Nutzer-ID, deren Befehle diesem Spieler zugeschrieben werden
+  discord_id text check (discord_id ~ '^[0-9]{5,25}$'),
   created_at timestamptz not null default now(),
-  unique (challenge_id, user_id),
+  unique (id, challenge_id),
   unique (challenge_id, seat),
-  check ((role = 'viewer') = (seat is null)),
-  check (role <> 'owner' or user_id is not null)
+  unique (challenge_id, discord_id),
+  check ((role = 'viewer') = (seat is null))
 );
 create unique index challenge_members_name_idx on public.challenge_members (challenge_id, lower(display_name));
+
+-- Geräte (anonyme Supabase-Sitzungen) eines Mitglieds. Ein Gerät gehört pro Challenge zu
+-- genau einem Mitglied; challenge_id ist redundant, damit genau das als Schlüssel prüfbar ist.
+create table public.member_devices (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  challenge_id uuid not null references public.challenges (id) on delete cascade,
+  member_id uuid not null,
+  created_at timestamptz not null default now(),
+  primary key (user_id, challenge_id),
+  foreign key (member_id, challenge_id) references public.challenge_members (id, challenge_id) on delete cascade
+);
+create index member_devices_member_idx on public.member_devices (member_id);
 
 create table public.routes (
   id uuid primary key default gen_random_uuid(),
@@ -124,7 +132,7 @@ create table public.events (
   type public.event_type not null,
   payload jsonb not null default '{}' check (jsonb_typeof(payload) = 'object'),
   source public.event_source not null,
-  actor_user_id uuid references public.profiles (id) on delete set null,
+  actor_user_id uuid references auth.users (id) on delete set null,
   actor_member_id uuid references public.challenge_members (id) on delete set null,
   -- Nur gesetzt, wenn ein Bot-Aufruf keinem Spieler zugeordnet werden konnte
   actor_discord_id text,
@@ -145,16 +153,16 @@ create table public.challenge_invites (
   id uuid primary key default gen_random_uuid(),
   challenge_id uuid not null references public.challenges (id) on delete cascade,
   token_hash bytea not null unique,
-  role public.member_role not null check (role in ('player', 'viewer')),
-  -- Optional: Einladung übernimmt einen bestehenden Platzhalter-Spieler
+  role public.member_role not null,
+  -- Optional: Link bindet ein Gerät an ein bestehendes Mitglied (Platzhalter oder weiteres Gerät)
   member_id uuid references public.challenge_members (id) on delete cascade,
   max_uses integer not null default 1 check (max_uses between 1 and 100),
   uses integer not null default 0 check (uses >= 0),
   expires_at timestamptz not null,
   revoked_at timestamptz,
-  created_by uuid references public.profiles (id) on delete set null,
+  created_by uuid references auth.users (id) on delete set null,
   created_at timestamptz not null default now(),
-  check (member_id is null or (role = 'player' and max_uses = 1))
+  check ((member_id is null and role in ('player', 'viewer')) or (member_id is not null and max_uses = 1))
 );
 
 -- Zugang des Discord-Bots: ein Token pro Challenge, nur als SHA-256-Hash gespeichert
@@ -165,7 +173,7 @@ create table public.bot_tokens (
   token_hash bytea not null unique,
   last_used_at timestamptz,
   revoked_at timestamptz,
-  created_by uuid references public.profiles (id) on delete set null,
+  created_by uuid references auth.users (id) on delete set null,
   created_at timestamptz not null default now()
 );
 
@@ -174,7 +182,7 @@ create table public.bot_tokens (
 -- -------------------------------------------------------------------------------------
 
 -- Erlaubt sind nur: Löschen zusammen mit der ganzen Challenge und das Anonymisieren der
--- Urheber-Spalten (z. B. wenn ein Konto gelöscht wird). Alles andere wird abgewiesen.
+-- Urheber-Spalten (z. B. wenn eine Sitzung gelöscht wird). Alles andere wird abgewiesen.
 create function private.protect_events() returns trigger
 language plpgsql
 set search_path = ''
@@ -204,36 +212,6 @@ create trigger events_immutable
   for each row execute function private.protect_events();
 
 -- -------------------------------------------------------------------------------------
--- Profil bei der ersten Anmeldung (Discord OAuth) anlegen
--- -------------------------------------------------------------------------------------
-
-create function private.handle_new_user() returns trigger
-language plpgsql
-security definer
-set search_path = ''
-as $$
-begin
-  insert into public.profiles (id, discord_id, display_name, avatar_url)
-  values (
-    new.id,
-    new.raw_user_meta_data ->> 'provider_id',
-    left(coalesce(
-      nullif(trim(new.raw_user_meta_data -> 'custom_claims' ->> 'global_name'), ''),
-      nullif(trim(new.raw_user_meta_data ->> 'full_name'), ''),
-      nullif(trim(new.raw_user_meta_data ->> 'name'), ''),
-      'Trainer'
-    ), 40),
-    new.raw_user_meta_data ->> 'avatar_url'
-  );
-  return new;
-end;
-$$;
-
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute function private.handle_new_user();
-
--- -------------------------------------------------------------------------------------
 -- Berechtigungs-Hilfsfunktionen (security definer, damit RLS nicht rekursiv wird)
 -- -------------------------------------------------------------------------------------
 
@@ -243,8 +221,10 @@ stable
 security definer
 set search_path = ''
 as $$
-  select m.role from public.challenge_members m
-  where m.challenge_id = p_challenge_id and m.user_id = auth.uid() and auth.uid() is not null;
+  select m.role
+  from public.member_devices d
+  join public.challenge_members m on m.id = d.member_id
+  where d.challenge_id = p_challenge_id and d.user_id = auth.uid();
 $$;
 
 create function private.can_read_challenge(p_challenge_id uuid) returns boolean
@@ -304,8 +284,10 @@ declare
   v_member public.challenge_members;
 begin
   perform private.require_user();
-  select * into v_member from public.challenge_members m
-  where m.challenge_id = p_challenge_id and m.user_id = auth.uid() and m.role in ('owner', 'player');
+  select m.* into v_member
+  from public.member_devices d
+  join public.challenge_members m on m.id = d.member_id
+  where d.challenge_id = p_challenge_id and d.user_id = auth.uid() and m.role in ('owner', 'player');
   if not found then
     raise exception using errcode = 'PT403', message = 'Nur Mitspieler dürfen in dieser Challenge schreiben';
   end if;
@@ -958,13 +940,18 @@ as $$
 declare
   v_user uuid := private.require_user();
   v_challenge public.challenges;
+  v_member_id uuid;
 begin
   insert into public.challenges (slug, name, game, visibility, created_by)
   values (lower(trim(p_slug)), trim(p_name), trim(p_game), p_visibility, v_user)
   returning * into v_challenge;
 
-  insert into public.challenge_members (challenge_id, user_id, role, display_name, seat, joined_at)
-  values (v_challenge.id, v_user, 'owner', trim(p_display_name), 0, now());
+  insert into public.challenge_members (challenge_id, role, display_name, seat)
+  values (v_challenge.id, 'owner', trim(p_display_name), 0)
+  returning id into v_member_id;
+
+  insert into public.member_devices (user_id, challenge_id, member_id)
+  values (v_user, v_challenge.id, v_member_id);
 
   return v_challenge;
 exception
@@ -1010,7 +997,7 @@ begin
 end;
 $$;
 
--- Platzhalter-Spieler ohne Konto (wird später per Einladung übernommen)
+-- Platzhalter-Spieler ohne Gerät (wird später per Einladungslink übernommen)
 create function public.add_player(p_challenge_id uuid, p_display_name text) returns public.challenge_members
 language plpgsql
 security definer
@@ -1035,8 +1022,19 @@ exception
 end;
 $$;
 
--- Name und Farbe ändern: der Spieler selbst oder die Challenge-Leitung
-create function public.update_member(p_member_id uuid, p_display_name text, p_color text)
+-- Eigener Mitgliedseintrag des angemeldeten Geräts in einer Challenge (oder null)
+create function private.my_member_id(p_challenge_id uuid) returns uuid
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select d.member_id from public.member_devices d
+  where d.challenge_id = p_challenge_id and d.user_id = auth.uid();
+$$;
+
+-- Name, Farbe und Discord-ID ändern: das Mitglied selbst oder die Challenge-Leitung
+create function public.update_member(p_member_id uuid, p_display_name text, p_color text, p_discord_id text)
 returns public.challenge_members
 language plpgsql
 security definer
@@ -1047,21 +1045,28 @@ declare
 begin
   perform private.require_user();
   select * into v_member from public.challenge_members m where m.id = p_member_id;
-  if not found or not (v_member.user_id = auth.uid() or private.is_challenge_owner(v_member.challenge_id)) then
+  if not found
+     or not (private.my_member_id(v_member.challenge_id) = p_member_id
+             or private.is_challenge_owner(v_member.challenge_id)) then
     raise exception using errcode = 'PT403', message = 'Keine Berechtigung für dieses Mitglied';
   end if;
   update public.challenge_members
-  set display_name = trim(p_display_name), color = lower(p_color)
+  set display_name = trim(p_display_name),
+      color = lower(nullif(trim(p_color), '')),
+      discord_id = nullif(trim(p_discord_id), '')
   where id = p_member_id
   returning * into v_member;
   return v_member;
 exception
   when unique_violation then
-    raise exception using errcode = 'PT409', message = 'Name ist in dieser Challenge schon vergeben';
+    raise exception using errcode = 'PT409', message = 'Name oder Discord-ID ist in dieser Challenge schon vergeben';
 end;
 $$;
 
--- Gibt den Klartext-Token genau einmal zurück; gespeichert wird nur der Hash
+-- Einladungslink. Mit p_member_id bindet der Link ein Gerät an dieses Mitglied: die Leitung für
+-- jeden Platz, jedes Mitglied für sich selbst (zweites Gerät). Ohne p_member_id entsteht beim
+-- Beitritt ein neues Mitglied (nur Leitung). Gibt den Klartext-Token genau einmal zurück;
+-- gespeichert wird nur der Hash.
 create function public.create_invite(
   p_challenge_id uuid,
   p_role public.member_role,
@@ -1075,25 +1080,38 @@ set search_path = ''
 as $$
 declare
   v_token text := private.new_token('inv_');
+  v_member public.challenge_members;
+  v_role public.member_role := p_role;
 begin
-  perform private.require_owner(p_challenge_id);
+  perform private.require_user();
   if p_valid_hours not between 1 and 720 then
     raise exception using errcode = 'PT400', message = 'Gültigkeit muss zwischen 1 und 720 Stunden liegen';
   end if;
-  if p_member_id is not null and not exists (
-    select 1 from public.challenge_members m
-    where m.id = p_member_id and m.challenge_id = p_challenge_id and m.role = 'player' and m.user_id is null
-  ) then
-    raise exception using errcode = 'PT400', message = 'Platzhalter-Spieler nicht gefunden oder schon vergeben';
+
+  if p_member_id is null then
+    perform private.require_owner(p_challenge_id);
+    if p_role not in ('player', 'viewer') then
+      raise exception using errcode = 'PT400', message = 'Neue Mitglieder können nur Spieler oder Zuschauer sein';
+    end if;
+  else
+    select * into v_member from public.challenge_members m
+    where m.id = p_member_id and m.challenge_id = p_challenge_id;
+    if not found then
+      raise exception using errcode = 'PT404', message = 'Mitglied nicht gefunden';
+    end if;
+    if not (private.is_challenge_owner(p_challenge_id) or private.my_member_id(p_challenge_id) = p_member_id) then
+      raise exception using errcode = 'PT403', message = 'Gerätelinks erstellt die Leitung oder das Mitglied selbst';
+    end if;
+    v_role := v_member.role;
   end if;
 
   insert into public.challenge_invites (challenge_id, token_hash, role, member_id, max_uses, expires_at, created_by)
   values (
     p_challenge_id,
     private.token_hash(v_token),
-    p_role,
+    v_role,
     p_member_id,
-    p_max_uses,
+    case when p_member_id is null then p_max_uses else 1 end,
     now() + make_interval(hours => p_valid_hours),
     auth.uid()
   );
@@ -1118,6 +1136,7 @@ begin
 end;
 $$;
 
+-- Einladungslink einlösen. Das Gerät (anonyme Sitzung) muss vorher angemeldet sein.
 create function public.join_challenge(p_token text, p_display_name text default null) returns public.challenge_members
 language plpgsql
 security definer
@@ -1127,7 +1146,7 @@ declare
   v_user uuid := private.require_user();
   v_invite public.challenge_invites;
   v_member public.challenge_members;
-  v_name text;
+  v_existing uuid;
 begin
   select * into v_invite from public.challenge_invites i
   where i.token_hash = private.token_hash(p_token)
@@ -1140,41 +1159,61 @@ begin
     raise exception using errcode = 'PT404', message = 'Einladung ungültig oder abgelaufen';
   end if;
 
-  if exists (select 1 from public.challenge_members m where m.challenge_id = v_invite.challenge_id and m.user_id = v_user) then
-    raise exception using errcode = 'PT409', message = 'Du bist bereits Mitglied dieser Challenge';
+  v_existing := private.my_member_id(v_invite.challenge_id);
+  if v_existing is not null then
+    raise exception using errcode = 'PT409', message = 'Dieses Gerät gehört in dieser Challenge schon zu einem Mitglied';
   end if;
 
   if v_invite.member_id is not null then
-    update public.challenge_members
-    set user_id = v_user, joined_at = now()
-    where id = v_invite.member_id and user_id is null
-    returning * into v_member;
-    if not found then
-      raise exception using errcode = 'PT409', message = 'Dieser Spielerplatz wurde schon übernommen';
-    end if;
+    select * into v_member from public.challenge_members m where m.id = v_invite.member_id;
   else
-    select coalesce(nullif(trim(p_display_name), ''), p.display_name) into v_name
-    from public.profiles p where p.id = v_user;
-
-    insert into public.challenge_members (challenge_id, user_id, role, display_name, seat, joined_at)
+    if nullif(trim(p_display_name), '') is null then
+      raise exception using errcode = 'PT400', message = 'Bitte einen Namen angeben';
+    end if;
+    insert into public.challenge_members (challenge_id, role, display_name, seat)
     values (
       v_invite.challenge_id,
-      v_user,
       v_invite.role,
-      v_name,
+      trim(p_display_name),
       case when v_invite.role = 'viewer' then null else (
         select coalesce(max(m.seat) + 1, 0) from public.challenge_members m where m.challenge_id = v_invite.challenge_id
-      ) end,
-      now()
+      ) end
     )
     returning * into v_member;
   end if;
+
+  insert into public.member_devices (user_id, challenge_id, member_id)
+  values (v_user, v_invite.challenge_id, v_member.id);
 
   update public.challenge_invites set uses = uses + 1 where id = v_invite.id;
   return v_member;
 exception
   when unique_violation then
     raise exception using errcode = 'PT409', message = 'Name ist in dieser Challenge schon vergeben';
+end;
+$$;
+
+-- Alle Geräte eines Mitglieds abmelden (z. B. verlorenes Handy). Danach braucht es einen neuen Link.
+create function public.remove_member_devices(p_member_id uuid) returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_challenge_id uuid;
+  v_count integer;
+begin
+  select m.challenge_id into v_challenge_id from public.challenge_members m where m.id = p_member_id;
+  if not found then
+    raise exception using errcode = 'PT404', message = 'Mitglied nicht gefunden';
+  end if;
+  perform private.require_owner(v_challenge_id);
+  if private.my_member_id(v_challenge_id) = p_member_id then
+    raise exception using errcode = 'PT400', message = 'Die eigenen Geräte kann die Leitung nicht abmelden';
+  end if;
+  delete from public.member_devices where member_id = p_member_id;
+  get diagnostics v_count = row_count;
+  return v_count;
 end;
 $$;
 
@@ -1334,10 +1373,9 @@ begin
       'members', coalesce((
         select jsonb_agg(jsonb_build_object(
           'id', m.id, 'display_name', m.display_name, 'role', m.role, 'seat', m.seat,
-          'discord_id', p.discord_id
+          'discord_id', m.discord_id
         ) order by m.seat nulls last, m.display_name)
         from public.challenge_members m
-        left join public.profiles p on p.id = m.user_id
         where m.challenge_id = v_token.challenge_id
       ), '[]'::jsonb),
       'routes', coalesce((
@@ -1401,8 +1439,7 @@ begin
 
   select m.* into v_member
   from public.challenge_members m
-  join public.profiles p on p.id = m.user_id
-  where m.challenge_id = v_token.challenge_id and p.discord_id = p_discord_user_id;
+  where m.challenge_id = v_token.challenge_id and m.discord_id = p_discord_user_id;
 
   if found and v_member.role = 'viewer' then
     raise exception using errcode = 'PT403', message = 'Zuschauer dürfen nicht schreiben';
@@ -1410,7 +1447,7 @@ begin
 
   if found then
     return private.append_event(
-      v_token.challenge_id, p_type, p_payload, 'bot', v_member.user_id, v_member.id, null, p_client_event_id, null
+      v_token.challenge_id, p_type, p_payload, 'bot', null, v_member.id, null, p_client_event_id, null
     );
   end if;
 
@@ -1429,7 +1466,6 @@ $$;
 -- Row Level Security
 -- -------------------------------------------------------------------------------------
 
-alter table public.profiles enable row level security;
 alter table public.species enable row level security;
 alter table public.challenges enable row level security;
 alter table public.challenge_members enable row level security;
@@ -1437,11 +1473,11 @@ alter table public.routes enable row level security;
 alter table public.events enable row level security;
 alter table public.challenge_invites enable row level security;
 alter table public.bot_tokens enable row level security;
+alter table public.member_devices enable row level security;
 
-create policy "Eigenes Profil lesen" on public.profiles
-  for select to authenticated using (id = auth.uid());
-create policy "Eigenes Profil ändern" on public.profiles
-  for update to authenticated using (id = auth.uid()) with check (id = auth.uid());
+-- Eigene Gerätebindungen ("Meine Challenges"); die Leitung sieht alle ihrer Challenge
+create policy "Eigene Geräte lesen, Leitung alle" on public.member_devices
+  for select to authenticated using (user_id = auth.uid() or private.is_challenge_owner(challenge_id));
 
 create policy "Stammdaten sind öffentlich" on public.species
   for select to anon, authenticated using (true);
@@ -1472,8 +1508,7 @@ grant select on public.species, public.challenges, public.challenge_members, pub
   to anon, authenticated;
 grant select on public.active_events, public.encounters, public.challenge_stats, public.member_stats, public.graveyard
   to anon, authenticated;
-grant select on public.profiles to authenticated;
-grant update (display_name) on public.profiles to authenticated;
+grant select on public.member_devices to authenticated;
 -- Token-Hashes verlassen die Datenbank nie
 grant select (id, challenge_id, role, member_id, max_uses, uses, expires_at, revoked_at, created_by, created_at)
   on public.challenge_invites to authenticated;
@@ -1490,7 +1525,8 @@ grant execute on function
   public.update_challenge(uuid, text, public.challenge_visibility, boolean),
   public.delete_challenge(uuid, text),
   public.add_player(uuid, text),
-  public.update_member(uuid, text, text),
+  public.update_member(uuid, text, text, text),
+  public.remove_member_devices(uuid),
   public.create_invite(uuid, public.member_role, uuid, integer, integer),
   public.revoke_invite(uuid),
   public.join_challenge(text, text),

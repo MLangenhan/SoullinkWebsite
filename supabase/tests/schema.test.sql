@@ -50,15 +50,12 @@ grant execute on all functions in schema test to public;
 -- Stammdaten kommen aus der Migration 20261008120100_species.sql
 select test.ok((select count(*) >= 1025 from public.species), 'Stammdaten sind geladen');
 
--- Drei Discord-Anmeldungen
-insert into auth.users (id, raw_user_meta_data) values
-  ('00000000-0000-0000-0000-000000000001', '{"provider_id": "111111", "full_name": "Moritz", "avatar_url": "https://cdn.test/m.png"}'),
-  ('00000000-0000-0000-0000-000000000002', '{"provider_id": "222222", "name": "janne_dc", "custom_claims": {"global_name": "Janne"}}'),
-  ('00000000-0000-0000-0000-000000000003', '{"provider_id": "333333", "full_name": "Fremder"}');
-
-select test.ok((select count(*) = 3 from public.profiles), 'Profile werden bei Anmeldung angelegt');
-select test.ok((select display_name = 'Janne' from public.profiles where discord_id = '222222'),
-               'Discord-Anzeigename (global_name) wird bevorzugt');
+-- Vier anonyme Sitzungen (Geräte): Moritz, Janne, ein Fremder, Jannes zweites Gerät
+insert into auth.users (id) values
+  ('00000000-0000-0000-0000-000000000001'),
+  ('00000000-0000-0000-0000-000000000002'),
+  ('00000000-0000-0000-0000-000000000003'),
+  ('00000000-0000-0000-0000-000000000004');
 
 -- ---------------------------------------------------------------- Challenge anlegen (Moritz)
 set role authenticated;
@@ -67,13 +64,14 @@ set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000001';
 select test.put('ch', (public.create_challenge('Platin Soul Link', 'platin-soullink', 'Moritz')).id::text);
 select test.put('janne', (public.add_player(test.get('ch')::uuid, 'Janne')).id::text);
 select test.put('elsmann', (public.add_player(test.get('ch')::uuid, 'Elsmann')).id::text);
-select test.put('moritz', (select id::text from public.challenge_members where user_id = auth.uid()));
+select test.put('moritz', (select member_id::text from public.member_devices where user_id = auth.uid()));
+select test.ok(test.get('moritz') is not null, 'Ersteller ist per Gerät an seinen Platz gebunden');
 select test.ok((select count(*) = 3 from public.challenge_members where challenge_id = test.get('ch')::uuid),
                'Owner sieht alle Mitglieder der privaten Challenge');
 select test.fails($$ select public.create_challenge('Doppelt', 'platin-soullink', 'Moritz') $$, 'PT409',
                   'Challenge-Adresse ist eindeutig');
 select test.fails($$ insert into public.challenges (slug, name) values ('direkt', 'Direkt') $$, '42501',
-                  'Direktes INSERT in runs ist verboten');
+                  'Direktes INSERT in challenges ist verboten');
 
 select test.put('invite_janne', public.create_invite(test.get('ch')::uuid, 'player', test.get('janne')::uuid));
 select test.put('invite_viewer', public.create_invite(test.get('ch')::uuid, 'viewer', null, 24, 5));
@@ -105,6 +103,25 @@ select test.fails(format($$ select public.join_challenge(%L) $$, test.get('invit
                   'Einladung ist nur einmal gültig');
 select test.fails($$ select public.join_challenge('inv_falsch') $$, 'PT404', 'Falscher Token wird abgelehnt');
 select test.ok((select count(*) = 0 from public.challenge_invites), 'Spieler (nicht Owner) sieht keine Einladungen');
+select test.ok((select count(*) = 1 from public.member_devices), 'Spieler sieht nur das eigene Gerät');
+
+-- Zweites Gerät: Janne erstellt sich selbst einen Gerätelink, aber nicht für andere
+select test.put('device_janne', public.create_invite(test.get('ch')::uuid, 'viewer', test.get('janne')::uuid));
+select test.fails(format($$ select public.create_invite(%L, 'player', %L) $$, test.get('ch'), test.get('moritz')),
+                  'PT403', 'Gerätelink für fremden Platz wird abgelehnt');
+select test.fails(format($$ select public.create_invite(%L, 'player') $$, test.get('ch')),
+                  'PT403', 'Nur die Leitung lädt neue Mitglieder ein');
+select test.fails(format($$ select public.join_challenge(%L) $$, test.get('invite_viewer')), 'PT409',
+                  'Ein Gerät gehört pro Challenge nur zu einem Mitglied');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000004';
+select test.ok((select id = test.get('janne')::uuid and role = 'player'
+                from public.join_challenge(test.get('device_janne'))),
+               'Zweites Gerät landet beim selben Spieler und behält die Rolle');
+select test.fails(format($$ select public.update_member(%L, 'Moritz', null, null) $$, test.get('moritz')), 'PT403',
+                  'Spieler darf fremde Mitglieder nicht ändern');
+select test.ok((select discord_id = '222222' from public.update_member(test.get('janne')::uuid, 'Janne', '#7fd1a8', '222222')),
+               'Spieler hinterlegt die eigene Discord-ID');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000002';
 
 select test.put('route201', (public.create_route(test.get('ch')::uuid, 'Route 201')).id::text);
 select test.ok((public.create_route(test.get('ch')::uuid, ' route 201 ')).id = test.get('route201')::uuid,
@@ -279,7 +296,7 @@ select test.fails(format($$ select public.bot_append_event(%L, '444444', 'encoun
   jsonb_build_object('member_id', test.get('elsmann'))), 'PT403', 'Strikter Modus sperrt unverknüpfte Discord-Nutzer');
 select test.ok((select count(*) > 0 from public.events), 'Öffentliche Challenge ist für Zuschauer lesbar');
 select test.ok((select count(*) = 3 from public.member_stats), 'Zuschauer sehen die Zähler');
-select test.fails($$ select * from public.profiles $$, '42501', 'Profile sind für Zuschauer nicht lesbar');
+select test.fails($$ select * from public.member_devices $$, '42501', 'Gerätebindungen sind für Zuschauer nicht lesbar');
 
 reset role;
 set role authenticated;
@@ -289,16 +306,20 @@ reset role;
 set role anon;
 select test.fails(format($$ select public.bot_state(%L) $$, test.get('bot')), 'PT401', 'Widerrufenes Bot-Token ist ungültig');
 
--- ---------------------------------------------------------------- Konto löschen, Challenge löschen
+-- ---------------------------------------------------------------- Sitzung löschen, Geräte abmelden
 reset role;
 delete from auth.users where id = '00000000-0000-0000-0000-000000000002';
 select test.ok((select count(*) = 0 from public.events where actor_user_id = '00000000-0000-0000-0000-000000000002'),
-               'Kontolöschung anonymisiert Ereignisse statt sie zu blockieren');
-select test.ok((select user_id is null from public.challenge_members where id = test.get('janne')::uuid),
-               'Spielerplatz wird wieder zum Platzhalter');
+               'Gelöschte Sitzung anonymisiert Ereignisse statt sie zu blockieren');
+select test.ok((select count(*) = 1 from public.member_devices where member_id = test.get('janne')::uuid),
+               'Jannes zweites Gerät bleibt angemeldet');
 
 set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000001';
+select test.fails(format($$ select public.remove_member_devices(%L) $$, test.get('moritz')), 'PT400',
+                  'Leitung sperrt sich nicht selbst aus');
+select test.ok(public.remove_member_devices(test.get('janne')::uuid) = 1, 'Leitung meldet alle Geräte eines Spielers ab');
+select test.ok((select count(*) = 1 from public.member_devices), 'Leitung sieht die Geräte ihrer Challenge');
 select test.fails(format($$ select public.delete_challenge(%L, 'falsch') $$, test.get('ch')), 'PT400',
                   'Löschen braucht die richtige Bestätigung');
 select public.delete_challenge(test.get('ch')::uuid, 'platin-soullink');

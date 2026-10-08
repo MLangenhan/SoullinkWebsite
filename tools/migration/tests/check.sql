@@ -1,5 +1,6 @@
--- Prüft den Import der Test-Altdaten (tools/migration/tests/*.json) gegen die Bot-Zähler.
--- Läuft nach schema.test.sql in derselben Datenbank (nutzt test.ok).
+-- Prüft den Import von tools/migration/tests/stats.json gegen die Bot-Zähler und den Beitritt
+-- per Einladungslink. Läuft nach schema.test.sql in derselben Datenbank (nutzt test.ok).
+-- Erwartet die psql-Variablen owner_token und player_token.
 \set ON_ERROR_STOP on
 \set QUIET on
 \o /dev/null
@@ -7,34 +8,40 @@
 create temp view imported as
 select * from public.member_stats
 where challenge_id = (select id from public.challenges where slug = 'bot-import');
+grant select on imported to public;
 
-select test.ok((select current_run = 4 and runs_finished = 3 and wipes_total = 3
+select test.ok((select current_run = 2 and runs_finished = 1 and wipes_total = 1
                 from public.challenge_stats s join public.challenges c on c.id = s.challenge_id
-                where c.slug = 'bot-import'), 'Import: drei frühere Runs, laufender Run ist Nummer 4');
+                where c.slug = 'bot-import'), 'Import: ein früherer Run, laufender Run ist Nummer 2');
 select test.ok((select string_agg(display_name || '=' || deaths_run || '/' || deaths_total, ' ' order by seat) from imported)
-               = 'Moritz=3/7 Janne=1/4 Elsmann=0/2 Linus=1/1', 'Import: Tode (Run/gesamt) entsprechen deaths.json');
+               = 'Moritz=2/4 Janne=0/1 Elsmann=2/4 Linus=0/2', 'Import: Tode (Run/gesamt) entsprechen stats.json');
 select test.ok((select string_agg(display_name || '=' || missed_run || '/' || missed_total, ' ' order by seat) from imported)
-               = 'Moritz=0/1 Janne=0/0 Elsmann=2/5 Linus=0/0', 'Import: verpasste Begegnungen entsprechen deaths.json');
+               = 'Moritz=0/2 Janne=1/3 Elsmann=0/1 Linus=0/0', 'Import: verpasste Begegnungen entsprechen stats.json');
 select test.ok((select string_agg(display_name || '=' || wipes_caused, ' ' order by seat) from imported)
-               = 'Moritz=1 Janne=1 Elsmann=0 Linus=0', 'Import: Wipes je Spieler aus "whipes"');
-select test.ok((select count(*) = 14 and count(*) filter (where kind = 'static') = 4
-                from public.encounters e join public.challenges c on c.id = e.challenge_id where c.slug = 'bot-import'),
-               'Import: 14 Begegnungen, davon 4 Static');
-select test.ok((select string_agg(m.display_name || ':' || s.name_de, ', ' order by m.seat, s.name_de)
-                from public.graveyard g
-                join public.challenges c on c.id = g.challenge_id
-                join public.challenge_members m on m.id = g.member_id
-                join public.species s on s.id = g.species_id
-                where c.slug = 'bot-import') = 'Moritz:Luxio, Moritz:Raichu, Linus:Zubat',
-               'Import: Tote mit der Entwicklungsstufe beim Tod');
-select test.ok((select count(*) = 7 from public.encounters e join public.challenges c on c.id = e.challenge_id
-                where c.slug = 'bot-import' and e.state = 'linked_dead'),
-               'Import: Soul-Link-Partner sind mitgestorben');
-select test.ok((select count(*) = 3 from public.challenge_members m join public.challenges c on c.id = m.challenge_id
-                where c.slug = 'bot-import' and m.user_id is null),
-               'Import: drei Platzhalter warten auf ihre Einladung');
+               = 'Moritz=0 Janne=0 Elsmann=1 Linus=0', 'Import: Wipes je Spieler');
 select test.ok((select bool_and(source = 'migration') from public.events e join public.challenges c on c.id = e.challenge_id
                 where c.slug = 'bot-import'), 'Import: alle Ereignisse tragen die Quelle "migration"');
+select test.ok((select count(*) = 0 from public.member_devices d join public.challenges c on c.id = d.challenge_id
+                where c.slug = 'bot-import'), 'Import: alle Plätze sind frei, bis jemand seinen Link öffnet');
+
+-- Beitritt mit den erzeugten Links
+insert into auth.users (id) values
+  ('00000000-0000-0000-0000-0000000000a1'),
+  ('00000000-0000-0000-0000-0000000000a2');
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000a1';
+select test.ok((select role = 'owner' and display_name = 'Moritz' from public.join_challenge(:'owner_token')),
+               'Import: Moritz übernimmt per Link die Leitung');
+select test.ok((select count(*) = 4 and count(*) filter (where uses = 1) = 1
+                from public.challenge_invites i join public.challenges c on c.id = i.challenge_id
+                where c.slug = 'bot-import'),
+               'Import: Leitung sieht die vier Einladungen, eine davon eingelöst');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-0000000000a2';
+select test.ok((select role = 'player' and display_name = 'Janne' from public.join_challenge(:'player_token')),
+               'Import: Janne übernimmt ihren Platz per Link');
+select test.ok((select deaths_total = 1 from imported where display_name = 'Janne'),
+               'Import: Janne sieht danach die private Challenge');
+reset role;
 
 \o
 \echo 'Migrationstest bestanden.'

@@ -9,11 +9,11 @@ dist-ssr
 # Altdaten des Bots (nur lokal, für die Migration)
 data.json
 deaths.json
+stats.json
 migration-report*.json
 migration.sql
 # … außer den erfundenen Testdaten
-!tools/migration/tests/data.json
-!tools/migration/tests/deaths.json
+!tools/migration/tests/stats.json
 
 .DS_Store
 .idea

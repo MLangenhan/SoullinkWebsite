@@ -1,0 +1,38 @@
+{
+  "deaths": {
+    "Moritz": 2,
+    "Janne": 0,
+    "Elsmann": 2,
+    "Linus": 0
+  },
+  "alldeaths": {
+    "Moritz": 4,
+    "Janne": 1,
+    "Elsmann": 4,
+    "Linus": 2
+  },
+  "missed_encounters": {
+    "Moritz": 0,
+    "Janne": 1,
+    "Elsmann": 0,
+    "Linus": 0
+  },
+  "overall_missed_encounters": {
+    "Moritz": 2,
+    "Janne": 3,
+    "Elsmann": 1,
+    "Linus": 0
+  },
+  "wipes": {
+    "Elsmann": 1,
+    "Moritz": 0
+  },
+  "resets": 1,
+  "dead_pokemon": [
+    "arkani",
+    "staraptor",
+    "bidifas",
+    "bibarell"
+  ],
+  "soul_links": {}
+}
