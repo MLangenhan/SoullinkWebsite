@@ -36,7 +36,7 @@ E|4|Karnimani|Tyracroc
 S|2026-10-03T19:30+02 / F|Route 34|Abra|Traumato|Pummeluff|Abra / FS|Dukatia City|Evoli|Evoli|Evoli|Evoli
 F|Route 35|Fukano|Hoothoot|Fukano|Pummeluff / F|Nationalpark|Sichlor|Pinsir|Hornliu|Raupy
 E|1|Voltilamm|Waaty / D|4|Voltilamm|Trainerkampf|Käfersammler|22|Route 35 / FS|Route 36|Mogelbaum|Mogelbaum|Mogelbaum|Mogelbaum
-T|2|Zubat
+B|2|Webarak / T|2|Zubat
 ';
   v_challenge uuid; v_members uuid[] := '{}'; v_clock timestamptz; v_step text; f text[]; v_seat integer;
   v_encounter uuid; v_route uuid; v_species integer; v_team integer; v_events jsonb[]; v_event jsonb;
