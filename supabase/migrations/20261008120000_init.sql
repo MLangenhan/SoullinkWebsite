@@ -6,6 +6,10 @@
 -- Status, Friedhof und Zähler sind Views, die daraus berechnet werden. Rückgängig machen
 -- heißt: ein Ereignis vom Typ event_reverted anhängen, nie löschen.
 --
+-- Begriffe: Eine Challenge ist die Gruppe mit ihren Spielern, Routen und Einladungen.
+-- Sie besteht aus aufeinanderfolgenden Runs (Start bis Wipe oder Sieg). "Session"-Zähler
+-- des alten Bots = Zähler des laufenden Runs.
+--
 -- Schreiben geht ausschließlich über Funktionen (RPC). Clients haben auf keine Tabelle
 -- INSERT-, UPDATE- oder DELETE-Rechte. Lesen ist per Row Level Security beschränkt.
 -- =====================================================================================
@@ -25,10 +29,12 @@ revoke all on schema private from public;
 -- Typen
 -- -------------------------------------------------------------------------------------
 
-create type public.run_visibility as enum ('public', 'private');
+create type public.challenge_visibility as enum ('public', 'private');
 create type public.member_role as enum ('owner', 'player', 'viewer');
 create type public.event_source as enum ('web', 'bot', 'migration');
 create type public.encounter_status as enum ('team', 'box');
+-- static: einmalige Begegnung durch Ansprechen (Sonderregel), zusätzlich zur wilden der Route
+create type public.encounter_kind as enum ('wild', 'static');
 create type public.pokemon_state as enum ('team', 'box', 'dead', 'linked_dead');
 create type public.event_type as enum (
   'encounter_logged',          -- Pokémon gefangen (gehört zu einem Soul-Link)
@@ -36,7 +42,7 @@ create type public.event_type as enum (
   'encounter_status_changed',  -- Team <-> Box
   'encounter_evolved',         -- Entwicklung
   'pokemon_died',              -- Tod inkl. Ort und Ursache
-  'attempt_ended',             -- Wipe oder Reset, danach beginnt der nächste Versuch
+  'run_ended',                 -- Run verloren (Wipe) oder gewonnen, danach beginnt der nächste
   'counter_adjusted',          -- manuelle Korrektur / Altdaten aus dem Bot
   'event_reverted'             -- Undo eines früheren Ereignisses
 );
@@ -67,13 +73,13 @@ create table public.species (
 );
 create index species_evolution_chain_idx on public.species (evolution_chain_id, evolution_stage);
 
-create table public.runs (
+create table public.challenges (
   id uuid primary key default gen_random_uuid(),
   slug text not null unique
     check (char_length(slug) between 3 and 40 and slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'),
   name text not null check (char_length(name) between 1 and 80),
   game text not null default 'platinum' check (char_length(game) between 1 and 40),
-  visibility public.run_visibility not null default 'private',
+  visibility public.challenge_visibility not null default 'private',
   -- false: Über den Bot dürfen nur Discord-Konten schreiben, die mit einem Spieler verknüpft sind
   bot_allow_unlinked boolean not null default true,
   -- Fortlaufende Nummer des letzten Ereignisses; dient als Sperre und Synchronisationsmarke
@@ -82,11 +88,11 @@ create table public.runs (
   created_at timestamptz not null default now()
 );
 
--- Spieler und Zuschauer eines Runs. user_id ist bei Platzhaltern (z. B. migrierte Spieler,
+-- Spieler und Zuschauer einer Challenge. user_id ist bei Platzhaltern (z. B. migrierte Spieler,
 -- die sich noch nicht angemeldet haben) leer und wird über einen Einladungslink übernommen.
-create table public.run_members (
+create table public.challenge_members (
   id uuid primary key default gen_random_uuid(),
-  run_id uuid not null references public.runs (id) on delete cascade,
+  challenge_id uuid not null references public.challenges (id) on delete cascade,
   user_id uuid references public.profiles (id) on delete set null,
   role public.member_role not null,
   display_name text not null check (char_length(display_name) between 1 and 40),
@@ -94,54 +100,54 @@ create table public.run_members (
   seat smallint check (seat >= 0),
   joined_at timestamptz,
   created_at timestamptz not null default now(),
-  unique (run_id, user_id),
-  unique (run_id, seat),
+  unique (challenge_id, user_id),
+  unique (challenge_id, seat),
   check ((role = 'viewer') = (seat is null)),
   check (role <> 'owner' or user_id is not null)
 );
-create unique index run_members_name_idx on public.run_members (run_id, lower(display_name));
+create unique index challenge_members_name_idx on public.challenge_members (challenge_id, lower(display_name));
 
 create table public.routes (
   id uuid primary key default gen_random_uuid(),
-  run_id uuid not null references public.runs (id) on delete cascade,
+  challenge_id uuid not null references public.challenges (id) on delete cascade,
   name text not null check (char_length(name) between 1 and 60),
   sort_order integer not null,
   created_at timestamptz not null default now()
 );
-create unique index routes_name_idx on public.routes (run_id, lower(name));
+create unique index routes_name_idx on public.routes (challenge_id, lower(name));
 
 create table public.events (
   id bigint generated always as identity primary key,
-  run_id uuid not null references public.runs (id) on delete cascade,
+  challenge_id uuid not null references public.challenges (id) on delete cascade,
   seq integer not null check (seq > 0),
-  attempt integer not null check (attempt > 0),
+  run_number integer not null check (run_number > 0),
   type public.event_type not null,
   payload jsonb not null default '{}' check (jsonb_typeof(payload) = 'object'),
   source public.event_source not null,
   actor_user_id uuid references public.profiles (id) on delete set null,
-  actor_member_id uuid references public.run_members (id) on delete set null,
+  actor_member_id uuid references public.challenge_members (id) on delete set null,
   -- Nur gesetzt, wenn ein Bot-Aufruf keinem Spieler zugeordnet werden konnte
   actor_discord_id text,
   client_event_id uuid,
   reverts_event_id bigint references public.events (id),
   occurred_at timestamptz not null default now(),
   recorded_at timestamptz not null default now(),
-  unique (run_id, seq),
-  unique (run_id, client_event_id),
+  unique (challenge_id, seq),
+  unique (challenge_id, client_event_id),
   check ((type = 'event_reverted') = (reverts_event_id is not null))
 );
 -- Ein Ereignis kann höchstens einmal rückgängig gemacht werden
 create unique index events_reverts_idx on public.events (reverts_event_id) where reverts_event_id is not null;
-create index events_run_type_idx on public.events (run_id, type, attempt);
+create index events_run_type_idx on public.events (challenge_id, type, run_number);
 create index events_encounter_idx on public.events ((payload ->> 'encounter_id')) where payload ? 'encounter_id';
 
-create table public.run_invites (
+create table public.challenge_invites (
   id uuid primary key default gen_random_uuid(),
-  run_id uuid not null references public.runs (id) on delete cascade,
+  challenge_id uuid not null references public.challenges (id) on delete cascade,
   token_hash bytea not null unique,
   role public.member_role not null check (role in ('player', 'viewer')),
   -- Optional: Einladung übernimmt einen bestehenden Platzhalter-Spieler
-  member_id uuid references public.run_members (id) on delete cascade,
+  member_id uuid references public.challenge_members (id) on delete cascade,
   max_uses integer not null default 1 check (max_uses between 1 and 100),
   uses integer not null default 0 check (uses >= 0),
   expires_at timestamptz not null,
@@ -151,10 +157,10 @@ create table public.run_invites (
   check (member_id is null or (role = 'player' and max_uses = 1))
 );
 
--- Zugang des Discord-Bots: ein Token pro Run, nur als SHA-256-Hash gespeichert
+-- Zugang des Discord-Bots: ein Token pro Challenge, nur als SHA-256-Hash gespeichert
 create table public.bot_tokens (
   id uuid primary key default gen_random_uuid(),
-  run_id uuid not null references public.runs (id) on delete cascade,
+  challenge_id uuid not null references public.challenges (id) on delete cascade,
   label text not null check (char_length(label) between 1 and 60),
   token_hash bytea not null unique,
   last_used_at timestamptz,
@@ -167,7 +173,7 @@ create table public.bot_tokens (
 -- Unveränderlichkeit der Ereignisse
 -- -------------------------------------------------------------------------------------
 
--- Erlaubt sind nur: Löschen zusammen mit dem ganzen Run und das Anonymisieren der
+-- Erlaubt sind nur: Löschen zusammen mit der ganzen Challenge und das Anonymisieren der
 -- Urheber-Spalten (z. B. wenn ein Konto gelöscht wird). Alles andere wird abgewiesen.
 create function private.protect_events() returns trigger
 language plpgsql
@@ -175,7 +181,7 @@ set search_path = ''
 as $$
 begin
   if tg_op = 'DELETE' then
-    if exists (select 1 from public.runs r where r.id = old.run_id) then
+    if exists (select 1 from public.challenges r where r.id = old.challenge_id) then
       raise exception using errcode = 'PT403', message = 'Ereignisse sind unveränderlich';
     end if;
     return old;
@@ -231,33 +237,33 @@ create trigger on_auth_user_created
 -- Berechtigungs-Hilfsfunktionen (security definer, damit RLS nicht rekursiv wird)
 -- -------------------------------------------------------------------------------------
 
-create function private.member_role(p_run_id uuid) returns public.member_role
+create function private.member_role(p_challenge_id uuid) returns public.member_role
 language sql
 stable
 security definer
 set search_path = ''
 as $$
-  select m.role from public.run_members m
-  where m.run_id = p_run_id and m.user_id = auth.uid() and auth.uid() is not null;
+  select m.role from public.challenge_members m
+  where m.challenge_id = p_challenge_id and m.user_id = auth.uid() and auth.uid() is not null;
 $$;
 
-create function private.can_read_run(p_run_id uuid) returns boolean
+create function private.can_read_challenge(p_challenge_id uuid) returns boolean
 language sql
 stable
 security definer
 set search_path = ''
 as $$
-  select exists (select 1 from public.runs r where r.id = p_run_id and r.visibility = 'public')
-      or private.member_role(p_run_id) is not null;
+  select exists (select 1 from public.challenges r where r.id = p_challenge_id and r.visibility = 'public')
+      or private.member_role(p_challenge_id) is not null;
 $$;
 
-create function private.is_run_owner(p_run_id uuid) returns boolean
+create function private.is_challenge_owner(p_challenge_id uuid) returns boolean
 language sql
 stable
 security definer
 set search_path = ''
 as $$
-  select coalesce(private.member_role(p_run_id) = 'owner', false);
+  select coalesce(private.member_role(p_challenge_id) = 'owner', false);
 $$;
 
 create function private.require_user() returns uuid
@@ -273,7 +279,7 @@ begin
 end;
 $$;
 
-create function private.require_owner(p_run_id uuid) returns void
+create function private.require_owner(p_challenge_id uuid) returns void
 language plpgsql
 stable
 security definer
@@ -281,27 +287,27 @@ set search_path = ''
 as $$
 begin
   perform private.require_user();
-  if not private.is_run_owner(p_run_id) then
-    raise exception using errcode = 'PT403', message = 'Nur die Run-Leitung darf das';
+  if not private.is_challenge_owner(p_challenge_id) then
+    raise exception using errcode = 'PT403', message = 'Nur die Challenge-Leitung darf das';
   end if;
 end;
 $$;
 
 -- Spieler-Eintrag des angemeldeten Nutzers (Rolle owner oder player), sonst Fehler
-create function private.require_player(p_run_id uuid) returns public.run_members
+create function private.require_player(p_challenge_id uuid) returns public.challenge_members
 language plpgsql
 stable
 security definer
 set search_path = ''
 as $$
 declare
-  v_member public.run_members;
+  v_member public.challenge_members;
 begin
   perform private.require_user();
-  select * into v_member from public.run_members m
-  where m.run_id = p_run_id and m.user_id = auth.uid() and m.role in ('owner', 'player');
+  select * into v_member from public.challenge_members m
+  where m.challenge_id = p_challenge_id and m.user_id = auth.uid() and m.role in ('owner', 'player');
   if not found then
-    raise exception using errcode = 'PT403', message = 'Nur Mitspieler dürfen in diesem Run schreiben';
+    raise exception using errcode = 'PT403', message = 'Nur Mitspieler dürfen in dieser Challenge schreiben';
   end if;
   return v_member;
 end;
@@ -382,7 +388,7 @@ begin
 end;
 $$;
 
-create function private.assert_player(p_run_id uuid, p_member_id uuid) returns void
+create function private.assert_player(p_challenge_id uuid, p_member_id uuid) returns void
 language plpgsql
 stable
 security definer
@@ -390,23 +396,23 @@ set search_path = ''
 as $$
 begin
   if not exists (
-    select 1 from public.run_members m
-    where m.id = p_member_id and m.run_id = p_run_id and m.role in ('owner', 'player')
+    select 1 from public.challenge_members m
+    where m.id = p_member_id and m.challenge_id = p_challenge_id and m.role in ('owner', 'player')
   ) then
-    raise exception using errcode = 'PT400', message = 'Spieler gehört nicht zu diesem Run';
+    raise exception using errcode = 'PT400', message = 'Spieler gehört nicht zu dieser Challenge';
   end if;
 end;
 $$;
 
-create function private.assert_route(p_run_id uuid, p_route_id uuid) returns void
+create function private.assert_route(p_challenge_id uuid, p_route_id uuid) returns void
 language plpgsql
 stable
 security definer
 set search_path = ''
 as $$
 begin
-  if not exists (select 1 from public.routes r where r.id = p_route_id and r.run_id = p_run_id) then
-    raise exception using errcode = 'PT400', message = 'Route gehört nicht zu diesem Run';
+  if not exists (select 1 from public.routes r where r.id = p_route_id and r.challenge_id = p_challenge_id) then
+    raise exception using errcode = 'PT400', message = 'Route gehört nicht zu dieser Challenge';
   end if;
 end;
 $$;
@@ -440,8 +446,8 @@ where e.type <> 'event_reverted'
 create view public.encounters with (security_invoker = true) as
 with logged as (
   select
-    e.run_id,
-    e.attempt,
+    e.challenge_id,
+    e.run_number,
     e.id as event_id,
     e.occurred_at as logged_at,
     (e.payload ->> 'encounter_id')::uuid as encounter_id,
@@ -450,7 +456,8 @@ with logged as (
     (e.payload ->> 'route_id')::uuid as route_id,
     (e.payload ->> 'species_id')::integer as species_id,
     e.payload ->> 'nickname' as nickname,
-    (e.payload ->> 'status')::public.encounter_status as initial_status
+    (e.payload ->> 'status')::public.encounter_status as initial_status,
+    (e.payload ->> 'kind')::public.encounter_kind as kind
   from public.active_events e
   where e.type = 'encounter_logged'
 ),
@@ -493,12 +500,13 @@ link_deaths as (
   order by l.link_id, d.died_at, d.death_event_id
 )
 select
-  l.run_id,
-  l.attempt,
+  l.challenge_id,
+  l.run_number,
   l.encounter_id,
   l.link_id,
   l.member_id,
   l.route_id,
+  l.kind,
   l.species_id as caught_species_id,
   coalesce(ls.species_id, l.species_id) as species_id,
   l.nickname,
@@ -522,55 +530,56 @@ left join last_species ls on ls.encounter_id = l.encounter_id
 left join deaths d on d.encounter_id = l.encounter_id
 left join link_deaths ld on ld.link_id = l.link_id;
 
--- Kennzahlen pro Run
-create view public.run_stats with (security_invoker = true) as
+-- Kennzahlen pro Challenge
+create view public.challenge_stats with (security_invoker = true) as
 select
-  r.id as run_id,
-  1 + count(e.id) filter (where e.type = 'attempt_ended') as current_attempt,
-  count(e.id) filter (where e.type = 'attempt_ended') as resets_total,
-  count(e.id) filter (where e.type = 'attempt_ended' and e.payload ->> 'reason' = 'wipe') as wipes_total
-from public.runs r
-left join public.active_events e on e.run_id = r.id and e.type = 'attempt_ended'
+  r.id as challenge_id,
+  (1 + count(e.id))::integer as current_run,
+  count(e.id)::integer as runs_finished,
+  (count(e.id) filter (where e.payload ->> 'result' = 'wipe'))::integer as wipes_total,
+  (count(e.id) filter (where e.payload ->> 'result' = 'won'))::integer as wins_total
+from public.challenges r
+left join public.active_events e on e.challenge_id = r.id and e.type = 'run_ended'
 group by r.id;
 
--- Zähler pro Spieler: laufender Versuch ("Session") und gesamt
+-- Zähler pro Spieler: laufender Run ("Session") und gesamt
 create view public.member_stats with (security_invoker = true) as
 with facts as (
-  select en.run_id, en.member_id, en.attempt, 'deaths' as counter, 1 as amount
+  select en.challenge_id, en.member_id, en.run_number, 'deaths' as counter, 1 as amount
   from public.encounters en
   where en.state = 'dead'
   union all
-  select e.run_id, (e.payload ->> 'member_id')::uuid, e.attempt, 'missed_encounters', 1
+  select e.challenge_id, (e.payload ->> 'member_id')::uuid, e.run_number, 'missed_encounters', 1
   from public.active_events e
   where e.type = 'encounter_missed'
   union all
-  select e.run_id, (e.payload ->> 'member_id')::uuid, e.attempt, e.payload ->> 'counter',
+  select e.challenge_id, (e.payload ->> 'member_id')::uuid, e.run_number, e.payload ->> 'counter',
          (e.payload ->> 'delta')::integer
   from public.active_events e
   where e.type = 'counter_adjusted'
   union all
-  select e.run_id, (e.payload ->> 'caused_by_member_id')::uuid, e.attempt, 'wipes', 1
+  select e.challenge_id, (e.payload ->> 'caused_by_member_id')::uuid, e.run_number, 'wipes', 1
   from public.active_events e
-  where e.type = 'attempt_ended' and e.payload ? 'caused_by_member_id'
+  where e.type = 'run_ended' and e.payload ->> 'result' = 'wipe' and e.payload ? 'caused_by_member_id'
 )
 select
-  m.run_id,
+  m.challenge_id,
   m.id as member_id,
   m.display_name,
   m.seat,
-  s.current_attempt,
-  coalesce(sum(f.amount) filter (where f.counter = 'deaths' and f.attempt = s.current_attempt), 0)::integer
-    as deaths_attempt,
+  s.current_run,
+  coalesce(sum(f.amount) filter (where f.counter = 'deaths' and f.run_number = s.current_run), 0)::integer
+    as deaths_run,
   coalesce(sum(f.amount) filter (where f.counter = 'deaths'), 0)::integer as deaths_total,
-  coalesce(sum(f.amount) filter (where f.counter = 'missed_encounters' and f.attempt = s.current_attempt), 0)::integer
-    as missed_attempt,
+  coalesce(sum(f.amount) filter (where f.counter = 'missed_encounters' and f.run_number = s.current_run), 0)::integer
+    as missed_run,
   coalesce(sum(f.amount) filter (where f.counter = 'missed_encounters'), 0)::integer as missed_total,
   coalesce(sum(f.amount) filter (where f.counter = 'wipes'), 0)::integer as wipes_caused
-from public.run_members m
-join public.run_stats s on s.run_id = m.run_id
-left join facts f on f.member_id = m.id and f.run_id = m.run_id
+from public.challenge_members m
+join public.challenge_stats s on s.challenge_id = m.challenge_id
+left join facts f on f.member_id = m.id and f.challenge_id = m.challenge_id
 where m.role in ('owner', 'player')
-group by m.run_id, m.id, m.display_name, m.seat, s.current_attempt;
+group by m.challenge_id, m.id, m.display_name, m.seat, s.current_run;
 
 -- Friedhof: selbst gestorbene Pokémon mit ihren Soul-Link-Partnern
 create view public.graveyard with (security_invoker = true) as
@@ -594,7 +603,7 @@ where en.state = 'dead';
 -- Ereignisse anhängen: einziger Schreibpfad für Web, Bot und Migration
 -- -------------------------------------------------------------------------------------
 
-create function private.current_attempt(p_run_id uuid) returns integer
+create function private.current_run(p_challenge_id uuid) returns integer
 language sql
 stable
 security definer
@@ -602,11 +611,11 @@ set search_path = ''
 as $$
   select 1 + count(*)::integer
   from public.active_events e
-  where e.run_id = p_run_id and e.type = 'attempt_ended';
+  where e.challenge_id = p_challenge_id and e.type = 'run_ended';
 $$;
 
--- Lebendes Pokémon des laufenden Versuchs, sonst Fehler
-create function private.require_living_encounter(p_run_id uuid, p_attempt integer, p_encounter_id uuid)
+-- Lebendes Pokémon des laufenden Runs, sonst Fehler
+create function private.require_living_encounter(p_challenge_id uuid, p_run integer, p_encounter_id uuid)
 returns public.encounters
 language plpgsql
 stable
@@ -617,12 +626,12 @@ declare
   v_encounter public.encounters;
 begin
   select * into v_encounter from public.encounters en
-  where en.run_id = p_run_id and en.encounter_id = p_encounter_id;
+  where en.challenge_id = p_challenge_id and en.encounter_id = p_encounter_id;
   if not found then
     raise exception using errcode = 'PT404', message = 'Begegnung nicht gefunden';
   end if;
-  if v_encounter.attempt <> p_attempt then
-    raise exception using errcode = 'PT409', message = 'Begegnung gehört zu einem früheren Versuch';
+  if v_encounter.run_number <> p_run then
+    raise exception using errcode = 'PT409', message = 'Begegnung gehört zu einem früheren Run';
   end if;
   if v_encounter.state in ('dead', 'linked_dead') then
     raise exception using errcode = 'PT409', message = 'Pokémon ist bereits tot';
@@ -632,7 +641,7 @@ end;
 $$;
 
 -- Prüft den Payload je Ereignistyp und gibt ihn normalisiert zurück (unbekannte Felder fallen weg)
-create function private.validate_event(p_run_id uuid, p_attempt integer, p_type public.event_type, p_payload jsonb)
+create function private.validate_event(p_challenge_id uuid, p_run integer, p_type public.event_type, p_payload jsonb)
 returns jsonb
 language plpgsql
 security definer
@@ -649,7 +658,8 @@ declare
   v_target public.events;
   v_counter text;
   v_delta integer;
-  v_reason text;
+  v_result text;
+  v_kind text;
   v_cause_member uuid;
 begin
   if p_payload is null or jsonb_typeof(p_payload) <> 'object' then
@@ -659,14 +669,19 @@ begin
   case p_type
     when 'encounter_logged' then
       v_member := private.jsonb_uuid(p_payload, 'member_id', true);
-      perform private.assert_player(p_run_id, v_member);
+      perform private.assert_player(p_challenge_id, v_member);
       v_route := private.jsonb_uuid(p_payload, 'route_id', true);
-      perform private.assert_route(p_run_id, v_route);
+      perform private.assert_route(p_challenge_id, v_route);
       v_species := private.jsonb_int(p_payload, 'species_id', true, 1, 100000);
       perform private.assert_species(v_species);
       v_status := coalesce(private.jsonb_text(p_payload, 'status', false, 10), 'box');
       if v_status not in ('team', 'box') then
         raise exception using errcode = 'PT400', message = 'Status muss "team" oder "box" sein';
+      end if;
+
+      v_kind := coalesce(private.jsonb_text(p_payload, 'kind', false, 10), 'wild');
+      if v_kind not in ('wild', 'static') then
+        raise exception using errcode = 'PT400', message = 'Art der Begegnung muss "wild" oder "static" sein';
       end if;
 
       v_encounter_id := coalesce(private.jsonb_uuid(p_payload, 'encounter_id', false), gen_random_uuid());
@@ -679,10 +694,11 @@ begin
 
       v_link := private.jsonb_uuid(p_payload, 'link_id', false);
       if v_link is null then
-        -- Ohne Angabe: dem jüngsten Soul-Link dieser Route beitreten, in dem der Spieler noch fehlt
+        -- Ohne Angabe: dem jüngsten Soul-Link dieser Route und Art beitreten, in dem der Spieler noch fehlt
         select en.link_id into v_link
         from public.encounters en
-        where en.run_id = p_run_id and en.attempt = p_attempt and en.route_id = v_route
+        where en.challenge_id = p_challenge_id and en.run_number = p_run and en.route_id = v_route
+          and en.kind::text = v_kind
           and not exists (
             select 1 from public.encounters o where o.link_id = en.link_id and o.member_id = v_member
           )
@@ -693,10 +709,11 @@ begin
         if exists (
           select 1 from public.encounters en
           where en.link_id = v_link
-            and (en.run_id <> p_run_id or en.attempt <> p_attempt or en.route_id <> v_route)
+            and (en.challenge_id <> p_challenge_id or en.run_number <> p_run or en.route_id <> v_route
+                 or en.kind::text <> v_kind)
         ) then
           raise exception using errcode = 'PT409',
-            message = 'Soul-Link gehört zu einer anderen Route oder einem anderen Versuch';
+            message = 'Soul-Link gehört zu einer anderen Route, Begegnungsart oder einem anderen Run';
         end if;
         if exists (select 1 from public.encounters en where en.link_id = v_link and en.member_id = v_member) then
           raise exception using errcode = 'PT409', message = 'Spieler hat in diesem Soul-Link bereits ein Pokémon';
@@ -709,16 +726,17 @@ begin
         'member_id', v_member,
         'route_id', v_route,
         'species_id', v_species,
+        'kind', v_kind,
         'status', v_status,
         'nickname', private.jsonb_text(p_payload, 'nickname', false, 20)
       ));
 
     when 'encounter_missed' then
       v_member := private.jsonb_uuid(p_payload, 'member_id', true);
-      perform private.assert_player(p_run_id, v_member);
+      perform private.assert_player(p_challenge_id, v_member);
       v_route := private.jsonb_uuid(p_payload, 'route_id', false);
       if v_route is not null then
-        perform private.assert_route(p_run_id, v_route);
+        perform private.assert_route(p_challenge_id, v_route);
       end if;
       return jsonb_strip_nulls(jsonb_build_object(
         'member_id', v_member,
@@ -728,7 +746,7 @@ begin
 
     when 'encounter_status_changed' then
       v_encounter_id := private.jsonb_uuid(p_payload, 'encounter_id', true);
-      v_encounter := private.require_living_encounter(p_run_id, p_attempt, v_encounter_id);
+      v_encounter := private.require_living_encounter(p_challenge_id, p_run, v_encounter_id);
       v_status := private.jsonb_text(p_payload, 'status', true, 10);
       if v_status not in ('team', 'box') then
         raise exception using errcode = 'PT400', message = 'Status muss "team" oder "box" sein';
@@ -740,7 +758,7 @@ begin
 
     when 'encounter_evolved' then
       v_encounter_id := private.jsonb_uuid(p_payload, 'encounter_id', true);
-      v_encounter := private.require_living_encounter(p_run_id, p_attempt, v_encounter_id);
+      v_encounter := private.require_living_encounter(p_challenge_id, p_run, v_encounter_id);
       v_species := private.jsonb_int(p_payload, 'species_id', true, 1, 100000);
       perform private.assert_species(v_species);
       if v_species = v_encounter.species_id or not exists (
@@ -755,10 +773,10 @@ begin
 
     when 'pokemon_died' then
       v_encounter_id := private.jsonb_uuid(p_payload, 'encounter_id', true);
-      perform private.require_living_encounter(p_run_id, p_attempt, v_encounter_id);
+      perform private.require_living_encounter(p_challenge_id, p_run, v_encounter_id);
       v_route := private.jsonb_uuid(p_payload, 'route_id', false);
       if v_route is not null then
-        perform private.assert_route(p_run_id, v_route);
+        perform private.assert_route(p_challenge_id, v_route);
       end if;
       return jsonb_strip_nulls(jsonb_build_object(
         'encounter_id', v_encounter_id,
@@ -768,17 +786,20 @@ begin
         'level', private.jsonb_int(p_payload, 'level', false, 1, 100)
       ));
 
-    when 'attempt_ended' then
-      v_reason := private.jsonb_text(p_payload, 'reason', true, 10);
-      if v_reason not in ('wipe', 'reset') then
-        raise exception using errcode = 'PT400', message = 'Grund muss "wipe" oder "reset" sein';
+    when 'run_ended' then
+      v_result := private.jsonb_text(p_payload, 'result', true, 10);
+      if v_result not in ('wipe', 'won') then
+        raise exception using errcode = 'PT400', message = 'Ergebnis muss "wipe" oder "won" sein';
       end if;
       v_cause_member := private.jsonb_uuid(p_payload, 'caused_by_member_id', false);
       if v_cause_member is not null then
-        perform private.assert_player(p_run_id, v_cause_member);
+        if v_result <> 'wipe' then
+          raise exception using errcode = 'PT400', message = 'Einen Verursacher gibt es nur bei einem Wipe';
+        end if;
+        perform private.assert_player(p_challenge_id, v_cause_member);
       end if;
       return jsonb_strip_nulls(jsonb_build_object(
-        'reason', v_reason,
+        'result', v_result,
         'caused_by_member_id', v_cause_member,
         'note', private.jsonb_text(p_payload, 'note', false, 200)
       ));
@@ -789,7 +810,7 @@ begin
         raise exception using errcode = 'PT400', message = 'Zähler muss "deaths" oder "missed_encounters" sein';
       end if;
       v_member := private.jsonb_uuid(p_payload, 'member_id', true);
-      perform private.assert_player(p_run_id, v_member);
+      perform private.assert_player(p_challenge_id, v_member);
       v_delta := private.jsonb_int(p_payload, 'delta', true, -1000, 1000);
       if v_delta = 0 then
         raise exception using errcode = 'PT400', message = 'Änderung darf nicht 0 sein';
@@ -803,7 +824,7 @@ begin
 
     when 'event_reverted' then
       select * into v_target from public.events e
-      where e.run_id = p_run_id and e.id = private.jsonb_int(p_payload, 'event_id', true, 1, 2147483647);
+      where e.challenge_id = p_challenge_id and e.id = private.jsonb_int(p_payload, 'event_id', true, 1, 2147483647);
       if not found then
         raise exception using errcode = 'PT404', message = 'Ereignis nicht gefunden';
       end if;
@@ -814,22 +835,22 @@ begin
         raise exception using errcode = 'PT409', message = 'Ereignis wurde bereits rückgängig gemacht';
       end if;
 
-      if v_target.type = 'attempt_ended' then
-        -- Nur der letzte Wipe/Reset, und nur solange im neuen Versuch noch nichts passiert ist
-        if v_target.attempt <> p_attempt - 1 then
-          raise exception using errcode = 'PT409', message = 'Nur der letzte Wipe/Reset kann rückgängig gemacht werden';
+      if v_target.type = 'run_ended' then
+        -- Nur das letzte Run-Ende, und nur solange im neuen Run noch nichts passiert ist
+        if v_target.run_number <> p_run - 1 then
+          raise exception using errcode = 'PT409', message = 'Nur das letzte Run-Ende kann rückgängig gemacht werden';
         end if;
-        if exists (select 1 from public.active_events e where e.run_id = p_run_id and e.attempt = p_attempt) then
+        if exists (select 1 from public.active_events e where e.challenge_id = p_challenge_id and e.run_number = p_run) then
           raise exception using errcode = 'PT409',
-            message = 'Im neuen Versuch gibt es schon Ereignisse; diese zuerst rückgängig machen';
+            message = 'Im neuen Run gibt es schon Ereignisse; diese zuerst rückgängig machen';
         end if;
-      elsif v_target.attempt <> p_attempt then
-        raise exception using errcode = 'PT409', message = 'Nur Ereignisse des laufenden Versuchs können rückgängig gemacht werden';
+      elsif v_target.run_number <> p_run then
+        raise exception using errcode = 'PT409', message = 'Nur Ereignisse des laufenden Runs können rückgängig gemacht werden';
       end if;
 
       if v_target.type = 'encounter_logged' and exists (
         select 1 from public.active_events e
-        where e.run_id = p_run_id
+        where e.challenge_id = p_challenge_id
           and e.id <> v_target.id
           and e.payload ->> 'encounter_id' = v_target.payload ->> 'encounter_id'
       ) then
@@ -843,7 +864,7 @@ end;
 $$;
 
 create function private.append_event(
-  p_run_id uuid,
+  p_challenge_id uuid,
   p_type public.event_type,
   p_payload jsonb,
   p_source public.event_source,
@@ -859,20 +880,20 @@ set search_path = ''
 as $$
 declare
   v_seq integer;
-  v_attempt integer;
+  v_run integer;
   v_payload jsonb;
   v_event public.events;
 begin
-  -- Zeilensperre auf dem Run: Ereignisse eines Runs werden strikt nacheinander geschrieben
-  select r.last_seq into v_seq from public.runs r where r.id = p_run_id for update;
+  -- Zeilensperre auf der Challenge: Ereignisse einer Challenge werden strikt nacheinander geschrieben
+  select r.last_seq into v_seq from public.challenges r where r.id = p_challenge_id for update;
   if not found then
-    raise exception using errcode = 'PT404', message = 'Run nicht gefunden';
+    raise exception using errcode = 'PT404', message = 'Challenge nicht gefunden';
   end if;
 
   -- Idempotenz: Wiederholte Anfragen (Doppelklick, Bot-Retry) liefern das vorhandene Ereignis
   if p_client_event_id is not null then
     select * into v_event from public.events e
-    where e.run_id = p_run_id and e.client_event_id = p_client_event_id;
+    where e.challenge_id = p_challenge_id and e.client_event_id = p_client_event_id;
     if found then
       if v_event.type <> p_type then
         raise exception using errcode = 'PT409', message = 'client_event_id wurde für ein anderes Ereignis verwendet';
@@ -881,16 +902,16 @@ begin
     end if;
   end if;
 
-  v_attempt := private.current_attempt(p_run_id);
-  v_payload := private.validate_event(p_run_id, v_attempt, p_type, p_payload);
+  v_run := private.current_run(p_challenge_id);
+  v_payload := private.validate_event(p_challenge_id, v_run, p_type, p_payload);
 
   insert into public.events (
-    run_id, seq, attempt, type, payload, source,
+    challenge_id, seq, run_number, type, payload, source,
     actor_user_id, actor_member_id, actor_discord_id,
     client_event_id, reverts_event_id, occurred_at
   )
   values (
-    p_run_id, v_seq + 1, v_attempt, p_type, v_payload, p_source,
+    p_challenge_id, v_seq + 1, v_run, p_type, v_payload, p_source,
     p_actor_user_id, p_actor_member_id, p_actor_discord_id,
     p_client_event_id,
     case when p_type = 'event_reverted' then (v_payload ->> 'event_id')::bigint end,
@@ -898,7 +919,7 @@ begin
   )
   returning * into v_event;
 
-  update public.runs set last_seq = v_seq + 1 where id = p_run_id;
+  update public.challenges set last_seq = v_seq + 1 where id = p_challenge_id;
   return v_event;
 end;
 $$;
@@ -923,126 +944,126 @@ as $$
   select sha256(convert_to(p_token, 'UTF8'));
 $$;
 
-create function public.create_run(
+create function public.create_challenge(
   p_name text,
   p_slug text,
   p_display_name text,
-  p_visibility public.run_visibility default 'private',
+  p_visibility public.challenge_visibility default 'private',
   p_game text default 'platinum'
-) returns public.runs
+) returns public.challenges
 language plpgsql
 security definer
 set search_path = ''
 as $$
 declare
   v_user uuid := private.require_user();
-  v_run public.runs;
+  v_challenge public.challenges;
 begin
-  insert into public.runs (slug, name, game, visibility, created_by)
+  insert into public.challenges (slug, name, game, visibility, created_by)
   values (lower(trim(p_slug)), trim(p_name), trim(p_game), p_visibility, v_user)
-  returning * into v_run;
+  returning * into v_challenge;
 
-  insert into public.run_members (run_id, user_id, role, display_name, seat, joined_at)
-  values (v_run.id, v_user, 'owner', trim(p_display_name), 0, now());
+  insert into public.challenge_members (challenge_id, user_id, role, display_name, seat, joined_at)
+  values (v_challenge.id, v_user, 'owner', trim(p_display_name), 0, now());
 
-  return v_run;
+  return v_challenge;
 exception
   when unique_violation then
-    raise exception using errcode = 'PT409', message = 'Diese Run-Adresse ist schon vergeben';
+    raise exception using errcode = 'PT409', message = 'Diese Challenge-Adresse ist schon vergeben';
 end;
 $$;
 
-create function public.update_run(
-  p_run_id uuid,
+create function public.update_challenge(
+  p_challenge_id uuid,
   p_name text,
-  p_visibility public.run_visibility,
+  p_visibility public.challenge_visibility,
   p_bot_allow_unlinked boolean
-) returns public.runs
+) returns public.challenges
 language plpgsql
 security definer
 set search_path = ''
 as $$
 declare
-  v_run public.runs;
+  v_challenge public.challenges;
 begin
-  perform private.require_owner(p_run_id);
-  update public.runs
+  perform private.require_owner(p_challenge_id);
+  update public.challenges
   set name = trim(p_name), visibility = p_visibility, bot_allow_unlinked = p_bot_allow_unlinked
-  where id = p_run_id
-  returning * into v_run;
-  return v_run;
+  where id = p_challenge_id
+  returning * into v_challenge;
+  return v_challenge;
 end;
 $$;
 
--- Löschen verlangt zur Bestätigung die Run-Adresse
-create function public.delete_run(p_run_id uuid, p_confirm_slug text) returns void
+-- Löschen verlangt zur Bestätigung die Challenge-Adresse
+create function public.delete_challenge(p_challenge_id uuid, p_confirm_slug text) returns void
 language plpgsql
 security definer
 set search_path = ''
 as $$
 begin
-  perform private.require_owner(p_run_id);
-  delete from public.runs where id = p_run_id and slug = p_confirm_slug;
+  perform private.require_owner(p_challenge_id);
+  delete from public.challenges where id = p_challenge_id and slug = p_confirm_slug;
   if not found then
-    raise exception using errcode = 'PT400', message = 'Bestätigung stimmt nicht mit der Run-Adresse überein';
+    raise exception using errcode = 'PT400', message = 'Bestätigung stimmt nicht mit der Challenge-Adresse überein';
   end if;
 end;
 $$;
 
 -- Platzhalter-Spieler ohne Konto (wird später per Einladung übernommen)
-create function public.add_player(p_run_id uuid, p_display_name text) returns public.run_members
+create function public.add_player(p_challenge_id uuid, p_display_name text) returns public.challenge_members
 language plpgsql
 security definer
 set search_path = ''
 as $$
 declare
-  v_member public.run_members;
+  v_member public.challenge_members;
 begin
-  perform private.require_owner(p_run_id);
-  insert into public.run_members (run_id, role, display_name, seat)
+  perform private.require_owner(p_challenge_id);
+  insert into public.challenge_members (challenge_id, role, display_name, seat)
   values (
-    p_run_id,
+    p_challenge_id,
     'player',
     trim(p_display_name),
-    (select coalesce(max(m.seat) + 1, 0) from public.run_members m where m.run_id = p_run_id)
+    (select coalesce(max(m.seat) + 1, 0) from public.challenge_members m where m.challenge_id = p_challenge_id)
   )
   returning * into v_member;
   return v_member;
 exception
   when unique_violation then
-    raise exception using errcode = 'PT409', message = 'Name ist in diesem Run schon vergeben';
+    raise exception using errcode = 'PT409', message = 'Name ist in dieser Challenge schon vergeben';
 end;
 $$;
 
--- Name und Farbe ändern: der Spieler selbst oder die Run-Leitung
+-- Name und Farbe ändern: der Spieler selbst oder die Challenge-Leitung
 create function public.update_member(p_member_id uuid, p_display_name text, p_color text)
-returns public.run_members
+returns public.challenge_members
 language plpgsql
 security definer
 set search_path = ''
 as $$
 declare
-  v_member public.run_members;
+  v_member public.challenge_members;
 begin
   perform private.require_user();
-  select * into v_member from public.run_members m where m.id = p_member_id;
-  if not found or not (v_member.user_id = auth.uid() or private.is_run_owner(v_member.run_id)) then
+  select * into v_member from public.challenge_members m where m.id = p_member_id;
+  if not found or not (v_member.user_id = auth.uid() or private.is_challenge_owner(v_member.challenge_id)) then
     raise exception using errcode = 'PT403', message = 'Keine Berechtigung für dieses Mitglied';
   end if;
-  update public.run_members
+  update public.challenge_members
   set display_name = trim(p_display_name), color = lower(p_color)
   where id = p_member_id
   returning * into v_member;
   return v_member;
 exception
   when unique_violation then
-    raise exception using errcode = 'PT409', message = 'Name ist in diesem Run schon vergeben';
+    raise exception using errcode = 'PT409', message = 'Name ist in dieser Challenge schon vergeben';
 end;
 $$;
 
 -- Gibt den Klartext-Token genau einmal zurück; gespeichert wird nur der Hash
 create function public.create_invite(
-  p_run_id uuid,
+  p_challenge_id uuid,
   p_role public.member_role,
   p_member_id uuid default null,
   p_valid_hours integer default 72,
@@ -1055,20 +1076,20 @@ as $$
 declare
   v_token text := private.new_token('inv_');
 begin
-  perform private.require_owner(p_run_id);
+  perform private.require_owner(p_challenge_id);
   if p_valid_hours not between 1 and 720 then
     raise exception using errcode = 'PT400', message = 'Gültigkeit muss zwischen 1 und 720 Stunden liegen';
   end if;
   if p_member_id is not null and not exists (
-    select 1 from public.run_members m
-    where m.id = p_member_id and m.run_id = p_run_id and m.role = 'player' and m.user_id is null
+    select 1 from public.challenge_members m
+    where m.id = p_member_id and m.challenge_id = p_challenge_id and m.role = 'player' and m.user_id is null
   ) then
     raise exception using errcode = 'PT400', message = 'Platzhalter-Spieler nicht gefunden oder schon vergeben';
   end if;
 
-  insert into public.run_invites (run_id, token_hash, role, member_id, max_uses, expires_at, created_by)
+  insert into public.challenge_invites (challenge_id, token_hash, role, member_id, max_uses, expires_at, created_by)
   values (
-    p_run_id,
+    p_challenge_id,
     private.token_hash(v_token),
     p_role,
     p_member_id,
@@ -1086,29 +1107,29 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_run_id uuid;
+  v_challenge_id uuid;
 begin
-  select i.run_id into v_run_id from public.run_invites i where i.id = p_invite_id;
+  select i.challenge_id into v_challenge_id from public.challenge_invites i where i.id = p_invite_id;
   if not found then
     raise exception using errcode = 'PT404', message = 'Einladung nicht gefunden';
   end if;
-  perform private.require_owner(v_run_id);
-  update public.run_invites set revoked_at = coalesce(revoked_at, now()) where id = p_invite_id;
+  perform private.require_owner(v_challenge_id);
+  update public.challenge_invites set revoked_at = coalesce(revoked_at, now()) where id = p_invite_id;
 end;
 $$;
 
-create function public.join_run(p_token text, p_display_name text default null) returns public.run_members
+create function public.join_challenge(p_token text, p_display_name text default null) returns public.challenge_members
 language plpgsql
 security definer
 set search_path = ''
 as $$
 declare
   v_user uuid := private.require_user();
-  v_invite public.run_invites;
-  v_member public.run_members;
+  v_invite public.challenge_invites;
+  v_member public.challenge_members;
   v_name text;
 begin
-  select * into v_invite from public.run_invites i
+  select * into v_invite from public.challenge_invites i
   where i.token_hash = private.token_hash(p_token)
     and i.revoked_at is null
     and i.expires_at > now()
@@ -1119,12 +1140,12 @@ begin
     raise exception using errcode = 'PT404', message = 'Einladung ungültig oder abgelaufen';
   end if;
 
-  if exists (select 1 from public.run_members m where m.run_id = v_invite.run_id and m.user_id = v_user) then
-    raise exception using errcode = 'PT409', message = 'Du bist bereits Mitglied dieses Runs';
+  if exists (select 1 from public.challenge_members m where m.challenge_id = v_invite.challenge_id and m.user_id = v_user) then
+    raise exception using errcode = 'PT409', message = 'Du bist bereits Mitglied dieser Challenge';
   end if;
 
   if v_invite.member_id is not null then
-    update public.run_members
+    update public.challenge_members
     set user_id = v_user, joined_at = now()
     where id = v_invite.member_id and user_id is null
     returning * into v_member;
@@ -1135,30 +1156,30 @@ begin
     select coalesce(nullif(trim(p_display_name), ''), p.display_name) into v_name
     from public.profiles p where p.id = v_user;
 
-    insert into public.run_members (run_id, user_id, role, display_name, seat, joined_at)
+    insert into public.challenge_members (challenge_id, user_id, role, display_name, seat, joined_at)
     values (
-      v_invite.run_id,
+      v_invite.challenge_id,
       v_user,
       v_invite.role,
       v_name,
       case when v_invite.role = 'viewer' then null else (
-        select coalesce(max(m.seat) + 1, 0) from public.run_members m where m.run_id = v_invite.run_id
+        select coalesce(max(m.seat) + 1, 0) from public.challenge_members m where m.challenge_id = v_invite.challenge_id
       ) end,
       now()
     )
     returning * into v_member;
   end if;
 
-  update public.run_invites set uses = uses + 1 where id = v_invite.id;
+  update public.challenge_invites set uses = uses + 1 where id = v_invite.id;
   return v_member;
 exception
   when unique_violation then
-    raise exception using errcode = 'PT409', message = 'Name ist in diesem Run schon vergeben';
+    raise exception using errcode = 'PT409', message = 'Name ist in dieser Challenge schon vergeben';
 end;
 $$;
 
 -- Legt eine Route an oder gibt die bestehende gleichen Namens zurück
-create function private.ensure_route(p_run_id uuid, p_name text) returns public.routes
+create function private.ensure_route(p_challenge_id uuid, p_name text) returns public.routes
 language plpgsql
 security definer
 set search_path = ''
@@ -1166,29 +1187,29 @@ as $$
 declare
   v_route public.routes;
 begin
-  select * into v_route from public.routes r where r.run_id = p_run_id and lower(r.name) = lower(trim(p_name));
+  select * into v_route from public.routes r where r.challenge_id = p_challenge_id and lower(r.name) = lower(trim(p_name));
   if found then
     return v_route;
   end if;
-  insert into public.routes (run_id, name, sort_order)
+  insert into public.routes (challenge_id, name, sort_order)
   values (
-    p_run_id,
+    p_challenge_id,
     trim(p_name),
-    (select coalesce(max(r.sort_order) + 1, 0) from public.routes r where r.run_id = p_run_id)
+    (select coalesce(max(r.sort_order) + 1, 0) from public.routes r where r.challenge_id = p_challenge_id)
   )
   returning * into v_route;
   return v_route;
 end;
 $$;
 
-create function public.create_route(p_run_id uuid, p_name text) returns public.routes
+create function public.create_route(p_challenge_id uuid, p_name text) returns public.routes
 language plpgsql
 security definer
 set search_path = ''
 as $$
 begin
-  perform private.require_player(p_run_id);
-  return private.ensure_route(p_run_id, p_name);
+  perform private.require_player(p_challenge_id);
+  return private.ensure_route(p_challenge_id, p_name);
 end;
 $$;
 
@@ -1204,7 +1225,7 @@ begin
   if not found then
     raise exception using errcode = 'PT404', message = 'Route nicht gefunden';
   end if;
-  perform private.require_player(v_route.run_id);
+  perform private.require_player(v_route.challenge_id);
   update public.routes set name = trim(p_name), sort_order = p_sort_order
   where id = p_route_id
   returning * into v_route;
@@ -1216,7 +1237,7 @@ end;
 $$;
 
 create function public.append_event(
-  p_run_id uuid,
+  p_challenge_id uuid,
   p_type public.event_type,
   p_payload jsonb,
   p_client_event_id uuid default null
@@ -1226,15 +1247,15 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_member public.run_members := private.require_player(p_run_id);
+  v_member public.challenge_members := private.require_player(p_challenge_id);
 begin
   return private.append_event(
-    p_run_id, p_type, p_payload, 'web', auth.uid(), v_member.id, null, p_client_event_id, null
+    p_challenge_id, p_type, p_payload, 'web', auth.uid(), v_member.id, null, p_client_event_id, null
   );
 end;
 $$;
 
-create function public.create_bot_token(p_run_id uuid, p_label text) returns text
+create function public.create_bot_token(p_challenge_id uuid, p_label text) returns text
 language plpgsql
 security definer
 set search_path = ''
@@ -1242,9 +1263,9 @@ as $$
 declare
   v_token text := private.new_token('slb_');
 begin
-  perform private.require_owner(p_run_id);
-  insert into public.bot_tokens (run_id, label, token_hash, created_by)
-  values (p_run_id, trim(p_label), private.token_hash(v_token), auth.uid());
+  perform private.require_owner(p_challenge_id);
+  insert into public.bot_tokens (challenge_id, label, token_hash, created_by)
+  values (p_challenge_id, trim(p_label), private.token_hash(v_token), auth.uid());
   return v_token;
 end;
 $$;
@@ -1255,20 +1276,20 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_run_id uuid;
+  v_challenge_id uuid;
 begin
-  select t.run_id into v_run_id from public.bot_tokens t where t.id = p_token_id;
+  select t.challenge_id into v_challenge_id from public.bot_tokens t where t.id = p_token_id;
   if not found then
     raise exception using errcode = 'PT404', message = 'Bot-Token nicht gefunden';
   end if;
-  perform private.require_owner(v_run_id);
+  perform private.require_owner(v_challenge_id);
   update public.bot_tokens set revoked_at = coalesce(revoked_at, now()) where id = p_token_id;
 end;
 $$;
 
 -- -------------------------------------------------------------------------------------
 -- RPCs für den Discord-Bot. Der Bot nutzt nur den öffentlichen anon-Key plus sein
--- Run-Token. Er kann genau diese drei Funktionen aufrufen und nur seinen Run sehen.
+-- Challenge-Token. Er kann genau diese drei Funktionen aufrufen und nur seine Challenge sehen.
 -- -------------------------------------------------------------------------------------
 
 create function private.bot_auth(p_token text) returns public.bot_tokens
@@ -1290,7 +1311,7 @@ begin
 end;
 $$;
 
--- Kompletter Lesestand des Runs in einem Aufruf (Spieler, Routen, Begegnungen, Zähler)
+-- Kompletter Lesestand der Challenge in einem Aufruf (Spieler, Routen, Begegnungen, Zähler)
 create function public.bot_state(p_token text) returns jsonb
 language plpgsql
 security definer
@@ -1301,44 +1322,44 @@ declare
 begin
   return (
     select jsonb_build_object(
-      'run', (
+      'challenge', (
         select jsonb_build_object(
           'id', r.id, 'slug', r.slug, 'name', r.name, 'game', r.game,
-          'last_seq', r.last_seq, 'current_attempt', s.current_attempt,
-          'resets_total', s.resets_total, 'wipes_total', s.wipes_total
+          'last_seq', r.last_seq, 'current_run', s.current_run,
+          'runs_finished', s.runs_finished, 'wipes_total', s.wipes_total, 'wins_total', s.wins_total
         )
-        from public.runs r join public.run_stats s on s.run_id = r.id
-        where r.id = v_token.run_id
+        from public.challenges r join public.challenge_stats s on s.challenge_id = r.id
+        where r.id = v_token.challenge_id
       ),
       'members', coalesce((
         select jsonb_agg(jsonb_build_object(
           'id', m.id, 'display_name', m.display_name, 'role', m.role, 'seat', m.seat,
           'discord_id', p.discord_id
         ) order by m.seat nulls last, m.display_name)
-        from public.run_members m
+        from public.challenge_members m
         left join public.profiles p on p.id = m.user_id
-        where m.run_id = v_token.run_id
+        where m.challenge_id = v_token.challenge_id
       ), '[]'::jsonb),
       'routes', coalesce((
         select jsonb_agg(jsonb_build_object('id', rt.id, 'name', rt.name, 'sort_order', rt.sort_order)
                          order by rt.sort_order)
         from public.routes rt
-        where rt.run_id = v_token.run_id
+        where rt.challenge_id = v_token.challenge_id
       ), '[]'::jsonb),
       'encounters', coalesce((
-        select jsonb_agg(to_jsonb(en) - 'run_id' order by en.logged_at)
+        select jsonb_agg(to_jsonb(en) - 'challenge_id' order by en.logged_at)
         from public.encounters en
-        where en.run_id = v_token.run_id
+        where en.challenge_id = v_token.challenge_id
       ), '[]'::jsonb),
       'member_stats', coalesce((
-        select jsonb_agg(to_jsonb(ms) - 'run_id' order by ms.seat)
+        select jsonb_agg(to_jsonb(ms) - 'challenge_id' order by ms.seat)
         from public.member_stats ms
-        where ms.run_id = v_token.run_id
+        where ms.challenge_id = v_token.challenge_id
       ), '[]'::jsonb),
       'recent_events', coalesce((
-        select jsonb_agg(to_jsonb(e) - 'run_id' - 'actor_user_id' order by e.seq desc)
+        select jsonb_agg(to_jsonb(e) - 'challenge_id' - 'actor_user_id' order by e.seq desc)
         from (
-          select * from public.events ev where ev.run_id = v_token.run_id order by ev.seq desc limit 25
+          select * from public.events ev where ev.challenge_id = v_token.challenge_id order by ev.seq desc limit 25
         ) e
       ), '[]'::jsonb)
     )
@@ -1354,7 +1375,7 @@ as $$
 declare
   v_token public.bot_tokens := private.bot_auth(p_token);
 begin
-  return private.ensure_route(v_token.run_id, p_name);
+  return private.ensure_route(v_token.challenge_id, p_name);
 end;
 $$;
 
@@ -1371,7 +1392,7 @@ set search_path = ''
 as $$
 declare
   v_token public.bot_tokens := private.bot_auth(p_token);
-  v_member public.run_members;
+  v_member public.challenge_members;
   v_allow_unlinked boolean;
 begin
   if p_discord_user_id is null or p_discord_user_id !~ '^[0-9]{5,25}$' then
@@ -1379,9 +1400,9 @@ begin
   end if;
 
   select m.* into v_member
-  from public.run_members m
+  from public.challenge_members m
   join public.profiles p on p.id = m.user_id
-  where m.run_id = v_token.run_id and p.discord_id = p_discord_user_id;
+  where m.challenge_id = v_token.challenge_id and p.discord_id = p_discord_user_id;
 
   if found and v_member.role = 'viewer' then
     raise exception using errcode = 'PT403', message = 'Zuschauer dürfen nicht schreiben';
@@ -1389,17 +1410,17 @@ begin
 
   if found then
     return private.append_event(
-      v_token.run_id, p_type, p_payload, 'bot', v_member.user_id, v_member.id, null, p_client_event_id, null
+      v_token.challenge_id, p_type, p_payload, 'bot', v_member.user_id, v_member.id, null, p_client_event_id, null
     );
   end if;
 
-  select r.bot_allow_unlinked into v_allow_unlinked from public.runs r where r.id = v_token.run_id;
+  select r.bot_allow_unlinked into v_allow_unlinked from public.challenges r where r.id = v_token.challenge_id;
   if not v_allow_unlinked then
     raise exception using errcode = 'PT403',
-      message = 'Dein Discord-Konto ist mit keinem Spieler dieses Runs verknüpft';
+      message = 'Dein Discord-Konto ist mit keinem Spieler dieser Challenge verknüpft';
   end if;
   return private.append_event(
-    v_token.run_id, p_type, p_payload, 'bot', null, null, p_discord_user_id, p_client_event_id, null
+    v_token.challenge_id, p_type, p_payload, 'bot', null, null, p_discord_user_id, p_client_event_id, null
   );
 end;
 $$;
@@ -1410,11 +1431,11 @@ $$;
 
 alter table public.profiles enable row level security;
 alter table public.species enable row level security;
-alter table public.runs enable row level security;
-alter table public.run_members enable row level security;
+alter table public.challenges enable row level security;
+alter table public.challenge_members enable row level security;
 alter table public.routes enable row level security;
 alter table public.events enable row level security;
-alter table public.run_invites enable row level security;
+alter table public.challenge_invites enable row level security;
 alter table public.bot_tokens enable row level security;
 
 create policy "Eigenes Profil lesen" on public.profiles
@@ -1425,19 +1446,19 @@ create policy "Eigenes Profil ändern" on public.profiles
 create policy "Stammdaten sind öffentlich" on public.species
   for select to anon, authenticated using (true);
 
-create policy "Öffentliche Runs und eigene Runs lesen" on public.runs
-  for select to anon, authenticated using (private.can_read_run(id));
-create policy "Mitglieder sichtbarer Runs lesen" on public.run_members
-  for select to anon, authenticated using (private.can_read_run(run_id));
-create policy "Routen sichtbarer Runs lesen" on public.routes
-  for select to anon, authenticated using (private.can_read_run(run_id));
-create policy "Ereignisse sichtbarer Runs lesen" on public.events
-  for select to anon, authenticated using (private.can_read_run(run_id));
+create policy "Öffentliche und eigene Challenges lesen" on public.challenges
+  for select to anon, authenticated using (private.can_read_challenge(id));
+create policy "Mitglieder sichtbarer Challenges lesen" on public.challenge_members
+  for select to anon, authenticated using (private.can_read_challenge(challenge_id));
+create policy "Routen sichtbarer Challenges lesen" on public.routes
+  for select to anon, authenticated using (private.can_read_challenge(challenge_id));
+create policy "Ereignisse sichtbarer Challenges lesen" on public.events
+  for select to anon, authenticated using (private.can_read_challenge(challenge_id));
 
-create policy "Run-Leitung sieht Einladungen" on public.run_invites
-  for select to authenticated using (private.is_run_owner(run_id));
-create policy "Run-Leitung sieht Bot-Tokens" on public.bot_tokens
-  for select to authenticated using (private.is_run_owner(run_id));
+create policy "Challenge-Leitung sieht Einladungen" on public.challenge_invites
+  for select to authenticated using (private.is_challenge_owner(challenge_id));
+create policy "Challenge-Leitung sieht Bot-Tokens" on public.bot_tokens
+  for select to authenticated using (private.is_challenge_owner(challenge_id));
 
 -- -------------------------------------------------------------------------------------
 -- Rechte: ausschließlich Lesen auf Tabellen/Views, Schreiben nur über die RPCs oben
@@ -1447,32 +1468,32 @@ revoke all on all tables in schema public from anon, authenticated;
 revoke all on all functions in schema public from public, anon, authenticated;
 revoke all on all functions in schema private from public, anon, authenticated;
 
-grant select on public.species, public.runs, public.run_members, public.routes, public.events
+grant select on public.species, public.challenges, public.challenge_members, public.routes, public.events
   to anon, authenticated;
-grant select on public.active_events, public.encounters, public.run_stats, public.member_stats, public.graveyard
+grant select on public.active_events, public.encounters, public.challenge_stats, public.member_stats, public.graveyard
   to anon, authenticated;
 grant select on public.profiles to authenticated;
 grant update (display_name) on public.profiles to authenticated;
 -- Token-Hashes verlassen die Datenbank nie
-grant select (id, run_id, role, member_id, max_uses, uses, expires_at, revoked_at, created_by, created_at)
-  on public.run_invites to authenticated;
-grant select (id, run_id, label, last_used_at, revoked_at, created_by, created_at)
+grant select (id, challenge_id, role, member_id, max_uses, uses, expires_at, revoked_at, created_by, created_at)
+  on public.challenge_invites to authenticated;
+grant select (id, challenge_id, label, last_used_at, revoked_at, created_by, created_at)
   on public.bot_tokens to authenticated;
 
 -- Für RLS-Policies benötigt
 grant usage on schema private to anon, authenticated;
-grant execute on function private.member_role(uuid), private.can_read_run(uuid), private.is_run_owner(uuid)
+grant execute on function private.member_role(uuid), private.can_read_challenge(uuid), private.is_challenge_owner(uuid)
   to anon, authenticated;
 
 grant execute on function
-  public.create_run(text, text, text, public.run_visibility, text),
-  public.update_run(uuid, text, public.run_visibility, boolean),
-  public.delete_run(uuid, text),
+  public.create_challenge(text, text, text, public.challenge_visibility, text),
+  public.update_challenge(uuid, text, public.challenge_visibility, boolean),
+  public.delete_challenge(uuid, text),
   public.add_player(uuid, text),
   public.update_member(uuid, text, text),
   public.create_invite(uuid, public.member_role, uuid, integer, integer),
   public.revoke_invite(uuid),
-  public.join_run(text, text),
+  public.join_challenge(text, text),
   public.create_route(uuid, text),
   public.update_route(uuid, text, integer),
   public.append_event(uuid, public.event_type, jsonb, uuid),
@@ -1490,4 +1511,4 @@ grant execute on function
 -- Live-Updates (Supabase Realtime prüft pro Abonnent die RLS-Policies oben)
 -- -------------------------------------------------------------------------------------
 
-alter publication supabase_realtime add table public.events, public.runs, public.run_members, public.routes;
+alter publication supabase_realtime add table public.events, public.challenges, public.challenge_members, public.routes;

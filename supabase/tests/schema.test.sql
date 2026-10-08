@@ -47,14 +47,8 @@ create function test.get(p_key text) returns text
 language sql stable as $$ select v from test.ids where k = p_key $$;
 grant execute on all functions in schema test to public;
 
--- Stammdaten (Auszug)
-insert into public.species (id, slug, name_en, name_de, generation, evolution_chain_id, evolves_from_id, evolution_stage, sprite_url) values
-  (172, 'pichu', 'Pichu', 'Pichu', 2, 10, null, 1, 'https://example.test/172.png'),
-  (25, 'pikachu', 'Pikachu', 'Pikachu', 1, 10, 172, 2, 'https://example.test/25.png'),
-  (26, 'raichu', 'Raichu', 'Raichu', 1, 10, 25, 3, 'https://example.test/26.png'),
-  (63, 'abra', 'Abra', 'Abra', 1, 26, null, 1, 'https://example.test/63.png'),
-  (64, 'kadabra', 'Kadabra', 'Kadabra', 1, 26, 63, 2, 'https://example.test/64.png'),
-  (393, 'piplup', 'Piplup', 'Plinfa', 4, 200, null, 1, 'https://example.test/393.png');
+-- Stammdaten kommen aus der Migration 20261008120100_species.sql
+select test.ok((select count(*) >= 1025 from public.species), 'Stammdaten sind geladen');
 
 -- Drei Discord-Anmeldungen
 insert into auth.users (id, raw_user_meta_data) values
@@ -66,68 +60,68 @@ select test.ok((select count(*) = 3 from public.profiles), 'Profile werden bei A
 select test.ok((select display_name = 'Janne' from public.profiles where discord_id = '222222'),
                'Discord-Anzeigename (global_name) wird bevorzugt');
 
--- ---------------------------------------------------------------- Run anlegen (Moritz)
+-- ---------------------------------------------------------------- Challenge anlegen (Moritz)
 set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000001';
 
-select test.put('run', (public.create_run('Platin Soul Link', 'platin-soullink', 'Moritz')).id::text);
-select test.put('janne', (public.add_player(test.get('run')::uuid, 'Janne')).id::text);
-select test.put('elsmann', (public.add_player(test.get('run')::uuid, 'Elsmann')).id::text);
-select test.put('moritz', (select id::text from public.run_members where user_id = auth.uid()));
-select test.ok((select count(*) = 3 from public.run_members where run_id = test.get('run')::uuid),
-               'Owner sieht alle Mitglieder des privaten Runs');
-select test.fails($$ select public.create_run('Doppelt', 'platin-soullink', 'Moritz') $$, 'PT409',
-                  'Run-Adresse ist eindeutig');
-select test.fails($$ insert into public.runs (slug, name) values ('direkt', 'Direkt') $$, '42501',
+select test.put('ch', (public.create_challenge('Platin Soul Link', 'platin-soullink', 'Moritz')).id::text);
+select test.put('janne', (public.add_player(test.get('ch')::uuid, 'Janne')).id::text);
+select test.put('elsmann', (public.add_player(test.get('ch')::uuid, 'Elsmann')).id::text);
+select test.put('moritz', (select id::text from public.challenge_members where user_id = auth.uid()));
+select test.ok((select count(*) = 3 from public.challenge_members where challenge_id = test.get('ch')::uuid),
+               'Owner sieht alle Mitglieder der privaten Challenge');
+select test.fails($$ select public.create_challenge('Doppelt', 'platin-soullink', 'Moritz') $$, 'PT409',
+                  'Challenge-Adresse ist eindeutig');
+select test.fails($$ insert into public.challenges (slug, name) values ('direkt', 'Direkt') $$, '42501',
                   'Direktes INSERT in runs ist verboten');
 
-select test.put('invite_janne', public.create_invite(test.get('run')::uuid, 'player', test.get('janne')::uuid));
-select test.put('invite_viewer', public.create_invite(test.get('run')::uuid, 'viewer', null, 24, 5));
-select test.fails($$ select token_hash from public.run_invites $$, '42501', 'Token-Hashes sind nicht lesbar');
-select test.ok((select count(*) = 2 from public.run_invites), 'Owner sieht Einladungen (ohne Hash)');
+select test.put('invite_janne', public.create_invite(test.get('ch')::uuid, 'player', test.get('janne')::uuid));
+select test.put('invite_viewer', public.create_invite(test.get('ch')::uuid, 'viewer', null, 24, 5));
+select test.fails($$ select token_hash from public.challenge_invites $$, '42501', 'Token-Hashes sind nicht lesbar');
+select test.ok((select count(*) = 2 from public.challenge_invites), 'Owner sieht Einladungen (ohne Hash)');
 
 -- ---------------------------------------------------------------- Zugriff von außen
 reset role;
 set role anon;
 reset request.jwt.claim.sub;
-select test.ok((select count(*) = 0 from public.runs), 'Anonym sieht private Runs nicht');
-select test.ok((select count(*) = 6 from public.species), 'Stammdaten sind öffentlich');
-select test.fails($$ select public.create_run('X', 'xyz', 'X') $$, '42501', 'Anonym darf keine Website-RPCs aufrufen');
+select test.ok((select count(*) = 0 from public.challenges), 'Anonym sieht private Challenges nicht');
+select test.ok((select count(*) >= 1025 from public.species), 'Stammdaten sind öffentlich');
+select test.fails($$ select public.create_challenge('X', 'xyz', 'X') $$, '42501', 'Anonym darf keine Website-RPCs aufrufen');
 
 reset role;
 set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000003';
-select test.ok((select count(*) = 0 from public.events), 'Fremder sieht keine Ereignisse eines privaten Runs');
-select test.fails(format($$ select public.create_route(%L, 'Route 201') $$, test.get('run')), 'PT403',
+select test.ok((select count(*) = 0 from public.events), 'Fremder sieht keine Ereignisse einer privaten Challenge');
+select test.fails(format($$ select public.create_route(%L, 'Route 201') $$, test.get('ch')), 'PT403',
                   'Fremder darf keine Route anlegen');
-select test.fails(format($$ select public.add_player(%L, 'Hacker') $$, test.get('run')), 'PT403',
+select test.fails(format($$ select public.add_player(%L, 'Hacker') $$, test.get('ch')), 'PT403',
                   'Fremder darf keine Spieler anlegen');
 
 -- ---------------------------------------------------------------- Beitritt per Einladung (Janne)
 set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000002';
-select test.ok((public.join_run(test.get('invite_janne'))).id = test.get('janne')::uuid,
+select test.ok((public.join_challenge(test.get('invite_janne'))).id = test.get('janne')::uuid,
                'Janne übernimmt den Platzhalter per Einladung');
-select test.fails(format($$ select public.join_run(%L) $$, test.get('invite_janne')), 'PT404',
+select test.fails(format($$ select public.join_challenge(%L) $$, test.get('invite_janne')), 'PT404',
                   'Einladung ist nur einmal gültig');
-select test.fails($$ select public.join_run('inv_falsch') $$, 'PT404', 'Falscher Token wird abgelehnt');
-select test.ok((select count(*) = 0 from public.run_invites), 'Spieler (nicht Owner) sieht keine Einladungen');
+select test.fails($$ select public.join_challenge('inv_falsch') $$, 'PT404', 'Falscher Token wird abgelehnt');
+select test.ok((select count(*) = 0 from public.challenge_invites), 'Spieler (nicht Owner) sieht keine Einladungen');
 
-select test.put('route201', (public.create_route(test.get('run')::uuid, 'Route 201')).id::text);
-select test.ok((public.create_route(test.get('run')::uuid, ' route 201 ')).id = test.get('route201')::uuid,
+select test.put('route201', (public.create_route(test.get('ch')::uuid, 'Route 201')).id::text);
+select test.ok((public.create_route(test.get('ch')::uuid, ' route 201 ')).id = test.get('route201')::uuid,
                'create_route ist idempotent (Groß-/Kleinschreibung egal)');
-select test.put('route202', (public.create_route(test.get('run')::uuid, 'Route 202')).id::text);
+select test.put('route202', (public.create_route(test.get('ch')::uuid, 'Route 202')).id::text);
 
 -- ---------------------------------------------------------------- Begegnungen und Soul-Link
 set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000001';
 select test.put('enc_moritz', (public.append_event(
-  test.get('run')::uuid, 'encounter_logged',
+  test.get('ch')::uuid, 'encounter_logged',
   jsonb_build_object('member_id', test.get('moritz'), 'route_id', test.get('route201'), 'species_id', 172,
                      'status', 'team', 'nickname', 'Blitz', 'unbekannt', 'wird verworfen'),
   '10000000-0000-0000-0000-000000000001'
 )).payload ->> 'encounter_id');
 select test.ok((select not (payload ? 'unbekannt') from public.events where seq = 1), 'Unbekannte Payload-Felder werden verworfen');
 select public.append_event(
-  test.get('run')::uuid, 'encounter_logged',
+  test.get('ch')::uuid, 'encounter_logged',
   jsonb_build_object('member_id', test.get('moritz'), 'route_id', test.get('route201'), 'species_id', 172),
   '10000000-0000-0000-0000-000000000001'
 );
@@ -135,33 +129,49 @@ select test.ok((select count(*) = 1 from public.events), 'Gleiche client_event_i
 
 set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000002';
 select test.put('enc_janne', (public.append_event(
-  test.get('run')::uuid, 'encounter_logged',
+  test.get('ch')::uuid, 'encounter_logged',
   jsonb_build_object('member_id', test.get('janne'), 'route_id', test.get('route201'), 'species_id', 63)
 )).payload ->> 'encounter_id');
 select test.ok((select count(distinct link_id) = 1 from public.encounters where route_id = test.get('route201')::uuid),
                'Zweite Begegnung derselben Route tritt automatisch dem Soul-Link bei');
-select test.fails(format($$ select public.append_event(%L, 'encounter_logged', %L) $$, test.get('run'),
-  jsonb_build_object('member_id', test.get('janne'), 'route_id', test.get('route201'), 'species_id', 999)),
+
+-- Static-Begegnung auf derselben Route bildet einen eigenen Soul-Link
+select test.put('static_janne', (public.append_event(
+  test.get('ch')::uuid, 'encounter_logged',
+  jsonb_build_object('member_id', test.get('janne'), 'route_id', test.get('route201'), 'species_id', 393, 'kind', 'static')
+)).payload ->> 'link_id');
+select test.ok((select count(distinct link_id) = 2 and count(*) filter (where kind = 'static') = 1
+                from public.encounters where route_id = test.get('route201')::uuid),
+               'Static-Begegnung bekommt einen eigenen Soul-Link auf derselben Route');
+select test.fails(format($$ select public.append_event(%L, 'encounter_logged', %L) $$, test.get('ch'),
+  jsonb_build_object('member_id', test.get('moritz'), 'route_id', test.get('route201'), 'species_id', 393,
+                     'link_id', test.get('static_janne'))),
+  'PT409', 'Wilde Begegnung kann keinem Static-Soul-Link beitreten');
+select test.fails(format($$ select public.append_event(%L, 'encounter_logged', %L) $$, test.get('ch'),
+  jsonb_build_object('member_id', test.get('moritz'), 'route_id', test.get('route201'), 'species_id', 393, 'kind', 'legendär')),
+  'PT400', 'Unbekannte Begegnungsart wird abgelehnt');
+select test.fails(format($$ select public.append_event(%L, 'encounter_logged', %L) $$, test.get('ch'),
+  jsonb_build_object('member_id', test.get('janne'), 'route_id', test.get('route201'), 'species_id', 99999)),
   'PT400', 'Unbekanntes Pokémon wird abgelehnt');
-select test.fails(format($$ select public.append_event(%L, 'encounter_logged', %L) $$, test.get('run'),
+select test.fails(format($$ select public.append_event(%L, 'encounter_logged', %L) $$, test.get('ch'),
   jsonb_build_object('member_id', test.get('janne'), 'route_id', test.get('route201'), 'species_id', '63')),
   'PT400', 'Falscher Datentyp wird abgelehnt');
-select test.fails($$ insert into public.events (run_id, seq, attempt, type, source) values (test.get('run')::uuid, 99, 1, 'encounter_missed', 'web') $$,
+select test.fails($$ insert into public.events (challenge_id, seq, run_number, type, source) values (test.get('ch')::uuid, 99, 1, 'encounter_missed', 'web') $$,
   '42501', 'Direktes INSERT in events ist verboten');
 
-select public.append_event(test.get('run')::uuid, 'encounter_evolved',
+select public.append_event(test.get('ch')::uuid, 'encounter_evolved',
   jsonb_build_object('encounter_id', test.get('enc_moritz'), 'species_id', 25));
 select test.ok((select species_id = 25 and caught_species_id = 172 from public.encounters
                 where encounter_id = test.get('enc_moritz')::uuid), 'Entwicklung ändert die aktuelle Art');
-select test.fails(format($$ select public.append_event(%L, 'encounter_evolved', %L) $$, test.get('run'),
+select test.fails(format($$ select public.append_event(%L, 'encounter_evolved', %L) $$, test.get('ch'),
   jsonb_build_object('encounter_id', test.get('enc_moritz'), 'species_id', 64)),
   'PT400', 'Entwicklung in fremde Reihe wird abgelehnt');
 
-select test.put('missed1', (public.append_event(test.get('run')::uuid, 'encounter_missed',
+select test.put('missed1', (public.append_event(test.get('ch')::uuid, 'encounter_missed',
   jsonb_build_object('member_id', test.get('janne'), 'route_id', test.get('route202')))).id::text);
 
 -- ---------------------------------------------------------------- Tod, Soul-Link, Undo
-select test.put('death1', (public.append_event(test.get('run')::uuid, 'pokemon_died',
+select test.put('death1', (public.append_event(test.get('ch')::uuid, 'pokemon_died',
   jsonb_build_object('encounter_id', test.get('enc_janne'), 'route_id', test.get('route202'),
                      'cause', 'Volltreffer', 'opponent', 'Rivale Barry', 'level', 12))).id::text);
 select test.ok((select state = 'dead' from public.encounters where encounter_id = test.get('enc_janne')::uuid),
@@ -170,50 +180,55 @@ select test.ok((select state = 'linked_dead' and lost_with_encounter_id = test.g
                 from public.encounters where encounter_id = test.get('enc_moritz')::uuid),
                'Soul-Link-Partner stirbt sichtbar mit');
 select test.ok((select jsonb_array_length(partners) = 1 from public.graveyard), 'Friedhof zeigt die Partner');
-select test.ok((select deaths_attempt = 1 and missed_attempt = 1 from public.member_stats
+select test.ok((select deaths_run = 1 and missed_run = 1 from public.member_stats
                 where member_id = test.get('janne')::uuid), 'Zähler für Janne stimmen');
-select test.ok((select deaths_attempt = 0 from public.member_stats where member_id = test.get('moritz')::uuid),
+select test.ok((select deaths_run = 0 from public.member_stats where member_id = test.get('moritz')::uuid),
                'Mitgestorbener Partner zählt nicht als eigener Tod');
-select test.fails(format($$ select public.append_event(%L, 'encounter_status_changed', %L) $$, test.get('run'),
+select test.fails(format($$ select public.append_event(%L, 'encounter_status_changed', %L) $$, test.get('ch'),
   jsonb_build_object('encounter_id', test.get('enc_moritz'), 'status', 'box')),
   'PT409', 'Totes Pokémon kann nicht in die Box');
-select test.fails(format($$ select public.append_event(%L, 'event_reverted', %L) $$, test.get('run'),
+select test.fails(format($$ select public.append_event(%L, 'event_reverted', %L) $$, test.get('ch'),
   jsonb_build_object('event_id', (select id from public.events where payload ->> 'encounter_id' = test.get('enc_janne') and type = 'encounter_logged'))),
   'PT409', 'Begegnung mit späteren Ereignissen kann nicht direkt rückgängig gemacht werden');
 
-select test.put('undo1', (public.append_event(test.get('run')::uuid, 'event_reverted',
+select test.put('undo1', (public.append_event(test.get('ch')::uuid, 'event_reverted',
   jsonb_build_object('event_id', test.get('death1')::bigint))).id::text);
 select test.ok((select count(*) = 0 from public.encounters where state in ('dead', 'linked_dead')),
                'Undo des Todes belebt beide Partner wieder');
-select test.fails(format($$ select public.append_event(%L, 'event_reverted', %L) $$, test.get('run'),
+select test.fails(format($$ select public.append_event(%L, 'event_reverted', %L) $$, test.get('ch'),
   jsonb_build_object('event_id', test.get('death1')::bigint)), 'PT409', 'Doppeltes Undo wird abgelehnt');
-select test.fails(format($$ select public.append_event(%L, 'event_reverted', %L) $$, test.get('run'),
+select test.fails(format($$ select public.append_event(%L, 'event_reverted', %L) $$, test.get('ch'),
   jsonb_build_object('event_id', test.get('undo1')::bigint)), 'PT400', 'Undo eines Undo wird abgelehnt');
 
-select public.append_event(test.get('run')::uuid, 'pokemon_died',
+select public.append_event(test.get('ch')::uuid, 'pokemon_died',
   jsonb_build_object('encounter_id', test.get('enc_janne'), 'cause', 'Selbstzerstörung'));
 
--- ---------------------------------------------------------------- Wipe und neuer Versuch
-select test.put('wipe1', (public.append_event(test.get('run')::uuid, 'attempt_ended',
-  jsonb_build_object('reason', 'wipe', 'caused_by_member_id', test.get('janne')))).id::text);
-select test.ok((select current_attempt = 2 and wipes_total = 1 and resets_total = 1 from public.run_stats),
-               'Wipe startet Versuch 2');
-select test.ok((select deaths_attempt = 0 and deaths_total = 1 and missed_attempt = 0 and missed_total = 1
+-- ---------------------------------------------------------------- Wipe, Sieg und neuer Run
+select test.put('wipe1', (public.append_event(test.get('ch')::uuid, 'run_ended',
+  jsonb_build_object('result', 'wipe', 'caused_by_member_id', test.get('janne')))).id::text);
+select test.ok((select current_run = 2 and wipes_total = 1 and runs_finished = 1 from public.challenge_stats),
+               'Wipe startet Run 2');
+select test.ok((select deaths_run = 0 and deaths_total = 1 and missed_run = 0 and missed_total = 1
                        and wipes_caused = 1
                 from public.member_stats where member_id = test.get('janne')::uuid),
                'Session-Zähler beginnen neu, Gesamtzähler bleiben');
-select test.fails(format($$ select public.append_event(%L, 'encounter_status_changed', %L) $$, test.get('run'),
+select test.fails(format($$ select public.append_event(%L, 'encounter_status_changed', %L) $$, test.get('ch'),
   jsonb_build_object('encounter_id', test.get('enc_moritz'), 'status', 'box')),
-  'PT409', 'Pokémon aus früherem Versuch sind gesperrt');
-select test.fails(format($$ select public.append_event(%L, 'event_reverted', %L) $$, test.get('run'),
-  jsonb_build_object('event_id', test.get('missed1')::bigint)), 'PT409', 'Undo im alten Versuch wird abgelehnt');
+  'PT409', 'Pokémon aus früherem Run sind gesperrt');
+select test.fails(format($$ select public.append_event(%L, 'event_reverted', %L) $$, test.get('ch'),
+  jsonb_build_object('event_id', test.get('missed1')::bigint)), 'PT409', 'Undo im alten Run wird abgelehnt');
 
-select public.append_event(test.get('run')::uuid, 'event_reverted', jsonb_build_object('event_id', test.get('wipe1')::bigint));
-select test.ok((select current_attempt = 1 from public.run_stats), 'Wipe lässt sich rückgängig machen, solange nichts folgte');
-select public.append_event(test.get('run')::uuid, 'attempt_ended', jsonb_build_object('reason', 'reset'));
-select public.append_event(test.get('run')::uuid, 'counter_adjusted',
+select public.append_event(test.get('ch')::uuid, 'event_reverted', jsonb_build_object('event_id', test.get('wipe1')::bigint));
+select test.ok((select current_run = 1 from public.challenge_stats), 'Wipe lässt sich rückgängig machen, solange nichts folgte');
+select test.fails(format($$ select public.append_event(%L, 'run_ended', %L) $$, test.get('ch'),
+  jsonb_build_object('result', 'won', 'caused_by_member_id', test.get('janne'))),
+  'PT400', 'Ein Sieg hat keinen Verursacher');
+select public.append_event(test.get('ch')::uuid, 'run_ended', jsonb_build_object('result', 'won'));
+select test.ok((select current_run = 2 and wins_total = 1 and wipes_total = 0 from public.challenge_stats),
+               'Sieg beendet den Run ebenfalls');
+select public.append_event(test.get('ch')::uuid, 'counter_adjusted',
   jsonb_build_object('counter', 'deaths', 'member_id', test.get('moritz'), 'delta', 3, 'note', 'Altdaten'));
-select test.ok((select deaths_attempt = 3 and deaths_total = 3 from public.member_stats
+select test.ok((select deaths_run = 3 and deaths_total = 3 from public.member_stats
                 where member_id = test.get('moritz')::uuid), 'Manuelle Korrektur fließt in die Zähler ein');
 select test.ok((select bool_and(seq = n) from (select seq, row_number() over (order by seq) as n from public.events) s),
                'Sequenznummern sind lückenlos');
@@ -228,17 +243,17 @@ select test.fails($$ delete from public.events where seq = 1 $$, 'PT403',
 -- ---------------------------------------------------------------- Bot-Zugang
 set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000002';
-select test.fails(format($$ select public.create_bot_token(%L, 'Bot') $$, test.get('run')), 'PT403',
-                  'Nur die Run-Leitung erstellt Bot-Tokens');
+select test.fails(format($$ select public.create_bot_token(%L, 'Bot') $$, test.get('ch')), 'PT403',
+                  'Nur die Challenge-Leitung erstellt Bot-Tokens');
 set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000001';
-select test.put('bot', public.create_bot_token(test.get('run')::uuid, 'Discord-Bot'));
+select test.put('bot', public.create_bot_token(test.get('ch')::uuid, 'Discord-Bot'));
 select test.fails($$ select token_hash from public.bot_tokens $$, '42501', 'Bot-Token-Hash ist nicht lesbar');
 
 reset role;
 set role anon;
 reset request.jwt.claim.sub;
-select test.ok((select (public.bot_state(test.get('bot')) -> 'run' ->> 'current_attempt')::integer = 2),
-               'Bot liest den Stand seines Runs');
+select test.ok((select (public.bot_state(test.get('bot')) -> 'challenge' ->> 'current_run')::integer = 2),
+               'Bot liest den Stand seiner Challenge');
 select test.fails($$ select public.bot_state('slb_falsch') $$, 'PT401', 'Falsches Bot-Token wird abgelehnt');
 select test.ok((select (public.bot_create_route(test.get('bot'), 'Route 203')).name = 'Route 203'), 'Bot legt Routen an');
 select test.ok((select actor_member_id = test.get('janne')::uuid and source = 'bot'
@@ -250,19 +265,19 @@ select test.ok((select actor_member_id is null and actor_discord_id = '444444'
                   jsonb_build_object('member_id', test.get('elsmann')))),
                'Unverknüpfte Discord-Nutzer werden protokolliert (wenn erlaubt)');
 select test.fails($$ select count(*) from public.bot_tokens $$, '42501', 'Anonym liest keine Bot-Tokens');
-select test.fails($$ select public.append_event(test.get('run')::uuid, 'encounter_missed', '{}') $$, '42501',
+select test.fails($$ select public.append_event(test.get('ch')::uuid, 'encounter_missed', '{}') $$, '42501',
                   'Bot kann die Website-RPCs nicht nutzen');
 
 reset role;
 set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000001';
-select public.update_run(test.get('run')::uuid, 'Platin Soul Link', 'public', false);
+select public.update_challenge(test.get('ch')::uuid, 'Platin Soul Link', 'public', false);
 reset role;
 set role anon;
 reset request.jwt.claim.sub;
 select test.fails(format($$ select public.bot_append_event(%L, '444444', 'encounter_missed', %L) $$, test.get('bot'),
   jsonb_build_object('member_id', test.get('elsmann'))), 'PT403', 'Strikter Modus sperrt unverknüpfte Discord-Nutzer');
-select test.ok((select count(*) > 0 from public.events), 'Öffentlicher Run ist für Zuschauer lesbar');
+select test.ok((select count(*) > 0 from public.events), 'Öffentliche Challenge ist für Zuschauer lesbar');
 select test.ok((select count(*) = 3 from public.member_stats), 'Zuschauer sehen die Zähler');
 select test.fails($$ select * from public.profiles $$, '42501', 'Profile sind für Zuschauer nicht lesbar');
 
@@ -274,21 +289,21 @@ reset role;
 set role anon;
 select test.fails(format($$ select public.bot_state(%L) $$, test.get('bot')), 'PT401', 'Widerrufenes Bot-Token ist ungültig');
 
--- ---------------------------------------------------------------- Konto löschen, Run löschen
+-- ---------------------------------------------------------------- Konto löschen, Challenge löschen
 reset role;
 delete from auth.users where id = '00000000-0000-0000-0000-000000000002';
 select test.ok((select count(*) = 0 from public.events where actor_user_id = '00000000-0000-0000-0000-000000000002'),
                'Kontolöschung anonymisiert Ereignisse statt sie zu blockieren');
-select test.ok((select user_id is null from public.run_members where id = test.get('janne')::uuid),
+select test.ok((select user_id is null from public.challenge_members where id = test.get('janne')::uuid),
                'Spielerplatz wird wieder zum Platzhalter');
 
 set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000001';
-select test.fails(format($$ select public.delete_run(%L, 'falsch') $$, test.get('run')), 'PT400',
-                  'Run-Löschung braucht die richtige Bestätigung');
-select public.delete_run(test.get('run')::uuid, 'platin-soullink');
+select test.fails(format($$ select public.delete_challenge(%L, 'falsch') $$, test.get('ch')), 'PT400',
+                  'Löschen braucht die richtige Bestätigung');
+select public.delete_challenge(test.get('ch')::uuid, 'platin-soullink');
 reset role;
-select test.ok((select count(*) = 0 from public.events), 'Run-Löschung entfernt auch alle Ereignisse');
+select test.ok((select count(*) = 0 from public.events), 'Löschen der Challenge entfernt auch alle Ereignisse');
 
 \o
 \echo 'Alle Tests bestanden.'
