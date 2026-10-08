@@ -311,3 +311,18 @@ mit zwei Browsern: Challenge anlegen, Spieler einladen, Beitritt per Link, Begeg
 beim zweiten Gerät, Static-Begegnung, Entwicklung, Tod mit Soul-Link, Undo, Run beenden, fremdes Gerät
 ohne Zugriff, Paar-Modus (nur der Partner stirbt mit), Basis-Pfad wie auf GitHub Pages, Import mit
 Übernahme der Leitung.
+
+## Spielregeln
+
+- **Soul-Link vollständig**: Ein Soul-Link zählt erst, wenn jeder Spieler seiner Gruppe ein Pokémon darin
+  hat (`src/lib/links.ts`). Hat ein Fehlender die Route mit `encounter_missed` (mit `kind`) verpasst, ist der
+  Soul-Link verfallen. Unvollständige Soul-Links erscheinen nicht in der Box, verfallene Routen werden
+  ausgeblendet. Die Route bleibt für den Spieler abgehakt (Grundlage für eine spätere Liste offener Orte).
+- **Team oder Box** beim Eintragen: Team, wenn der Soul-Link damit vollständig ist und alle Beteiligten
+  Platz haben; die Partner aus der Box kommen per `change_team` mit.
+- **Level-Cap**: Vorlagen in `src/data/levelCaps.ts`, erkannt am Spielnamen oder in `challenges.level_cap_preset`
+  gewählt. `level_cap_index` gilt für `level_cap_run`; ein neuer Run beginnt beim ersten Cap, ohne Schreibzugriff.
+- **Pokédex**: `tools/generate_dex.py` erzeugt aus den PokeAPI-CSVs pro Edition eine statische Datei
+  (Typen der Generation, Basiswerte, Level-Attacken mit den Werten dieser Generation inkl. physisch/speziell
+  vor Gen 4, Entwicklungen mit Bedingungen). Die Website lädt nur die Datei der gespielten Edition.
+

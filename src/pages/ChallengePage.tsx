@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { ChevronLeft, ChevronRight, Eye, Flag, Lock, Plus, Radio } from 'lucide-react'
 import { Board } from '@/components/challenge/Board'
+import { DexPanel } from '@/components/challenge/DexPanel'
 import { EndRunDialog } from '@/components/challenge/EndRunDialog'
 import { Graveyard } from '@/components/challenge/Graveyard'
+import { LevelCapControl } from '@/components/challenge/LevelCapControl'
 import { LogEncounterDialog } from '@/components/challenge/LogEncounterDialog'
 import { SettingsPanel } from '@/components/challenge/SettingsPanel'
 import { StatsPanel } from '@/components/challenge/StatsPanel'
@@ -24,6 +26,7 @@ import { cn } from '@/lib/utils'
 const TABS = [
   { id: 'routen', label: 'Routen' },
   { id: 'teams', label: 'Teams' },
+  { id: 'pokedex', label: 'Pokédex' },
   { id: 'friedhof', label: 'Friedhof' },
   { id: 'timeline', label: 'Timeline' },
   { id: 'zaehler', label: 'Zähler' },
@@ -109,7 +112,7 @@ export function ChallengePage({ slug }: { slug: string }) {
         </h1>
 
         <div className="flex flex-wrap items-end justify-between gap-6">
-          <div className="flex items-end gap-8">
+          <div className="flex flex-wrap items-end gap-x-8 gap-y-4">
             <div>
               <p className="label text-muted-foreground">Run</p>
               <div className="flex items-center gap-1">
@@ -149,6 +152,7 @@ export function ChallengePage({ slug }: { slug: string }) {
               <p className="label text-muted-foreground">Verloren</p>
               <Counter to={lost} className="font-display tracking-tight text-6xl font-extrabold text-destructive" />
             </div>
+            {isCurrent && <LevelCapControl data={d} />}
           </div>
 
           {d.canWrite && isCurrent && (
@@ -196,6 +200,7 @@ export function ChallengePage({ slug }: { slug: string }) {
         >
           {tab === 'routen' && <Board data={d} species={species} lookups={lookups} onLog={() => setLogOpen(true)} />}
           {tab === 'teams' && <TeamsPanel data={d} species={species} lookups={lookups} onChanged={state.refresh} />}
+          {tab === 'pokedex' && <DexPanel data={d} species={species} />}
           {tab === 'friedhof' && <Graveyard data={d} species={species} lookups={lookups} />}
           {tab === 'timeline' && <Timeline data={d} species={species} lookups={lookups} />}
           {tab === 'zaehler' && <StatsPanel data={d} />}

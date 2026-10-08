@@ -460,6 +460,24 @@ select test.ok(test.state('t7') = 'box' and test.state('j7') = 'box' and test.st
 select test.fails(format($$ select public.undo_team_change(%L, %L) $$, '00000000-0000-0000-0000-0000000000a1', test.get('g1')),
   'PT404', 'Zweites Rückgängig findet nichts mehr');
 select test.ok(not (public.set_team_sync('00000000-0000-0000-0000-0000000000a1', false)).team_sync, 'Leitung schaltet Angleichen aus');
+
+-- ---------------------------------------------------------------- Regeln: Level-Cap, Dupes, verfallene Soul-Links
+select test.ok((select level_cap_index = 3 and level_cap_run = 1 from public.set_level_cap('00000000-0000-0000-0000-0000000000a1', 3)),
+               'Level-Cap wird für den laufenden Run gesetzt');
+select test.fails($$ select public.set_level_cap('00000000-0000-0000-0000-0000000000a1', 100) $$, 'PT400', 'Level-Cap außerhalb der Liste wird abgelehnt');
+select test.ok((select level_cap_preset = 'sinnoh_pt' and level_cap_index = 0 and not dupes_clause
+                from public.set_challenge_rules('00000000-0000-0000-0000-0000000000a1', 'sinnoh_pt', false)),
+               'Leitung wählt die Level-Cap-Vorlage (Cap beginnt von vorn) und schaltet Dupes aus');
+select test.ok((select level_cap_preset is null and dupes_clause
+                from public.set_challenge_rules('00000000-0000-0000-0000-0000000000a1', '', true)),
+               'Leere Vorlage heißt: am Spielnamen erkennen');
+select test.ok((public.append_event('00000000-0000-0000-0000-0000000000a1', 'encounter_missed',
+                  jsonb_build_object('member_id', '00000000-0000-0000-0000-0000000000b2',
+                                     'route_id', '00000000-0000-0000-0000-0000000000c8', 'kind', 'static'))).payload ->> 'kind' = 'static',
+               'Verpasste Begegnung merkt sich die Art (Static)');
+select test.fails(format($$ select public.append_event(%L, 'encounter_missed', %L) $$, '00000000-0000-0000-0000-0000000000a1',
+    jsonb_build_object('member_id', '00000000-0000-0000-0000-0000000000b2', 'kind', 'legendär')),
+  'PT400', 'Unbekannte Art bei verpasster Begegnung wird abgelehnt');
 reset role;
 select test.ok((select team_sync from public.challenges where slug = 'platin-soullink') is null
                and (select not team_sync from public.challenges where slug = 'team-test'), 'Einstellung gilt pro Challenge');

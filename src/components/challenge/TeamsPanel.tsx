@@ -29,6 +29,10 @@ import type { ChallengeData } from '@/hooks/useChallenge'
 import { changeTeam, undoTeamChange } from '@/lib/actions'
 import { formatTime, speciesName, type Lookups } from '@/lib/describe'
 import type { SpeciesIndex } from '@/lib/species'
+import { EvolutionChain, TypeChip } from '@/components/challenge/DexPanel'
+import { versionGroupFor } from '@/data/levelCaps'
+import { useDex, type DexData } from '@/lib/dex'
+import { analyzeLinks } from '@/lib/links'
 import { arrange, mirror, TEAM_SIZE, unsynced, type Arrangement, type Effect, type Move } from '@/lib/team'
 import { toast, toastError } from '@/lib/toast'
 import type { Encounter, Member } from '@/lib/types'
@@ -117,6 +121,9 @@ export function TeamsPanel({
   }, [pending, data.events])
 
   const arrangement = (override?.memberId === player?.id ? override.arrangement : null) ?? arrangements.get(player?.id ?? '')
+  const dex = useDex(versionGroupFor(data.challenge))
+  // Box: nur Pokémon aus vollständigen Soul-Links (unvollständige oder verfallene sind nicht spielbar)
+  const links = useMemo(() => analyzeLinks(players, data.encounters, data.events), [players, data.encounters, data.events])
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
@@ -319,7 +326,7 @@ export function TeamsPanel({
 
           <div className="grid content-start gap-6">
             <PcBox
-              box={arrangement.box}
+              box={arrangement.box.filter((e) => links.get(e.link_id)?.complete !== false)}
               name={name}
               editable={editable && !busy}
               selectedId={selectedId}
@@ -336,6 +343,7 @@ export function TeamsPanel({
               name={name}
               routeName={routeName}
               onMore={setDetail}
+              dex={dex}
               sync={
                 data.challenge.team_sync && editable && !busy
                   ? (e) => {
@@ -818,6 +826,7 @@ function Details({
   routeName,
   onMore,
   sync,
+  dex,
 }: {
   encounter: Encounter | null
   arrangement: Arrangement
@@ -829,6 +838,7 @@ function Details({
   onMore: (e: Encounter) => void
   /** Partner angleichen; nur gesetzt, wenn erlaubt */
   sync?: (e: Encounter) => void
+  dex: DexData | null
 }) {
   if (!encounter) {
     return (
@@ -871,7 +881,23 @@ function Details({
           <dd>{speciesName(species, encounter.caught_species_id)}</dd>
           <dt className="text-muted-foreground">Eingetragen</dt>
           <dd>{formatTime(encounter.logged_at)}</dd>
+          {dex?.types[encounter.species_id] && (
+            <>
+              <dt className="text-muted-foreground">Typ</dt>
+              <dd className="flex flex-wrap gap-1">
+                {dex.types[encounter.species_id].map((t) => (
+                  <TypeChip key={t} type={t} small />
+                ))}
+              </dd>
+            </>
+          )}
         </dl>
+        {dex && species && (
+          <div className="mt-4 border-t pt-3">
+            <p className="label mb-2 text-muted-foreground">Entwicklung</p>
+            <EvolutionChain speciesId={encounter.species_id} dex={dex} species={species} />
+          </div>
+        )}
         {partners.length > 0 && (
           <div className="mt-4 border-t pt-3">
             <p className="label mb-2 text-muted-foreground">Soul-Link</p>

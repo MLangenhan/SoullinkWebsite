@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { motion } from 'motion/react'
-import { PencilLine, Skull } from 'lucide-react'
+import { ExternalLink, PencilLine, Skull } from 'lucide-react'
+import { EvolutionChain, TypeChip } from '@/components/challenge/DexPanel'
+import { versionGroupFor } from '@/data/levelCaps'
+import { pokewikiUrl, useDex } from '@/lib/dex'
 import { SpeciesPicker } from '@/components/SpeciesPicker'
 import { StateChip } from '@/components/challenge/StateChip'
 import { Sprite } from '@/components/Sprite'
@@ -67,6 +70,7 @@ function EncounterBody({
   const [opponent, setOpponent] = useState('')
   const [level, setLevel] = useState('')
   const [deathRoute, setDeathRoute] = useState(encounter.route_id)
+  const dex = useDex(versionGroupFor(data.challenge))
 
   const alive = encounter.state === 'team' || encounter.state === 'box'
   const editable = data.canWrite && alive && encounter.run_number === data.stats.current_run
@@ -109,6 +113,25 @@ function EncounterBody({
           </div>
         </div>
       </DialogHeader>
+
+      {dex && species && dex.types[encounter.species_id] && (
+        <div className="grid gap-3 rounded-lg border bg-card/60 p-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {dex.types[encounter.species_id].map((t) => (
+              <TypeChip key={t} type={t} small />
+            ))}
+            <a
+              href={pokewikiUrl(species.byId.get(encounter.species_id)?.name_de ?? name)}
+              target="_blank"
+              rel="noreferrer"
+              className="ml-auto inline-flex items-center gap-1 text-xs text-primary hover:underline"
+            >
+              PokéWiki <ExternalLink className="size-3" />
+            </a>
+          </div>
+          <EvolutionChain speciesId={encounter.species_id} dex={dex} species={species} />
+        </div>
+      )}
 
       {partners.length > 0 && (
         <div className="rounded-lg border bg-card/60 p-3">

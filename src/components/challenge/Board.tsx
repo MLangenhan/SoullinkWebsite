@@ -9,7 +9,10 @@ import { speciesName, type Lookups } from '@/lib/describe'
 import { normalize, type SpeciesIndex } from '@/lib/species'
 import type { Encounter, Member } from '@/lib/types'
 import { cn } from '@/lib/utils'
-import { Plus, Search, X } from 'lucide-react'
+import { Ban, Check, CopyX, Eye, EyeOff, Plus, Search, X } from 'lucide-react'
+import { appendEvent } from '@/lib/actions'
+import { analyzeLinks, hasMissed, missedKeys } from '@/lib/links'
+import { toast, toastError } from '@/lib/toast'
 
 /** Eine Zeile: eine Route (wild oder static); bei Paaren enthält sie mehrere Soul-Links */
 interface RouteRow {
@@ -68,8 +71,11 @@ function Cell({
   onOpen,
   onAdd,
   match,
+  missed,
 }: {
   encounter: Encounter | undefined
+  /** Spieler hat diese Route als verpasst eingetragen */
+  missed?: boolean
   species: SpeciesIndex | null
   onOpen: (e: Encounter) => void
   /** Bei aktiver Suche: Treffer hervorheben, den Rest abblenden */
@@ -77,6 +83,16 @@ function Cell({
   /** Nur gesetzt, wenn hier nachgetragen werden darf (Spieler, laufender Run) */
   onAdd?: () => void
 }) {
+  if (!encounter && missed) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-1 py-3 text-destructive/70">
+        <span className="flex size-16 items-center justify-center rounded-full border-2 border-dashed border-current/40">
+          <Ban className="size-5" />
+        </span>
+        <span className="label text-[0.6rem]">Verpasst</span>
+      </div>
+    )
+  }
   if (!encounter && onAdd) {
     return (
       <button
@@ -133,6 +149,8 @@ export function Board({
   const [selected, setSelected] = useState<Encounter | null>(null)
   const [adding, setAdding] = useState<AddTarget | null>(null)
   const [query, setQuery] = useState('')
+  const [showFailed, setShowFailed] = useState(false)
+  const [confirming, setConfirming] = useState<string | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const canAdd = data.canWrite && data.shownRun === data.stats.current_run
   const group = (memberId: string) => lookups.members.get(memberId)?.link_group ?? -1
@@ -191,12 +209,21 @@ export function Board({
   // Suche nach Pokémon (aktuelle oder gefangene Art, deutsch, englisch, Nummer, Spitzname) oder Route
   const q = normalize(query)
   const number = /^\d+$/.test(query.trim()) ? Number(query.trim()) : null
+  // Gesucht wird nach ganzen Entwicklungsreihen: "Taubsi" findet auch Tauboga und Tauboss
+  const chains = useMemo(() => {
+    if (!q || !species) return new Set<number>()
+    return new Set(
+      species.list
+        .filter((s) => s.id === number || normalize(s.name_de).includes(q) || normalize(s.name_en).includes(q))
+        .map((s) => s.evolution_chain_id),
+    )
+  }, [q, number, species])
+  const chainOf = (id: number) => species?.byId.get(id)?.evolution_chain_id ?? -1
   const matches = (e: Encounter) =>
-    [e.species_id, e.caught_species_id].some((id) => {
-      if (id === number) return true
-      const s = species?.byId.get(id)
-      return !!s && (normalize(s.name_de).includes(q) || normalize(s.name_en).includes(q))
-    }) || (!!e.nickname && normalize(e.nickname).includes(q))
+    chains.has(chainOf(e.species_id)) || chains.has(chainOf(e.caught_species_id)) || (!!e.nickname && normalize(e.nickname).includes(q))
+  // Dupe-Check: Passt die Suche genau zu einer Reihe, zeigen wir, ob sie in diesem Run schon gefangen wurde
+  const dupeLine = chains.size === 1 && species ? species.list.find((s) => chains.has(s.evolution_chain_id) && s.evolution_stage === 1) : undefined
+  const dupeHits = dupeLine ? data.encounters.filter(matches) : []
   const routeMatches = (row: RouteRow) => normalize(lookups.routes.get(row.routeId)?.name ?? '').includes(q)
   const visible = q ? rows.filter((row) => routeMatches(row) || [...row.cells.values()].some(matches)) : rows
   const hits = q ? visible.reduce((n, row) => n + [...row.cells.values()].filter(matches).length, 0) : 0
@@ -212,6 +239,31 @@ export function Board({
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  // Vollständigkeit: verfallene Soul-Links (jemand hat verpasst) werden ausgeblendet
+  const linkInfo = useMemo(() => analyzeLinks(players, data.encounters, data.events), [players, data.encounters, data.events])
+  const missed = useMemo(() => missedKeys(data.events), [data.events])
+  const rowFailed = (row: RouteRow) => row.links.length > 0 && row.links.every((l) => linkInfo.get(l.linkId)?.failed)
+  const rowOpen = (row: RouteRow) =>
+    row.links.flatMap((l) => {
+      const info = linkInfo.get(l.linkId)
+      return info && !info.complete ? info.missing.filter((id) => !info.missed.includes(id)) : []
+    })
+  const failedCount = rows.filter(rowFailed).length
+  const shown = showFailed ? visible : visible.filter((row) => !rowFailed(row))
+
+  // Soul-Link verfallen lassen: Wer noch fehlt, hat die Route verpasst (zählt und hakt die Route ab)
+  const expire = async (row: RouteRow) => {
+    setConfirming(null)
+    try {
+      for (const memberId of rowOpen(row)) {
+        await appendEvent(data.challenge.id, 'encounter_missed', { member_id: memberId, route_id: row.routeId, kind: row.kind })
+      }
+      toast(`${lookups.routes.get(row.routeId)?.name ?? 'Route'}: Soul-Link verfallen, Route ausgeblendet`)
+    } catch (error) {
+      toastError(error)
+    }
+  }
 
   const columns = `minmax(7rem, 11rem) repeat(${players.length}, minmax(6.5rem, 1fr))`
   const current = selected ? (lookups.encounters.get(selected.encounter_id) ?? selected) : null
@@ -270,7 +322,51 @@ export function Board({
             </motion.span>
           )}
         </AnimatePresence>
+        {failedCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowFailed((v) => !v)}
+            className="ml-auto flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+          >
+            {showFailed ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+            {showFailed ? 'Verfallene Routen ausblenden' : `Verfallene Routen zeigen (${failedCount})`}
+          </button>
+        )}
       </div>
+      <AnimatePresence initial={false}>
+        {dupeLine && data.challenge.dupes_clause && (
+          <motion.div
+            key={dupeLine.id}
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className={cn(
+              'mb-5 flex max-w-2xl items-start gap-3 rounded-xl px-4 py-3 text-sm',
+              dupeHits.length ? 'bg-highlight/20' : 'bg-ok/10 text-ok',
+            )}
+            role="status"
+          >
+            {dupeHits.length ? <CopyX className="mt-0.5 size-4 shrink-0" /> : <Check className="mt-0.5 size-4 shrink-0" />}
+            <span>
+              {dupeHits.length ? (
+                <>
+                  <span className="font-medium">Dupe: {dupeLine.name_de}-Reihe schon gefangen</span> –{' '}
+                  {dupeHits
+                    .map(
+                      (e) =>
+                        `${e.nickname ?? speciesName(species, e.species_id)} (${lookups.routes.get(e.route_id)?.name ?? 'Route'}, ${lookups.members.get(e.member_id)?.display_name ?? '?'})`,
+                    )
+                    .join(', ')}
+                </>
+              ) : (
+                <>
+                  <span className="font-medium">{dupeLine.name_de}-Reihe</span> wurde in diesem Run noch nicht gefangen.
+                </>
+              )}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div className="min-w-fit">
         <div className="label grid gap-2 border-b pb-3 text-muted-foreground" style={{ gridTemplateColumns: columns }}>
           <span>Route</span>
@@ -282,7 +378,7 @@ export function Board({
           ))}
         </div>
         <AnimatePresence initial={false}>
-          {visible.map((row, i) => (
+          {shown.map((row, i) => (
             <motion.div
               key={row.key}
               layout
@@ -290,14 +386,39 @@ export function Board({
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.45, delay: Math.min(i, 10) * 0.03, ease: [0.16, 1, 0.3, 1] }}
-              className={cn('grid items-center gap-2 border-b', row.dead && 'bg-destructive/[0.04]')}
+              className={cn('grid items-center gap-2 border-b', (row.dead || rowFailed(row)) && 'bg-destructive/[0.04]')}
               style={{ gridTemplateColumns: columns }}
             >
               <div className="py-3 pr-2">
-                <div className={cn('font-medium', row.dead && 'text-muted-foreground')}>
+                <div className={cn('font-medium', (row.dead || rowFailed(row)) && 'text-muted-foreground', rowFailed(row) && 'line-through')}>
                   {lookups.routes.get(row.routeId)?.name ?? 'Route'}
                 </div>
                 {row.kind === 'static' && <span className="label text-[0.6rem] text-primary">Static</span>}
+                {rowFailed(row) && <span className="label ml-2 text-[0.6rem] text-destructive">verfallen</span>}
+                {canAdd && !rowFailed(row) && rowOpen(row).length > 0 && (
+                  <div className="mt-1.5">
+                    {confirming === row.key ? (
+                      <span className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="text-muted-foreground">Fehlende als verpasst?</span>
+                        <button type="button" onClick={() => void expire(row)} className="font-medium text-destructive hover:underline">
+                          Ja
+                        </button>
+                        <button type="button" onClick={() => setConfirming(null)} className="text-muted-foreground hover:underline">
+                          Nein
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirming(row.key)}
+                        className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-destructive"
+                        title="Nicht alle haben hier etwas gefangen: Soul-Link verfällt, die Route wird ausgeblendet"
+                      >
+                        <Ban className="size-3.5" /> Verfallen lassen
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="relative col-span-full col-start-2 grid gap-2" style={{ gridTemplateColumns: `repeat(${players.length}, minmax(6.5rem, 1fr))` }}>
                 {row.links.map((link, lane) => (
@@ -310,6 +431,7 @@ export function Board({
                     species={species}
                     onOpen={setSelected}
                     onAdd={canAdd && !q ? () => setAdding(addTarget(row, p)) : undefined}
+                    missed={!row.cells.has(p.id) && hasMissed(missed, p.id, row.routeId, row.kind)}
                     match={q && !routeMatches(row) ? (row.cells.has(p.id) ? matches(row.cells.get(p.id)!) : undefined) : undefined}
                   />
                 ))}
@@ -317,7 +439,7 @@ export function Board({
             </motion.div>
           ))}
         </AnimatePresence>
-        {q && visible.length === 0 && (
+        {q && shown.length === 0 && (
           <p className="py-12 text-center text-muted-foreground">Kein Pokémon und keine Route passt zu „{query.trim()}“.</p>
         )}
       </div>

@@ -4,11 +4,12 @@ import { SpeciesPicker } from '@/components/SpeciesPicker'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import type { ChallengeData } from '@/hooks/useChallenge'
-import { appendEvent } from '@/lib/actions'
+import { DupeWarning } from '@/components/challenge/DupeWarning'
+import { appendEvent, changeTeam } from '@/lib/actions'
+import { autoStatus } from '@/lib/links'
 import type { SpeciesIndex } from '@/lib/species'
 import { toast, toastError } from '@/lib/toast'
-import type { EncounterKind, EncounterStatus, Member, Route } from '@/lib/types'
-import { cn } from '@/lib/utils'
+import type { EncounterKind, Member, Route } from '@/lib/types'
 
 export interface AddTarget {
   member: Member
@@ -56,7 +57,6 @@ export function AddEncounterDialog({
 
 function AddForm({ target, data, species, close }: { target: AddTarget; data: ChallengeData; species: SpeciesIndex; close: () => void }) {
   const [speciesId, setSpeciesId] = useState<number | null>(null)
-  const [status, setStatus] = useState<EncounterStatus>('team')
   const [busy, setBusy] = useState(false)
   // Feste IDs pro geöffnetem Dialog: Erneutes Absenden nach einem Fehler erzeugt keine Duplikate
   const [ids] = useState(() => ({ encounter: crypto.randomUUID(), logged: crypto.randomUUID(), missed: crypto.randomUUID() }))
@@ -65,9 +65,17 @@ function AddForm({ target, data, species, close }: { target: AddTarget; data: Ch
     setBusy(true)
     try {
       if (missed) {
-        await appendEvent(data.challenge.id, 'encounter_missed', { member_id: target.member.id, route_id: target.route.id }, ids.missed)
+        await appendEvent(
+          data.challenge.id,
+          'encounter_missed',
+          { member_id: target.member.id, route_id: target.route.id, kind: target.kind },
+          ids.missed,
+        )
         toast(`${target.member.display_name}: Begegnung auf ${target.route.name} verpasst`)
       } else if (speciesId !== null) {
+        // Team, wenn der Soul-Link damit vollständig ist und alle Platz haben; die Partner kommen mit
+        const plan = autoStatus(data.players, data.encounters, target.route.id, target.kind, [target.member.id])
+        const status = plan.status.get(target.member.id) ?? 'box'
         await appendEvent(
           data.challenge.id,
           'encounter_logged',
@@ -82,6 +90,13 @@ function AddForm({ target, data, species, close }: { target: AddTarget; data: Ch
           },
           ids.logged,
         )
+        if (plan.promote.length) {
+          await changeTeam(
+            data.challenge.id,
+            crypto.randomUUID(),
+            plan.promote.map((e) => ({ encounter_id: e.encounter_id, status: 'team' as const })),
+          )
+        }
         toast(`${species.byId.get(speciesId)?.name_de ?? 'Pokémon'} für ${target.member.display_name} nachgetragen`)
       }
       close()
@@ -95,21 +110,7 @@ function AddForm({ target, data, species, close }: { target: AddTarget; data: Ch
   return (
     <div className="grid gap-4">
       <SpeciesPicker index={species} value={speciesId} onChange={setSpeciesId} autoFocus />
-      <div className="flex gap-2">
-        {(['team', 'box'] as const).map((s) => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => setStatus(s)}
-            className={cn(
-              'label rounded border px-3 py-1.5 text-[0.65rem] transition-colors',
-              status === s ? 'border-primary text-primary' : 'text-muted-foreground',
-            )}
-          >
-            {s === 'team' ? 'Team' : 'Box'}
-          </button>
-        ))}
-      </div>
+      <DupeWarning speciesId={speciesId} data={data} species={species} />
       <div className="grid grid-cols-[1fr_auto] gap-2">
         <Button size="lg" disabled={busy || speciesId === null} onClick={() => void save(false)}>
           {busy ? 'Speichere …' : 'Nachtragen'}

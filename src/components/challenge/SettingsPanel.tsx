@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Bot, Link2, LogOut, Pencil, Smartphone, Trash2, UserPlus } from 'lucide-react'
 import { CopyLink } from '@/components/CopyLink'
+import { detectPreset, LEVEL_CAP_PRESETS } from '@/data/levelCaps'
 import { Button } from '@/components/ui/button'
 import { Field, Input, Select } from '@/components/ui/input'
 import type { ChallengeData } from '@/hooks/useChallenge'
@@ -204,6 +205,7 @@ function OwnerSettings({ data, onChanged }: { data: ChallengeData; onChanged: ()
       </Section>
 
       <LinkGroupsSection data={data} onChanged={onChanged} />
+      <RulesSection data={data} onChanged={onChanged} />
       <TeamSyncSection data={data} onChanged={onChanged} />
 
       <Section
@@ -424,6 +426,57 @@ function OwnerSettings({ data, onChanged }: { data: ChallengeData; onChanged: ()
         </form>
       </Section>
     </>
+  )
+}
+
+/** Spielregeln: Level-Cap-Vorlage und Dupes-Clause */
+function RulesSection({ data, onChanged }: { data: ChallengeData; onChanged: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false)
+  const detected = detectPreset(data.challenge.game)
+  const save = async (preset: string | null, dupes: boolean) => {
+    setBusy(true)
+    const ok = await attempt(() =>
+      rpc('set_challenge_rules', { p_challenge_id: data.challenge.id, p_level_cap_preset: preset ?? '', p_dupes_clause: dupes }).then(() => true),
+    )
+    await onChanged()
+    setBusy(false)
+    if (ok) toast('Spielregeln gespeichert')
+  }
+  return (
+    <Section title="Spielregeln" description="Level-Caps und Pokédex-Daten richten sich nach dem Spiel. Dupes gelten immer für alle Spieler zusammen.">
+      <div className="grid gap-4">
+        <Field label="Level-Caps und Pokédex nach Spiel">
+          <Select
+            value={data.challenge.level_cap_preset ?? ''}
+            disabled={busy}
+            onChange={(e) => void save(e.target.value || null, data.challenge.dupes_clause)}
+          >
+            <option value="">Automatisch{detected ? ` (erkannt: ${detected.name})` : ' (nicht erkannt)'}</option>
+            {LEVEL_CAP_PRESETS.map((p) => (
+              <option key={p.key} value={p.key}>
+                {p.name}
+              </option>
+            ))}
+            <option value="none">Ohne Level-Cap</option>
+          </Select>
+        </Field>
+        <label className="flex items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            className="mt-1 size-4 accent-[var(--primary)]"
+            checked={data.challenge.dupes_clause}
+            disabled={busy}
+            onChange={(e) => void save(data.challenge.level_cap_preset, e.target.checked)}
+          />
+          <span>
+            <span className="font-medium">Dupes-Clause</span>
+            <span className="block text-muted-foreground">
+              Warnt beim Eintragen, wenn die Entwicklungsreihe in diesem Run schon von irgendwem gefangen wurde.
+            </span>
+          </span>
+        </label>
+      </div>
+    </Section>
   )
 }
 
