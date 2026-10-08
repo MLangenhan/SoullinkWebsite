@@ -46,3 +46,19 @@ token() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.ar
 PGOPTIONS='--client-min-messages=notice' psql "$TEST_URL" -qX -v ON_ERROR_STOP=1 \
   -v owner_token="$(token Moritz)" -v player_token="$(token Janne)" \
   -f "$ROOT/tools/migration/tests/check.sql" 2>&1 | sed -E 's/^psql:[^:]+:[0-9]+: NOTICE:  //'
+
+# Demo-Challenge: muss in einer Transaktion durchlaufen (wie im SQL Editor) und mit 3 Wipes und 1 Sieg enden
+psql "$TEST_URL" -qX -1 -v ON_ERROR_STOP=1 -f "$ROOT/supabase/demo/demo_challenge.sql" >/dev/null
+psql "$TEST_URL" -qX -v ON_ERROR_STOP=1 -c "
+do \$\$
+declare
+  v public.challenge_stats;
+begin
+  select s.* into v from public.challenge_stats s join public.challenges c on c.id = s.challenge_id
+  where c.slug = 'demo-platin-soullink';
+  if v.wipes_total <> 3 or v.wins_total <> 1 then
+    raise exception 'Demo-Challenge: % Wipes, % Siege', v.wipes_total, v.wins_total;
+  end if;
+  raise notice 'ok - Demo-Challenge: 3 Wipes, 1 Sieg';
+end;
+\$\$;" 2>&1 | sed -E 's/^NOTICE:  //'
