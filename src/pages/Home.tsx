@@ -107,15 +107,6 @@ export function Home() {
               transition={{ delay: 0.6, type: 'spring', stiffness: 300, damping: 12 }}
             />
           </h1>
-          <motion.p
-            className="mt-6 max-w-xl text-lg text-muted-foreground"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5, duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-          >
-            Begegnungen, Soul-Links, Friedhof und alle Zähler eurer Challenge, für alle gleichzeitig live. Stirbt eins,
-            sterben alle.
-          </motion.p>
           <motion.div
             className="mt-8"
             initial={{ opacity: 0, y: 12 }}
