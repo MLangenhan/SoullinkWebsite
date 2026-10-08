@@ -16,9 +16,9 @@ export function TeamsPanel({ data, species, lookups }: { data: ChallengeData; sp
           const box = own.filter((e) => e.state === 'box')
           const lost = own.filter((e) => e.state === 'dead' || e.state === 'linked_dead').length
           return (
-            <section key={player.id} className="rounded-xl border bg-card/60 p-5">
+            <section key={player.id} className="soft-card rounded-2xl p-5">
               <header className="mb-4 flex items-center justify-between">
-                <h3 className="flex items-center gap-2 font-display text-2xl font-extrabold uppercase">
+                <h3 className="flex items-center gap-2 font-display tracking-tight text-2xl font-extrabold">
                   <span className="size-2.5 rounded-full" style={{ background: player.color ?? 'var(--primary)' }} />
                   {player.display_name}
                 </h3>

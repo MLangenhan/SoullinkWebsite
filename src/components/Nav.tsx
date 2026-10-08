@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { motion, useMotionValueEvent, useScroll } from 'motion/react'
-import { linkProps } from '@/lib/router'
+import { linkProps, withBase } from '@/lib/router'
 
 /** Kopfzeile, die beim Runterscrollen verschwindet und beim Hochscrollen zurückkommt. */
 export function Nav() {
@@ -19,9 +19,9 @@ export function Nav() {
       transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
     >
       <div className="mx-auto flex max-w-7xl items-center justify-between py-4">
-        <a {...linkProps('/')} className="group flex items-center gap-2.5 font-display text-xl font-extrabold tracking-wide uppercase">
+        <a {...linkProps('/')} className="group flex items-center gap-2.5 font-display text-xl font-extrabold tracking-tight">
           <motion.img
-            src="/favicon.svg"
+            src={withBase('/favicon.svg')}
             alt=""
             className="size-7"
             whileHover={{ rotate: [0, -20, 20, -10, 0] }}

@@ -3,12 +3,13 @@
 Umgesetzt: Datenbankschema ([`supabase/migrations/`](../supabase/migrations/)), Pokémon-Stammdaten
 ([`tools/generate_species.py`](../tools/generate_species.py)), Import der Bot-Zähler
 ([`tools/migration/`](../tools/migration/)), Frontend ([`src/`](../src/)) und Tests.
-Einrichtung Schritt für Schritt: [`setup.md`](setup.md). Offen: Bot auf die neue Datenbank umbauen,
+Benutzung und Einrichtung: [`README.md`](../README.md). Offen: Bot auf die neue Datenbank umbauen,
 danach die Sicherheitsphase (Threat Model, Header/CSP, CI-Scans, Pentest-Bericht).
 
 ## 1. Ausgangslage: was der Bot heute speichert
 
-Pro Run eine `stats.json` mit den Zählern:
+Pro Bot-Run ein Ordner `data/runs/<id>/` mit `meta.json` (Name, Spiel, Spieler, Status),
+`routes.json` (pro Route die Entwicklungslinie jedes Spielers) und `stats.json`:
 
 | Schlüssel | Inhalt |
 |---|---|
@@ -17,7 +18,7 @@ Pro Run eine `stats.json` mit den Zählern:
 | `wipes` | Wipes pro Spieler |
 | `resets` | Zahl abgeschlossener Runs |
 | `dead_pokemon` | Namen toter Pokémon, ohne Spieler oder Route |
-| `soul_links` | Soul-Links (bisher leer, Format noch unbekannt) |
+| `soul_links` | ungenutzt; Paare ergeben sich aus der Spielerreihenfolge (1↔2, 3↔4) |
 
 Probleme, die das neue Modell direkt löst:
 
@@ -45,8 +46,11 @@ Challenge ──< Mitglied (Spieler / Zuschauer) ──< Gerät (anonyme Sitzung
   beendet ihn, danach beginnt der nächste. Die „Session“-Zähler des Bots sind die Zähler des
   laufenden Runs, „gesamt“ läuft über alle Runs. Runs sind keine eigene Tabelle: Jedes Ereignis
   trägt seine Run-Nummer, die laufende Nummer ist 1 + Anzahl der `run_ended`-Ereignisse.
-- **Soul-Link**: Die Begegnungen einer Route im selben Run bilden eine Gruppe (`link_id`). Stirbt
-  ein Pokémon, gelten alle Partner der Gruppe als `linked_dead`. Der Tod zählt nur beim Besitzer.
+- **Soul-Link**: Die Begegnungen einer Route im selben Run bilden pro Soul-Link-Gruppe einen Link
+  (`link_id`). Gruppen kommen von den Spielern: alle gemeinsam (`link_group` leer) oder Paare wie im
+  Bot (1↔2, 3↔4). Stirbt ein Pokémon, gelten die Partner im selben Link als `linked_dead`. Der Tod
+  zählt nur beim Besitzer. Die Datenbank verhindert, dass Spieler verschiedener Gruppen in einem Link
+  landen.
 - **Begegnungsart**: `wild` (die normale Begegnung der Route) oder `static` (einmalige Begegnung
   durch Ansprechen, nach Sonderregel). Eine Static-Begegnung bildet einen eigenen Soul-Link auf
   derselben Route.
@@ -57,7 +61,7 @@ Challenge ──< Mitglied (Spieler / Zuschauer) ──< Gerät (anonyme Sitzung
 |---|---|
 | `species` | 1025 Pokémon: Dex-Nr., englischer und deutscher Name, Generation, Entwicklungsreihe und -stufe, Sprite-URL |
 | `challenges` | Challenge mit Sichtbarkeit, Bot-Einstellung und `last_seq` (Nummer des letzten Ereignisses) |
-| `challenge_members` | Spieler und Zuschauer mit Name, Farbe, Sitzplatz und optionaler Discord-ID (für den Bot) |
+| `challenge_members` | Spieler und Zuschauer mit Name, Farbe, Sitzplatz, Soul-Link-Gruppe (`link_group`: Paare oder alle) und optionaler Discord-ID (für den Bot) |
 | `member_devices` | Geräte eines Mitglieds: anonyme Supabase-Sitzung (`auth.users`) → Mitglied, pro Challenge eindeutig |
 | `routes` | Routen pro Challenge (über alle Runs gleich), frei benennbar, sortierbar |
 | `events` | **die eine Wahrheit**, siehe unten |
@@ -210,25 +214,29 @@ werden). Deutsche Namen sind die offiziellen aus PokeAPI (z. B. „Nidoran♀“
 Bots („nidoranf“) löst das Migrationsskript über `pokemonMapping.json` auf. Alle 1025 Einträge der
 Mapping-Datei werden eindeutig zugeordnet.
 
-## 6. Übernahme der Bot-Zähler
+## 6. Übernahme eines Bot-Runs
 
-`tools/migration/migrate_bot_data.py` (nur Python-Standardbibliothek) liest `stats.json` und schreibt
-**nichts** in die Datenbank. Es erzeugt einen Bericht, eine SQL-Datei (Ausführung im Supabase-SQL-Editor,
-eine Transaktion) und pro Spieler einen persönlichen Einladungslink. Die SQL-Datei enthält nur die
-Hashes der Links.
+`tools/migration/migrate_bot_data.py` (nur Python-Standardbibliothek) liest einen Bot-Run-Ordner und
+schreibt **nichts** in die Datenbank. Es erzeugt einen Bericht, eine SQL-Datei (Ausführung im
+Supabase-SQL-Editor, eine Transaktion) und pro Spieler einen persönlichen Einladungslink. Die
+SQL-Datei enthält nur die Hashes der Links.
 
-1. Challenge mit allen Spielern als freie Plätze anlegen; `--owner` bekommt die Rolle Leitung und
-   übernimmt sie, indem er als Erster seinen Link öffnet.
-2. `resets` bzw. die Summe aus `wipes` ergibt die abgeschlossenen Runs, jeweils als Wipe mit
-   Verursacher. Was die Gesamtzähler über den laufenden Run hinaus zählen, wird als `counter_adjusted`
-   („Altdaten Bot: Summe aller früheren Runs“) im ersten Run verbucht.
-3. Die Zähler des laufenden Runs werden als `counter_adjusted` („Altdaten Bot“) übernommen. Ergebnis:
-   Alle Zähler pro Spieler entsprechen exakt dem Bot.
-4. `dead_pokemon` erscheint nur im Bericht: Ohne Spieler und Route lässt sich kein Pokémon zuordnen.
-5. Ist `soul_links` nicht leer, bricht das Skript ab, bis das Format bekannt ist.
+1. Challenge aus `meta.json`, alle Spieler als freie Plätze in derselben Reihenfolge; `--owner` bekommt
+   die Rolle Leitung und übernimmt sie, indem er als Erster seinen Link öffnet.
+2. Soul-Link-Gruppen wie im Bot paarweise (Spieler 1↔2, 3↔4), wahlweise alle gemeinsam.
+3. `resets` bzw. die Summe aus `wipes` ergibt die abgeschlossenen Runs (Wipes mit Verursacher). Was
+   die Gesamtzähler über den laufenden Run hinaus zählen, wird als `counter_adjusted` im ersten Run
+   verbucht.
+4. `routes.json` wird der laufende Run: pro Route und Paar ein Soul-Link; gefangene Art = erste Stufe
+   der gespeicherten Linie.
+5. `dead_pokemon` wird wie im Bot über die Entwicklungslinie zugeordnet (mit Entwicklung auf die
+   genannte Stufe). Der mitgestorbene Partner, den der Bot ebenfalls in die Liste schreibt, wird
+   erkannt. Da der Bot die Liste bei `/resetall` nicht leert, landen Namen ohne Begegnung nur im Bericht.
+6. Die Zähler des laufenden Runs, abzüglich der übernommenen Tode, als `counter_adjusted`: Alle Zähler
+   pro Spieler entsprechen exakt dem Bot. Ein abgeschlossener Bot-Run (Hall of Fame) endet als Sieg.
 
 Alle Ereignisse laufen über `private.append_event` mit Quelle `migration`, also durch dieselbe
-Validierung wie neue Eingaben. Aufruf: siehe [`setup.md`](setup.md#7-loslegen).
+Validierung wie neue Eingaben.
 
 ## 7. Tests
 
@@ -240,26 +248,33 @@ alle Migrationen und die Tests in eine Wegwerf-Datenbank:
   Soul-Link-Tod, Static-Begegnungen, Undo-Regeln, Wipe und Sieg, Zähler über Runs hinweg, Bot-Zuordnung
   und strikter Modus, Geräte (zweites Gerät, Gerätelinks nur für den eigenen Platz, Abmelden),
   gelöschte Sitzung anonymisiert statt zu blockieren.
-- `tools/migration/tests/`: eine `stats.json` im Bot-Format. Das erzeugte SQL wird eingespielt, die
-  Zähler werden gegen die Datei geprüft, und zwei Geräte treten mit den erzeugten Links bei.
+- `tools/migration/tests/run/`: ein Bot-Run im Originalformat (`meta.json`, `routes.json`,
+  `stats.json`). Das erzeugte SQL wird eingespielt, Begegnungen, Tode, Paare und Zähler werden geprüft,
+  und zwei Geräte treten mit den erzeugten Links bei.
+
+In GitHub Actions laufen diese Tests bei jedem Pull Request (Postgres-Service-Container), dazu Lint,
+Typprüfung und Build der Website.
 
 ```bash
 DATABASE_URL=postgres://postgres@localhost:5432/postgres scripts/test-db.sh
 ```
 
-Später als CI-Job (Postgres-Service-Container in GitHub Actions).
 
 ## 8. Frontend
 
-Stack wie im Portfolio: Vite, React 19, TypeScript, Tailwind CSS v4, shadcn/ui (Radix), Motion, Lenis,
-oxlint, Deployment auf Vercel; dazu `@supabase/supabase-js`. Kein Router-Paket: drei Seiten
+Stack und Animationsansatz wie im Portfolio (Vite, React 19, TypeScript, Tailwind CSS v4, shadcn/ui,
+Motion, Lenis, oxlint), aber mit eigenem, hellem Erscheinungsbild: warmes Off-White, weiße Karten mit
+weichen Schatten, Pokémon-Blau als Akzent, Gelb für Highlights, Rot nur für Tode; Schriften Bricolage
+Grotesque, DM Sans und JetBrains Mono. Dazu `@supabase/supabase-js`. Gehostet auf GitHub Pages: Der
+Basis-Pfad (`/SoullinkWebsite/`) kommt aus `VITE_BASE`, Unterseiten lädt die App über eine Kopie der
+`index.html` als `404.html`. Kein Router-Paket: drei Seiten
 (`/`, `/join`, `/c/<adresse>`) erledigt ein kleiner Router über die History-API (`src/lib/router.ts`).
 
 | Seite / Bereich | Inhalt |
 |---|---|
 | Start | Hero mit Split-Reveal, Sprite-Laufband (Tempo folgt der Scroll-Geschwindigkeit), „Meine Challenges“ dieses Geräts, neue Challenge |
 | Einladung | Vorschau (welche Challenge, welcher Platz), Beitritt ohne Konto |
-| Routen | pro Soul-Link eine Zeile, Spieler als Spalten; Static-Begegnungen als eigene Zeile; das Soul-Link-Band schimmert, solange alle leben, und reißt bei einem Tod |
+| Routen | pro Route eine Zeile, Spieler als Spalten; Static-Begegnungen als eigene Zeile; je Soul-Link (alle oder Paar) ein Band, das schimmert, solange alle leben, und bei einem Tod reißt |
 | Teams | Team und Box je Spieler; Wechsel fliegen animiert an den neuen Platz (Shared Layout) |
 | Friedhof | Grabsteine mit Ursache, Gegner, Level, Ort und den mitgerissenen Partnern |
 | Timeline | alle Ereignisse des Runs, Undo direkt am Eintrag, Undos durchgestrichen |
@@ -281,4 +296,5 @@ oxlint, Deployment auf Vercel; dazu `@supabase/supabase-js`. Kein Router-Paket: 
 Getestet wurde der komplette Ablauf mit Playwright gegen den lokalen Supabase-Stack (`supabase start`)
 mit zwei Browsern: Challenge anlegen, Spieler einladen, Beitritt per Link, Begegnung mit Live-Update
 beim zweiten Gerät, Static-Begegnung, Entwicklung, Tod mit Soul-Link, Undo, Run beenden, fremdes Gerät
-ohne Zugriff, Import aus `stats.json` mit Übernahme der Leitung.
+ohne Zugriff, Paar-Modus (nur der Partner stirbt mit), Basis-Pfad wie auf GitHub Pages, Import mit
+Übernahme der Leitung.

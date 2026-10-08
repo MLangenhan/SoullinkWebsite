@@ -35,12 +35,11 @@ run_test() {
 
 run_test "$ROOT/supabase/tests/schema.test.sql"
 
-# Import der Bot-Zähler mit Testdaten: SQL erzeugen, einspielen, Zähler und Einladungslinks prüfen
+# Import eines Bot-Runs (Testdaten im Bot-Format): SQL erzeugen, einspielen, Zähler und Einladungslinks prüfen
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"; cleanup' EXIT
 python3 "$ROOT/tools/migration/migrate_bot_data.py" \
-  --stats "$ROOT/tools/migration/tests/stats.json" \
-  --name "Platin Soul Link" --slug bot-import --owner moritz \
+  --run-dir "$ROOT/tools/migration/tests/run" --slug bot-import --owner moritz \
   --out "$WORK/migration.sql" --report "$WORK/report.json" --links-out "$WORK/links.json" >/dev/null
 run_sql "$WORK/migration.sql"
 token() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))[sys.argv[2]].split("#", 1)[1])' "$WORK/links.json" "$1"; }

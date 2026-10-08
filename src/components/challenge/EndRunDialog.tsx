@@ -47,7 +47,7 @@ export function EndRunDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle className="font-display text-4xl font-black uppercase">Run {run} beenden</DialogTitle>
+          <DialogTitle className="font-display tracking-tight text-4xl font-extrabold">Run {run} beenden</DialogTitle>
           <DialogDescription>
             Danach beginnt Run {run + 1}; die Zähler des Runs starten wieder bei null. Rückgängig geht nur, solange im neuen
             Run noch nichts eingetragen ist.
@@ -71,7 +71,7 @@ export function EndRunDialog({
                 )}
               >
                 <Icon className="size-7" />
-                <span className="font-display text-2xl font-extrabold uppercase">{label}</span>
+                <span className="font-display tracking-tight text-2xl font-extrabold">{label}</span>
               </button>
             ))}
           </div>

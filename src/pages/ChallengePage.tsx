@@ -67,7 +67,7 @@ export function ChallengePage({ slug }: { slug: string }) {
     return (
       <main className="mx-auto flex min-h-svh max-w-xl flex-col items-center justify-center gap-4 px-4 text-center">
         <p className="label text-primary">{state.status === 'error' ? 'Fehler' : 'Nicht gefunden'}</p>
-        <h1 className="font-display text-5xl font-black uppercase">
+        <h1 className="font-display tracking-tight text-5xl font-extrabold">
           {state.status === 'error' ? 'Da lief etwas schief' : 'Keine Challenge unter dieser Adresse'}
         </h1>
         <p className="text-muted-foreground">
@@ -102,7 +102,7 @@ export function ChallengePage({ slug }: { slug: string }) {
             </span>
           )}
         </div>
-        <h1 className="font-display text-6xl leading-[0.85] font-black uppercase md:text-8xl">
+        <h1 className="font-display tracking-tight text-6xl leading-[0.85] font-extrabold md:text-8xl">
           <SplitReveal text={d.challenge.name} />
         </h1>
 
@@ -120,7 +120,7 @@ export function ChallengePage({ slug }: { slug: string }) {
                     initial={{ y: 20, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
                     exit={{ y: -20, opacity: 0 }}
-                    className="min-w-[2ch] text-center font-display text-6xl font-black tabular-nums"
+                    className="min-w-[2ch] text-center font-display tracking-tight text-6xl font-extrabold tabular-nums"
                   >
                     {d.shownRun}
                   </motion.span>
@@ -141,11 +141,11 @@ export function ChallengePage({ slug }: { slug: string }) {
             </div>
             <div>
               <p className="label text-muted-foreground">Leben</p>
-              <Counter to={alive} className="font-display text-6xl font-black text-ok" />
+              <Counter to={alive} className="font-display tracking-tight text-6xl font-extrabold text-ok" />
             </div>
             <div>
               <p className="label text-muted-foreground">Verloren</p>
-              <Counter to={lost} className="font-display text-6xl font-black text-destructive" />
+              <Counter to={lost} className="font-display tracking-tight text-6xl font-extrabold text-destructive" />
             </div>
           </div>
 

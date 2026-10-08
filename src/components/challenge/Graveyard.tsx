@@ -31,11 +31,11 @@ export function Graveyard({ data, species, lookups }: { data: ChallengeData; spe
             whileInView={{ opacity: 1, y: 0, rotate: 0 }}
             viewport={{ once: true, margin: '-5% 0px' }}
             transition={{ duration: 0.7, delay: (i % 4) * 0.08, ease: [0.16, 1, 0.3, 1] }}
-            className="relative flex flex-col items-center rounded-t-[999px] rounded-b-lg border border-border bg-grave px-5 pt-10 pb-5 text-center shadow-[inset_0_-40px_60px_-40px_rgba(0,0,0,0.6)]"
+            className="relative flex flex-col items-center rounded-t-[999px] rounded-b-2xl border border-border bg-gradient-to-b from-card to-grave px-5 pt-10 pb-5 text-center shadow-[0_12px_30px_-18px_rgba(27,34,48,0.35)]"
           >
             <span className="label absolute top-4 text-[0.6rem] text-muted-foreground">R.I.P.</span>
             <Sprite id={grave.species_id} name={name} state="dead" size="lg" />
-            <h3 className="mt-2 font-display text-3xl font-extrabold uppercase">{name}</h3>
+            <h3 className="mt-2 font-display tracking-tight text-3xl font-extrabold">{name}</h3>
             <p className="text-sm text-muted-foreground">
               {lookups.members.get(grave.member_id)?.display_name} · {lookups.routes.get(grave.route_id)?.name}
             </p>

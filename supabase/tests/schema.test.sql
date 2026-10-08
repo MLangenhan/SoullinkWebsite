@@ -250,6 +250,31 @@ select public.append_event(test.get('ch')::uuid, 'counter_adjusted',
   jsonb_build_object('counter', 'deaths', 'member_id', test.get('moritz'), 'delta', 3, 'note', 'Altdaten'));
 select test.ok((select deaths_run = 3 and deaths_total = 3 from public.member_stats
                 where member_id = test.get('moritz')::uuid), 'Manuelle Korrektur fließt in die Zähler ein');
+-- ---------------------------------------------------------------- Soul-Link-Paare (wie im Bot: 1↔2, 3↔4)
+set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000001';
+select public.set_member_link_group(test.get('moritz')::uuid, 0::smallint);
+select public.set_member_link_group(test.get('janne')::uuid, 0::smallint);
+select public.set_member_link_group(test.get('elsmann')::uuid, 1::smallint);
+set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000002';
+select test.fails(format($$ select public.set_member_link_group(%L, 1::smallint) $$, test.get('janne')), 'PT403',
+                  'Nur die Leitung legt Soul-Link-Gruppen fest');
+select test.put('pair_moritz', (public.append_event(test.get('ch')::uuid, 'encounter_logged',
+  jsonb_build_object('member_id', test.get('moritz'), 'route_id', test.get('route202'), 'species_id', 25))).payload ->> 'encounter_id');
+select test.put('pair_elsmann', (public.append_event(test.get('ch')::uuid, 'encounter_logged',
+  jsonb_build_object('member_id', test.get('elsmann'), 'route_id', test.get('route202'), 'species_id', 63))).payload ->> 'link_id');
+select test.put('pair_janne', (public.append_event(test.get('ch')::uuid, 'encounter_logged',
+  jsonb_build_object('member_id', test.get('janne'), 'route_id', test.get('route202'), 'species_id', 393))).payload ->> 'encounter_id');
+select test.ok((select count(distinct link_id) = 2 from public.encounters where route_id = test.get('route202')::uuid and run_number = 2),
+               'Paare: dieselbe Route ergibt zwei Soul-Links');
+select test.fails(format($$ select public.append_event(%L, 'encounter_logged', %L) $$, test.get('ch'),
+  jsonb_build_object('member_id', test.get('moritz'), 'route_id', test.get('route202'), 'species_id', 172,
+                     'link_id', test.get('pair_elsmann'))),
+  'PT409', 'Fremde Soul-Link-Gruppe wird abgelehnt');
+select public.append_event(test.get('ch')::uuid, 'pokemon_died', jsonb_build_object('encounter_id', test.get('pair_janne')));
+select test.ok((select string_agg(state::text, ',' order by species_id) from public.encounters
+                where route_id = test.get('route202')::uuid and run_number = 2) = 'linked_dead,box,dead',
+               'Paare: Tod reißt nur den Partner mit (Pikachu mitgestorben, Abra lebt)');
+
 select test.ok((select bool_and(seq = n) from (select seq, row_number() over (order by seq) as n from public.events) s),
                'Sequenznummern sind lückenlos');
 

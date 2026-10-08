@@ -4,34 +4,36 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
-  Farbwelt wie im Portfolio: tiefes Nachtblau als Grund, Bernstein als Akzent.
-  Dazu Zustandsfarben für Pokémon: Team (grün), Box (blau), tot (rot).
+  Helle Farbwelt: warmes Off-White als Grund, weiße Karten, Pokémon-Blau als Akzent,
+  Gelb für Highlights. Rot ist für Tode reserviert, Grün für das Team, Violett für die Box.
 */
 :root {
-  --radius: 0.5rem;
+  --radius: 0.75rem;
 
-  --background: #0a0f16;
-  --foreground: #e8edf2;
-  --card: #111a26;
-  --card-foreground: #e8edf2;
-  --popover: #0d141e;
-  --popover-foreground: #e8edf2;
-  --primary: #ffb547;
-  --primary-foreground: #0a0f16;
-  --secondary: #172233;
-  --secondary-foreground: #e8edf2;
-  --muted: #172233;
-  --muted-foreground: #8394aa;
-  --accent: #172233;
-  --accent-foreground: #ffb547;
-  --destructive: #ff6b5b;
-  --border: #1f2b3b;
-  --input: #1f2b3b;
-  --ring: #ffb547;
+  --background: #f6f4ef;
+  --foreground: #1b2230;
+  --card: #ffffff;
+  --card-foreground: #1b2230;
+  --popover: #ffffff;
+  --popover-foreground: #1b2230;
+  --primary: #2a6fdb;
+  --primary-foreground: #ffffff;
+  --secondary: #eceff5;
+  --secondary-foreground: #1b2230;
+  --muted: #eceff5;
+  --muted-foreground: #5d6678;
+  --accent: #fff3c4;
+  --accent-foreground: #1b2230;
+  --destructive: #d93b2b;
+  --border: #e4e1d8;
+  --input: #d9d5ca;
+  --ring: #2a6fdb;
 
-  --ok: #7fd1a8;
-  --box: #7aa7ff;
-  --grave: #0d1219;
+  --highlight: #ffcb05;
+  --ok: #12855a;
+  --box: #6a4be0;
+  --grave: #efede7;
+  --pokeball: #e3350d;
 }
 
 @theme inline {
@@ -53,6 +55,8 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-highlight: var(--highlight);
+  --color-pokeball: var(--pokeball);
   --color-ok: var(--ok);
   --color-box: var(--box);
   --color-grave: var(--grave);
@@ -62,9 +66,9 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 
-  --font-display: 'Big Shoulders Display', 'Arial Narrow', 'Roboto Condensed', Impact, sans-serif;
-  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-display: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'DM Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 @layer base {
@@ -72,7 +76,7 @@
     @apply border-border outline-ring/60;
   }
   html {
-    color-scheme: dark;
+    color-scheme: light;
   }
   body {
     @apply bg-background text-foreground font-sans antialiased;
@@ -106,10 +110,11 @@ html.lenis body {
 
 @utility label {
   font-family: var(--font-mono);
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   line-height: 1rem;
+  font-weight: 500;
   text-transform: uppercase;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
 }
 
 /* Pixel-Sprites scharf skalieren */
@@ -117,12 +122,19 @@ html.lenis body {
   image-rendering: pixelated;
 }
 
-/* Feines Raster im Hintergrund, wie ein Pokédex-Display */
-@utility grid-bg {
-  background-image:
-    linear-gradient(to right, color-mix(in oklab, var(--border) 55%, transparent) 1px, transparent 1px),
-    linear-gradient(to bottom, color-mix(in oklab, var(--border) 55%, transparent) 1px, transparent 1px);
-  background-size: 32px 32px;
+/* Punktraster im Hintergrund */
+@utility dot-bg {
+  background-image: radial-gradient(color-mix(in oklab, var(--foreground) 14%, transparent) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+/* Karten mit weichem Schatten statt harter Kanten */
+@utility soft-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  box-shadow:
+    0 1px 2px rgb(27 34 48 / 0.04),
+    0 8px 24px -12px rgb(27 34 48 / 0.12);
 }
 
 @media (prefers-reduced-motion: reduce) {

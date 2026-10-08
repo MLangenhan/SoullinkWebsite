@@ -1,53 +1,281 @@
-# Soul-Link-Plattform
+# Soul Link
 
-Web-App für Soul-Link-Nuzlockes mit Freunden: Begegnungen pro Route, Soul-Link-Paare, Tode,
-Zähler, Run-Timeline und eine öffentliche Zuschauerseite mit Live-Updates. Ersetzt den
-[Soullinkbot](https://github.com/MLangenhan/Soullinkbot); der Bot bleibt als zweiter Client erhalten.
+Web-App für Soul-Link-Nuzlockes mit Freunden: Begegnungen pro Route, Soul-Link-Paare, Team und Box,
+Friedhof, Timeline mit Undo und alle Zähler des alten Discord-Bots, live für alle Mitspieler
+gleichzeitig. Ersetzt den [Soullinkbot](https://github.com/MLangenhan/Soullinkbot), der Bot kann
+weiter als zweiter Weg zum Eintragen dienen.
 
 **Stack:** Vite · React 19 · TypeScript · Tailwind CSS v4 · shadcn/ui · Motion · Lenis ·
-Supabase (Postgres, Row Level Security, Realtime, anonyme Sitzungen) · Vercel
+Supabase (Postgres, Row Level Security, Realtime, anonyme Sitzungen) · GitHub Pages
 
-- Einrichtung (Supabase + Vercel): [`docs/setup.md`](docs/setup.md)
-- Architektur und Entscheidungen: [`docs/architektur.md`](docs/architektur.md)
+Wie es gebaut ist und warum: [`docs/architektur.md`](docs/architektur.md)
 
-Kein Konto nötig: Mitspieler bekommen einen persönlichen Link, der ihr Gerät mit ihrem Platz verbindet.
+---
 
-## Aufbau
+## Inhalt
 
+1. [Benutzung](#benutzung)
+2. [Einrichtung: Supabase](#einrichtung-supabase)
+3. [Veröffentlichen auf GitHub Pages](#veröffentlichen-auf-github-pages)
+4. [Daten aus dem Discord-Bot übernehmen](#daten-aus-dem-discord-bot-übernehmen)
+5. [Discord-Bot verbinden](#discord-bot-verbinden)
+6. [Notfall: Zugang der Leitung](#notfall-zugang-der-leitung)
+7. [Lokal entwickeln und testen](#lokal-entwickeln-und-testen)
+8. [Aufbau des Repositorys](#aufbau-des-repositorys)
+
+---
+
+## Benutzung
+
+### Kein Konto, nur Links
+
+Es gibt keine Anmeldung mit E-Mail oder Passwort. Jeder Spieler bekommt einen **persönlichen Link**.
+Wer ihn öffnet, wird mit seinem Platz in der Challenge verbunden; der Browser merkt sich das. Für ein
+zweites Gerät (Handy, anderer Rechner) erstellt man sich unter **Einstellungen → Mein Platz → Weiteres
+Gerät verbinden** selbst einen neuen Link.
+
+### Begriffe
+
+| Begriff | Bedeutung |
+|---|---|
+| **Challenge** | eure Gruppe mit Spielern, Routen und Einladungen, z. B. „Platin Soul Link“ |
+| **Run** | ein Durchgang von Start bis Wipe oder Sieg; danach beginnt der nächste Run |
+| **Soul-Link** | Pokémon derselben Route sind verbunden: Stirbt eins, stirbt der Partner mit |
+| **Static** | einmalige Begegnung durch Ansprechen (Sonderregel), eigener Soul-Link auf derselben Route |
+
+### Eine Challenge starten
+
+1. Startseite → **Neue Challenge** → Name, Adresse und deinen Namen eintragen. Du bist jetzt die
+   **Leitung**.
+2. **Einstellungen → Mitglieder & Geräte**: Mitspieler hinzufügen. Für jeden entsteht ein
+   **Gerätelink** (72 Stunden gültig, einmal nutzbar), den du ihm schickst.
+3. **Einstellungen → Soul-Links**: „Alle verbunden“ oder **Paare** (Spieler 1↔2, 3↔4, wie im Bot).
+   Die Reihenfolge der Spieler ist die Reihenfolge, in der sie hinzugefügt wurden.
+
+### Im Spiel
+
+| Was | Wo |
+|---|---|
+| Begegnung eintragen | **Begegnung eintragen**: Route wählen oder neu eingeben, Wild oder Static, für jeden Spieler das Pokémon (Suche nach deutschem oder englischem Namen oder Pokédex-Nummer) oder **Verpasst** |
+| Ins Team / in die Box, Entwicklung, Tod | Pokémon im Tab **Routen** anklicken |
+| Tod mit Ursache, Gegner, Level, Ort | im selben Dialog unter **Tod eintragen**; der Soul-Link-Partner stirbt automatisch mit |
+| Verpasste Begegnung ohne Route | Tab **Zähler** → **Verpasste Begegnung** |
+| Wipe oder Sieg | **Run beenden**, beim Wipe optional, wer schuld war |
+| Versehen rückgängig machen | Tab **Timeline** → **Rückgängig** am Eintrag |
+| Frühere Runs ansehen | Pfeile neben der Run-Nummer |
+
+Alles, was jemand einträgt, erscheint bei allen anderen sofort, ohne Neuladen.
+
+### Rollen
+
+| Rolle | darf |
+|---|---|
+| **Leitung** | alles, dazu Mitglieder, Links, Soul-Link-Modus, Bot-Zugang, Löschen |
+| **Spieler** | eintragen, rückgängig machen, eigene Daten und eigene Geräte verwalten |
+| **Zuschauer** | nur ansehen (Einladung als Zuschauer unter **Einstellungen → Offene Einladung**) |
+
+Ist eine Challenge **öffentlich** (Einstellungen → Challenge), kann jeder mit der Adresse zuschauen.
+
+### Gerät verloren oder Browserdaten gelöscht
+
+Die Leitung meldet unter **Mitglieder & Geräte** die alten Geräte ab (**Abmelden**) und schickt einen
+neuen **Gerätelink**. Hat die Leitung selbst keinen Zugang mehr, siehe
+[Notfall: Zugang der Leitung](#notfall-zugang-der-leitung).
+
+---
+
+## Einrichtung: Supabase
+
+Supabase ist die Datenbank. Der Free Tier reicht; Dauer etwa 10 Minuten.
+
+1. Auf [supabase.com](https://supabase.com) anmelden → **New project** → Name z. B. `soullink`,
+   Region **Central EU (Frankfurt)**, Datenbank-Passwort erzeugen und speichern.
+2. **Schema einspielen:** Links **SQL Editor** → **New query** → den kompletten Inhalt von
+   [`supabase/migrations/20261008120000_init.sql`](supabase/migrations/20261008120000_init.sql)
+   einfügen → **Run**. Danach in einer neuen Abfrage genauso
+   [`supabase/migrations/20261008120100_species.sql`](supabase/migrations/20261008120100_species.sql)
+   (die 1025 Pokémon). Reihenfolge beachten, jede Datei nur einmal.
+   *Alternative mit der CLI:* `npx supabase login`, `npx supabase link --project-ref <ref>`,
+   `npx supabase db push`.
+3. **Anmeldung ohne Konten einschalten:** **Authentication → Sign In / Providers → Allow anonymous
+   sign-ins** → Speichern.
+4. **Adresse eintragen:** **Authentication → URL Configuration → Site URL** auf die spätere Adresse
+   der Website setzen, z. B. `https://mlangenhan.github.io/SoullinkWebsite/`.
+5. **Schlüssel notieren:** **Project Settings → API Keys**: die **Project URL**
+   (`https://<ref>.supabase.co`) und den **Publishable key** (`sb_publishable_…`, in älteren Projekten
+   „anon public“).
+
+Der Publishable Key ist öffentlich und darf in die Website; was er darf, regeln die
+Row-Level-Security-Regeln in der Datenbank. Den **Secret key / service_role key** braucht die App
+nicht. Er gehört nirgendwo hin, schon gar nicht ins Repository.
+
+Kontrolle: Im **Table Editor** gibt es u. a. `challenges`, `events` und `species` (1025 Zeilen), alle
+mit „RLS enabled“. Unter **Database → Publications → supabase_realtime** stehen `events`,
+`challenges`, `challenge_members` und `routes` (für die Live-Updates; macht das Schema selbst).
+
+Hinweis zum Free Tier: Supabase pausiert Projekte nach 7 Tagen ohne Aufrufe. Wieder aufwecken im
+Dashboard mit **Restore**; die Daten bleiben erhalten.
+
+---
+
+## Veröffentlichen auf GitHub Pages
+
+Das Repository bringt einen fertigen Workflow mit ([`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)),
+der die Seite bei jedem Push auf `main` baut und veröffentlicht.
+
+1. **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+2. **Settings → Secrets and variables → Actions → Variables → New repository variable**:
+   - `SUPABASE_URL` = Project URL
+   - `SUPABASE_PUBLISHABLE_KEY` = Publishable key
+
+   Bewusst *Variables*, nicht *Secrets*: Beide Werte landen ohnehin im ausgelieferten JavaScript.
+3. Pull Request mergen bzw. auf `main` pushen, oder unter **Actions → Website veröffentlichen → Run
+   workflow** manuell starten.
+4. Die Seite ist danach unter `https://<github-name>.github.io/SoullinkWebsite/` erreichbar. Diese
+   Adresse in Supabase als Site URL eintragen (Schritt 4 oben).
+
+**Eigene Domain:** In den Pages-Einstellungen eintragen und zusätzlich die Variable `BASE_PATH` auf `/`
+setzen (sonst erwartet die App den Pfad `/SoullinkWebsite/`).
+
+**Einen Pull Request vorher ansehen:** Lokal starten (siehe [unten](#lokal-entwickeln-und-testen)).
+Alternativ den Workflow manuell für den Branch starten; dazu unter **Settings → Environments →
+github-pages** den Branch bei „Deployment branches“ erlauben.
+
+Jeder Pull Request wird außerdem automatisch geprüft ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
+Datenbank-Tests (Schema, RLS, Import) sowie Lint, Typprüfung und Build der Website.
+
+---
+
+## Daten aus dem Discord-Bot übernehmen
+
+Jeder Run des Bots liegt in einem eigenen Ordner `data/runs/<id>/` mit `meta.json`, `routes.json`
+und `stats.json`. Ein solcher Ordner wird eine Challenge.
+
+```bash
+python3 tools/migration/migrate_bot_data.py \
+  --run-dir ../Soullinkbot/data/runs/<id> \
+  --owner Moritz \
+  --site-url https://mlangenhan.github.io/SoullinkWebsite
 ```
-src/
-  pages/                Start, Einladung, Challenge
-  components/challenge/ Routen-Board, Teams, Friedhof, Timeline, Zähler, Einstellungen, Dialoge
-  components/           Sprite (animiert), Pokémon-Suche, Effekte (fx/), UI-Bausteine (ui/)
-  hooks/ lib/           Datenzugriff, Live-Updates, Stammdaten, Router
-supabase/
-  migrations/   SQL-Migrationen (Schema, Views, RPCs, RLS; Pokémon-Stammdaten)
-  tests/        Supabase-Attrappe und Szenario-Tests
-tools/
-  generate_species.py   Stammdaten aus PokeAPI erzeugen
-  migration/            Import von data.json/deaths.json des alten Bots (mit Testdaten)
-data/species.json       Stammdaten für Bot und Frontend
-scripts/test-db.sh      Migrationen + alle Tests in einer Wegwerf-Datenbank ausführen
-docs/                   Architektur
+
+Das Skript (nur Python 3.10+, keine Pakete) schreibt **nichts** in die Datenbank, sondern zeigt einen
+Bericht und erzeugt:
+
+- `migration.sql`: der Import, in einer Transaktion,
+- `migration-report.json`: was übernommen wurde und was nicht zugeordnet werden konnte,
+- einen **persönlichen Link pro Spieler** (nur auf der Konsole, 14 Tage gültig).
+
+Danach:
+
+1. Bericht prüfen (Hinweise am Ende der Ausgabe).
+2. Inhalt von `migration.sql` im Supabase-**SQL Editor** ausführen.
+3. **Zuerst den eigenen Link öffnen**: Damit wirst du Leitung. Dann die anderen Links verschicken.
+
+Was übernommen wird:
+
+| Bot | Website |
+|---|---|
+| Name, Spiel, Spieler (`meta.json`) | Challenge und Spieler in derselben Reihenfolge |
+| Soul-Link-Paare (Spieler 1↔2, 3↔4) | Soul-Link-Modus „Paare“ (`--links all` für alle gemeinsam) |
+| `routes.json` | Begegnungen des laufenden Runs; als gefangen gilt die erste Stufe der Entwicklungslinie |
+| `dead_pokemon` | Tode, über die Entwicklungslinie zugeordnet; der Partner stirbt automatisch mit |
+| `resets`, `wipes` | abgeschlossene Runs (Wipes mit Verursacher) |
+| `deaths`/`alldeaths`, `missed_encounters`/`overall_missed_encounters` | alle Zähler, Run und gesamt, exakt wie im Bot |
+| Status „completed“ (Hall of Fame) | der laufende Run endet als Sieg |
+
+Weitere Optionen: `--slug` (Adresse, Standard aus dem Namen), `--visibility public`,
+`--alias Jane=Janne` (Spielernamen vereinheitlichen), `--assign Zubat=Linus` (mehrdeutigen Tod
+zuordnen), `--help` für alles.
+
+---
+
+## Discord-Bot verbinden
+
+Der Bot bekommt **keinen** geheimen Datenbankschlüssel, sondern ein eigenes Token, das nur für eine
+Challenge gilt und jederzeit widerrufen werden kann:
+
+1. Website → **Einstellungen → Discord-Bot → Token erstellen** (wird nur einmal angezeigt).
+2. In der `.env` des Bots:
+
+   ```
+   SUPABASE_URL=https://<ref>.supabase.co
+   SUPABASE_PUBLISHABLE_KEY=sb_publishable_…
+   SOULLINK_BOT_TOKEN=slb_…
+   ```
+
+3. Jeder Spieler trägt unter **Einstellungen → Mein Platz** seine **Discord-ID** ein (Discord:
+   Einstellungen → Erweitert → Entwicklermodus; dann Rechtsklick auf den eigenen Namen → „Nutzer-ID
+   kopieren“). So werden Bot-Befehle dem richtigen Spieler zugeschrieben.
+
+Die Datenbank-Schnittstelle für den Bot (`bot_state`, `bot_create_route`, `bot_append_event`) ist
+fertig und getestet; der Umbau des Bots selbst folgt.
+
+---
+
+## Notfall: Zugang der Leitung
+
+Hat die Leitung kein verbundenes Gerät mehr, erzeugt dieses Snippet im Supabase-**SQL Editor** einen
+neuen Link (Adresse der Challenge anpassen). Das Ergebnis an die Website-Adresse hängen:
+`https://…/SoullinkWebsite/join#<ergebnis>`.
+
+```sql
+with t as (select 'inv_' || translate(encode(extensions.gen_random_bytes(32), 'base64'), '+/=', '-_') as token)
+insert into public.challenge_invites (challenge_id, token_hash, role, member_id, max_uses, expires_at)
+select m.challenge_id, sha256(convert_to(t.token, 'UTF8')), 'owner', m.id, 1, now() + interval '1 day'
+from public.challenge_members m, t
+where m.role = 'owner' and m.challenge_id = (select id from public.challenges where slug = 'platin-soullink')
+returning (select token from t);
 ```
 
-## Lokal starten
+---
+
+## Lokal entwickeln und testen
+
+Voraussetzungen: Node.js 20+, Docker (für den lokalen Supabase-Stack), Python 3.10+.
 
 ```bash
 npm install
-npx supabase start   # lokaler Supabase-Stack per Docker, spielt die Migrationen ein
-cp .env.example .env.local   # URL und Publishable Key aus der Ausgabe eintragen
-npm run dev          # http://localhost:5173
+npx supabase start          # lokaler Supabase-Stack, spielt alle Migrationen ein
+cp .env.example .env.local  # API_URL und PUBLISHABLE_KEY aus der Ausgabe eintragen
+npm run dev                 # http://localhost:5173
 ```
 
-`npm run build` (Typprüfung + Build), `npm run lint` (oxlint).
+| Befehl | Zweck |
+|---|---|
+| `npm run build` | Typprüfung und Produktions-Build |
+| `npm run lint` | oxlint |
+| `npm run test:db` | Datenbank-Tests (braucht `DATABASE_URL` eines PostgreSQL ≥ 15, z. B. `postgres://postgres:postgres@localhost:5432/postgres`) |
+| `npx supabase db reset` | lokale Datenbank neu aufsetzen (nach Änderungen an den Migrationen) |
 
-## Datenbank testen
+Die Datenbank-Tests spielen eine Supabase-Attrappe, alle Migrationen und rund 100 Prüfungen in eine
+Wegwerf-Datenbank: Row Level Security, Einladungen und Geräte, Unveränderlichkeit der Ereignisse,
+Soul-Links (alle und paarweise), Undo-Regeln, Zähler über Runs hinweg, Bot-Zugang und den Import
+eines Bot-Runs.
 
-Voraussetzung: PostgreSQL 15 oder neuer mit `psql` (lokal oder per Docker) und Python 3.10+.
+Stammdaten neu erzeugen (z. B. bei einer neuen Pokémon-Generation): `python3 tools/generate_species.py`.
 
-```bash
-# z. B. mit Docker:
-docker run -d --name soullink-pg -e POSTGRES_HOST_AUTH_METHOD=trust -p 5432:5432 postgres:16
-DATABASE_URL=postgres://postgres@localhost:5432/postgres scripts/test-db.sh
+---
+
+## Aufbau des Repositorys
+
 ```
+src/
+  pages/                 Start, Einladung, Challenge
+  components/challenge/  Routen-Board, Teams, Friedhof, Timeline, Zähler, Einstellungen, Dialoge
+  components/            Sprite (animiert), Pokémon-Suche, Effekte (fx/), UI-Bausteine (ui/)
+  hooks/, lib/           Datenzugriff, Live-Updates, Stammdaten, Router
+supabase/
+  migrations/            Schema, Views, Funktionen, RLS; Pokémon-Stammdaten
+  tests/                 Supabase-Attrappe und Szenario-Tests
+  config.toml            lokaler Supabase-Stack
+tools/
+  generate_species.py    Stammdaten aus PokeAPI
+  migration/             Import eines Bot-Runs (mit Testdaten im Bot-Format)
+data/species.json        Stammdaten als JSON
+scripts/test-db.sh       Datenbank-Tests
+.github/workflows/       CI und Veröffentlichung auf GitHub Pages
+docs/architektur.md      Architektur und Entscheidungen
+```
+
+Pokémon-Sprites und -Daten stammen von [PokeAPI](https://pokeapi.co). Pokémon ist eine Marke von
+Nintendo, Creatures und GAME FREAK; dies ist ein privates Fanprojekt.

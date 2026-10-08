@@ -1,0 +1,14 @@
+{
+  "Route 201": {
+    "Moritz": ["Staralili", "Staravia", "Staraptor"],
+    "Janne": ["Bidiza", "Bidifas"],
+    "Elsmann": ["Fukano", "Arkani"],
+    "Linus": ["Plinfa", "Pliprin", "Impoleon"]
+  },
+  "Route 202": {
+    "Moritz": ["Sheinux", "Luxio", "Luxtra"],
+    "Janne": ["Zirpurze", "Zirpeise"],
+    "Elsmann": ["Knospi", "Roselia", "Roserade"],
+    "Linus": []
+  }
+}

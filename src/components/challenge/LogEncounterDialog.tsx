@@ -29,7 +29,7 @@ function freshEntries(data: ChallengeData): Record<string, Entry> {
   )
 }
 
-/** Wie /add im Bot: eine Route, für jeden Spieler ein Pokémon (oder verpasst). Alle bilden einen Soul-Link. */
+/** Wie /add im Bot: eine Route, für jeden Spieler ein Pokémon (oder verpasst). Je Soul-Link-Gruppe ein Soul-Link. */
 export function LogEncounterDialog({
   open,
   onOpenChange,
@@ -45,9 +45,11 @@ export function LogEncounterDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="font-display text-4xl font-black uppercase">Begegnung eintragen</DialogTitle>
+          <DialogTitle className="font-display tracking-tight text-4xl font-extrabold">Begegnung eintragen</DialogTitle>
           <DialogDescription>
-            Alle Pokémon dieser Route bilden einen Soul-Link. Stirbt eins, sterben alle.
+            {data.players.some((p) => p.link_group !== null)
+              ? 'Die Pokémon jedes Soul-Link-Paars sind verbunden. Stirbt eins, stirbt der Partner mit.'
+              : 'Alle Pokémon dieser Route bilden einen Soul-Link. Stirbt eins, sterben alle.'}
           </DialogDescription>
         </DialogHeader>
         {open && (species ? <LogForm data={data} species={species} close={() => onOpenChange(false)} /> : <Pokeball className="py-10" />)}
@@ -61,7 +63,13 @@ function LogForm({ data, species, close }: { data: ChallengeData; species: Speci
   const [routeName, setRouteName] = useState('')
   const [kind, setKind] = useState<EncounterKind>('wild')
   const [entries, setEntries] = useState(() => freshEntries(data))
-  const [linkId] = useState(() => crypto.randomUUID())
+  // Ein Soul-Link pro Gruppe (alle zusammen oder Paare); feste IDs pro geöffnetem Dialog
+  const [linkIds] = useState(() => new Map<number, string>())
+  const linkFor = (group: number | null) => {
+    const key = group ?? -1
+    if (!linkIds.has(key)) linkIds.set(key, crypto.randomUUID())
+    return linkIds.get(key)!
+  }
   const [busy, setBusy] = useState(false)
 
   const update = (memberId: string, patch: Partial<Entry>) =>
@@ -85,7 +93,7 @@ function LogForm({ data, species, close }: { data: ChallengeData; species: Speci
             'encounter_logged',
             {
               encounter_id: entry.encounterId,
-              link_id: linkId,
+              link_id: linkFor(player.link_group),
               member_id: player.id,
               route_id: route.id,
               species_id: entry.speciesId,
@@ -144,7 +152,7 @@ function LogForm({ data, species, close }: { data: ChallengeData; species: Speci
         {data.players.map((player) => {
           const entry = entries[player.id]
           return (
-            <div key={player.id} className="grid gap-2 rounded-lg border bg-card/50 p-3">
+            <div key={player.id} className="grid gap-2 rounded-xl border bg-background/60 p-3">
               <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-2 font-medium">
                   <span className="size-2 rounded-full" style={{ background: player.color ?? 'var(--primary)' }} />

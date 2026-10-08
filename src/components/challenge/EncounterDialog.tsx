@@ -93,7 +93,7 @@ function EncounterBody({
         <div className="flex items-center gap-4">
           <Sprite id={encounter.species_id} name={name} state={encounter.state} size="xl" />
           <div className="min-w-0">
-            <DialogTitle className="font-display text-4xl font-black uppercase">{encounter.nickname ?? name}</DialogTitle>
+            <DialogTitle className="font-display tracking-tight text-4xl font-extrabold">{encounter.nickname ?? name}</DialogTitle>
             <DialogDescription className="mt-1">
               {owner} · {route}
               {encounter.kind === 'static' && ' · Static'}

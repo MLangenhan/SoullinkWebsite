@@ -95,6 +95,9 @@ create table public.challenge_members (
   seat smallint check (seat >= 0),
   -- Für den Bot: Discord-Nutzer-ID, deren Befehle diesem Spieler zugeschrieben werden
   discord_id text check (discord_id ~ '^[0-9]{5,25}$'),
+  -- Soul-Link-Gruppe: Nur Pokémon von Spielern derselben Gruppe sind verbunden (z. B. Paare 1↔2, 3↔4).
+  -- null = alle Spieler ohne Gruppe bilden zusammen eine Gruppe.
+  link_group smallint check (link_group between 0 and 20),
   created_at timestamptz not null default now(),
   unique (id, challenge_id),
   unique (challenge_id, seat),
@@ -642,6 +645,7 @@ declare
   v_delta integer;
   v_result text;
   v_kind text;
+  v_group smallint;
   v_cause_member uuid;
 begin
   if p_payload is null or jsonb_typeof(p_payload) <> 'object' then
@@ -674,15 +678,23 @@ begin
         raise exception using errcode = 'PT409', message = 'encounter_id ist bereits vergeben';
       end if;
 
+      select coalesce(m.link_group, -1) into v_group from public.challenge_members m where m.id = v_member;
       v_link := private.jsonb_uuid(p_payload, 'link_id', false);
       if v_link is null then
-        -- Ohne Angabe: dem jüngsten Soul-Link dieser Route und Art beitreten, in dem der Spieler noch fehlt
+        -- Ohne Angabe: dem jüngsten Soul-Link dieser Route und Art beitreten, in dem der Spieler noch
+        -- fehlt und der zu seiner Soul-Link-Gruppe gehört
         select en.link_id into v_link
         from public.encounters en
         where en.challenge_id = p_challenge_id and en.run_number = p_run and en.route_id = v_route
           and en.kind::text = v_kind
           and not exists (
             select 1 from public.encounters o where o.link_id = en.link_id and o.member_id = v_member
+          )
+          and not exists (
+            select 1
+            from public.encounters o
+            join public.challenge_members om on om.id = o.member_id
+            where o.link_id = en.link_id and coalesce(om.link_group, -1) <> v_group
           )
         order by en.logged_at desc
         limit 1;
@@ -699,6 +711,14 @@ begin
         end if;
         if exists (select 1 from public.encounters en where en.link_id = v_link and en.member_id = v_member) then
           raise exception using errcode = 'PT409', message = 'Spieler hat in diesem Soul-Link bereits ein Pokémon';
+        end if;
+        if exists (
+          select 1
+          from public.encounters en
+          join public.challenge_members om on om.id = en.member_id
+          where en.link_id = v_link and coalesce(om.link_group, -1) <> v_group
+        ) then
+          raise exception using errcode = 'PT409', message = 'Spieler gehört zu einer anderen Soul-Link-Gruppe';
         end if;
       end if;
 
@@ -1224,6 +1244,25 @@ exception
 end;
 $$;
 
+-- Soul-Link-Gruppe eines Spielers festlegen (gilt für künftige Begegnungen)
+create function public.set_member_link_group(p_member_id uuid, p_link_group smallint) returns public.challenge_members
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_member public.challenge_members;
+begin
+  select * into v_member from public.challenge_members m where m.id = p_member_id;
+  if not found then
+    raise exception using errcode = 'PT404', message = 'Mitglied nicht gefunden';
+  end if;
+  perform private.require_owner(v_member.challenge_id);
+  update public.challenge_members set link_group = p_link_group where id = p_member_id returning * into v_member;
+  return v_member;
+end;
+$$;
+
 -- Alle Geräte eines Mitglieds abmelden (z. B. verlorenes Handy). Danach braucht es einen neuen Link.
 create function public.remove_member_devices(p_member_id uuid) returns integer
 language plpgsql
@@ -1404,7 +1443,7 @@ begin
       'members', coalesce((
         select jsonb_agg(jsonb_build_object(
           'id', m.id, 'display_name', m.display_name, 'role', m.role, 'seat', m.seat,
-          'discord_id', m.discord_id
+          'discord_id', m.discord_id, 'link_group', m.link_group
         ) order by m.seat nulls last, m.display_name)
         from public.challenge_members m
         where m.challenge_id = v_token.challenge_id
@@ -1558,6 +1597,7 @@ grant execute on function
   public.add_player(uuid, text),
   public.update_member(uuid, text, text, text),
   public.remove_member_devices(uuid),
+  public.set_member_link_group(uuid, smallint),
   public.create_invite(uuid, public.member_role, uuid, integer, integer),
   public.revoke_invite(uuid),
   public.join_challenge(text, text),

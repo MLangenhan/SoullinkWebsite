@@ -9,11 +9,13 @@ import type { SpeciesIndex } from '@/lib/species'
 import type { Encounter, Member } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
-interface LinkRow {
-  linkId: string
+/** Eine Zeile: eine Route (wild oder static); bei Paaren enthält sie mehrere Soul-Links */
+interface RouteRow {
+  key: string
   routeId: string
   kind: Encounter['kind']
   cells: Map<string, Encounter>
+  links: { linkId: string; dead: boolean; columns: number[] }[]
   dead: boolean
 }
 
@@ -21,7 +23,7 @@ interface LinkRow {
  * Soul-Link-Band zwischen den Pokémon einer Zeile. Lebt der Link, läuft ein Schimmer durch;
  * stirbt ein Partner, reißt das Band in der Mitte und färbt sich rot.
  */
-function LinkBand({ dead, filled, columns }: { dead: boolean; filled: number[]; columns: number }) {
+function LinkBand({ dead, filled, columns, lane }: { dead: boolean; filled: number[]; columns: number; lane: number }) {
   const reduce = useReducedMotion()
   // Nur zwischen dem ersten und letzten belegten Platz; ein einzelnes Pokémon hat kein Band
   if (filled.length < 2) return null
@@ -30,7 +32,7 @@ function LinkBand({ dead, filled, columns }: { dead: boolean; filled: number[]; 
   const left = `${((first + 0.5) / columns) * 100}%`
   const right = `${((columns - last - 0.5) / columns) * 100}%`
   return (
-    <div className="pointer-events-none absolute top-[38%] h-0.5" style={{ left, right }} aria-hidden>
+    <div className="pointer-events-none absolute h-0.5" style={{ left, right, top: `calc(38% + ${lane * 7}px)` }} aria-hidden>
       {dead ? (
         <div className="relative size-full">
           <motion.div
@@ -107,16 +109,43 @@ export function Board({
 
   const routes = lookups.routes
   const rows = useMemo(() => {
-    const byLink = new Map<string, LinkRow>()
+    // Pro Route und Art eine Zeile; hat ein Spieler dort mehrere Pokémon (mehrere Statics), folgen weitere Zeilen
+    const groups = new Map<string, Map<string, Encounter[]>>()
     for (const e of data.encounters) {
-      const row = byLink.get(e.link_id) ?? { linkId: e.link_id, routeId: e.route_id, kind: e.kind, cells: new Map(), dead: false }
-      row.cells.set(e.member_id, e)
-      row.dead ||= e.state === 'dead' || e.state === 'linked_dead'
-      byLink.set(e.link_id, row)
+      const key = `${e.route_id}|${e.kind}`
+      const perPlayer = groups.get(key) ?? new Map<string, Encounter[]>()
+      perPlayer.set(e.member_id, [...(perPlayer.get(e.member_id) ?? []), e])
+      groups.set(key, perPlayer)
     }
-    const order = (r: LinkRow) => routes.get(r.routeId)?.sort_order ?? 0
-    return [...byLink.values()].sort((a, b) => order(a) - order(b) || (a.kind === b.kind ? 0 : a.kind === 'wild' ? -1 : 1))
-  }, [data.encounters, routes])
+    const result: RouteRow[] = []
+    for (const [key, perPlayer] of groups) {
+      const depth = Math.max(...[...perPlayer.values()].map((list) => list.length))
+      for (let i = 0; i < depth; i++) {
+        const cells = new Map<string, Encounter>()
+        for (const [memberId, list] of perPlayer) if (list[i]) cells.set(memberId, list[i])
+        const first = cells.values().next().value as Encounter
+        const links = new Map<string, { linkId: string; dead: boolean; columns: number[] }>()
+        players.forEach((p, column) => {
+          const e = cells.get(p.id)
+          if (!e) return
+          const link = links.get(e.link_id) ?? { linkId: e.link_id, dead: false, columns: [] }
+          link.columns.push(column)
+          link.dead ||= e.state === 'dead' || e.state === 'linked_dead'
+          links.set(e.link_id, link)
+        })
+        result.push({
+          key: `${key}|${i}`,
+          routeId: first.route_id,
+          kind: first.kind,
+          cells,
+          links: [...links.values()],
+          dead: [...cells.values()].every((e) => e.state === 'dead' || e.state === 'linked_dead'),
+        })
+      }
+    }
+    const order = (r: RouteRow) => routes.get(r.routeId)?.sort_order ?? 0
+    return result.sort((a, b) => order(a) - order(b) || (a.kind === b.kind ? 0 : a.kind === 'wild' ? -1 : 1))
+  }, [data.encounters, routes, players])
 
   const columns = `minmax(7rem, 11rem) repeat(${players.length}, minmax(6.5rem, 1fr))`
   const current = selected ? (lookups.encounters.get(selected.encounter_id) ?? selected) : null
@@ -154,7 +183,7 @@ export function Board({
         <AnimatePresence initial={false}>
           {rows.map((row, i) => (
             <motion.div
-              key={row.linkId}
+              key={row.key}
               layout
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
@@ -170,11 +199,9 @@ export function Board({
                 {row.kind === 'static' && <span className="label text-[0.6rem] text-primary">Static</span>}
               </div>
               <div className="relative col-span-full col-start-2 grid gap-2" style={{ gridTemplateColumns: `repeat(${players.length}, minmax(6.5rem, 1fr))` }}>
-                <LinkBand
-                  dead={row.dead}
-                  columns={players.length}
-                  filled={players.flatMap((p, index) => (row.cells.has(p.id) ? [index] : []))}
-                />
+                {row.links.map((link, lane) => (
+                  <LinkBand key={link.linkId} dead={link.dead} columns={players.length} filled={link.columns} lane={lane} />
+                ))}
                 {players.map((p) => (
                   <Cell key={p.id} encounter={row.cells.get(p.id)} species={species} onOpen={setSelected} />
                 ))}

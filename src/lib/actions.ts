@@ -1,3 +1,4 @@
+import { withBase } from '@/lib/router'
 import { rpc } from '@/lib/supabase'
 import type { ChallengeEvent, EventType, Route } from '@/lib/types'
 
@@ -25,5 +26,5 @@ export function revertEvent(challengeId: string, eventId: number) {
 }
 
 export function inviteUrl(token: string) {
-  return `${window.location.origin}/join#${token}`
+  return `${window.location.origin}${withBase('/join')}#${token}`
 }

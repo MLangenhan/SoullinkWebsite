@@ -23,7 +23,7 @@ function NotFound() {
   return (
     <main className="mx-auto flex min-h-[70vh] max-w-xl flex-col items-center justify-center gap-4 px-4 text-center">
       <p className="label text-primary">404</p>
-      <h1 className="font-display text-5xl font-black uppercase">Hier ist nur hohes Gras</h1>
+      <h1 className="font-display tracking-tight text-5xl font-extrabold">Hier ist nur hohes Gras</h1>
       <a {...linkProps('/')} className="text-primary underline-offset-4 hover:underline">
         Zur Startseite
       </a>

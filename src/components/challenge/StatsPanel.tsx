@@ -37,9 +37,9 @@ export function StatsPanel({ data }: { data: ChallengeData }) {
     <div className="grid gap-8">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {overview.map((o) => (
-          <div key={o.label} className="rounded-xl border bg-card/60 p-5">
+          <div key={o.label} className="soft-card rounded-2xl p-5">
             <p className="label text-muted-foreground">{o.label}</p>
-            <Counter to={o.value} className="mt-2 block font-display text-6xl font-black" />
+            <Counter to={o.value} className="mt-2 block font-display tracking-tight text-6xl font-extrabold" />
           </div>
         ))}
       </div>
@@ -55,10 +55,10 @@ export function StatsPanel({ data }: { data: ChallengeData }) {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.6, delay: i * 0.06, ease: [0.16, 1, 0.3, 1] }}
-              className="rounded-xl border bg-card/60 p-6"
+              className="soft-card rounded-2xl p-6"
             >
               <header className="flex items-center justify-between gap-3">
-                <h3 className="flex items-center gap-2 font-display text-3xl font-extrabold uppercase">
+                <h3 className="flex items-center gap-2 font-display tracking-tight text-3xl font-extrabold">
                   <span className="size-3 rounded-full" style={{ background: member?.color ?? 'var(--primary)' }} />
                   {m.display_name}
                 </h3>
@@ -100,7 +100,7 @@ function Stat({ label, value, sub }: { label: string; value: number; sub?: strin
     <div>
       <dt className="label text-[0.65rem] text-muted-foreground">{label}</dt>
       <dd>
-        <Counter to={value} className="font-display text-5xl font-black" />
+        <Counter to={value} className="font-display tracking-tight text-5xl font-extrabold" />
         {sub && <span className="block text-xs text-muted-foreground">{sub}</span>}
       </dd>
     </div>

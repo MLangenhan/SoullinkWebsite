@@ -46,6 +46,8 @@ export interface Member {
   color: string | null
   seat: number | null
   discord_id: string | null
+  /** Soul-Link-Gruppe (z. B. Paare); null = alle ohne Gruppe sind verbunden */
+  link_group: number | null
 }
 
 export interface Route {

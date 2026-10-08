@@ -60,7 +60,7 @@ export function Sprite({
           draggable={false}
           onError={() => setSource((s) => (s === 'animated' ? 'static' : 'none'))}
           className={cn(
-            'pixelated max-h-full max-w-full object-contain drop-shadow-[0_6px_6px_rgba(0,0,0,0.45)] select-none',
+            'pixelated max-h-full max-w-full object-contain drop-shadow-[0_6px_5px_rgba(27,34,48,0.18)] select-none',
             dead && 'opacity-60 grayscale',
             state === 'linked_dead' && 'sepia-[.35]',
           )}

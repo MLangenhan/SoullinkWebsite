@@ -15,9 +15,9 @@ const roleLabel: Record<Role, string> = { owner: 'Leitung', player: 'Spieler', v
 
 function Section({ title, children, description }: { title: string; description?: string; children?: React.ReactNode }) {
   return (
-    <section className="grid gap-4 rounded-xl border bg-card/60 p-6">
+    <section className="grid gap-4 soft-card rounded-2xl p-6">
       <div>
-        <h3 className="font-display text-3xl font-extrabold uppercase">{title}</h3>
+        <h3 className="font-display tracking-tight text-3xl font-extrabold">{title}</h3>
         {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
       </div>
       {children}
@@ -203,6 +203,8 @@ function OwnerSettings({ data, onChanged }: { data: ChallengeData; onChanged: ()
         </form>
       </Section>
 
+      <LinkGroupsSection data={data} onChanged={onChanged} />
+
       <Section
         title="Mitglieder & Geräte"
         description="Jeder Platz wird über einen persönlichen Link mit einem oder mehreren Geräten verbunden. Verlorenes Handy? Geräte abmelden und neuen Link schicken."
@@ -212,7 +214,7 @@ function OwnerSettings({ data, onChanged }: { data: ChallengeData; onChanged: ()
             const count = devices.filter((d) => d.member_id === member.id).length
             const isMe = member.id === data.me?.id
             return (
-              <li key={member.id} className="grid gap-3 rounded-lg border bg-background/40 p-4">
+              <li key={member.id} className="grid gap-3 rounded-xl border bg-background/60 p-4">
                 <div className="flex flex-wrap items-center gap-3">
                   <span className="size-3 rounded-full" style={{ background: member.color ?? 'var(--primary)' }} />
                   <span className="font-medium">{member.display_name}</span>
@@ -221,6 +223,9 @@ function OwnerSettings({ data, onChanged }: { data: ChallengeData; onChanged: ()
                     {count ? `${count} ${count === 1 ? 'Gerät' : 'Geräte'}` : 'Platz frei'}
                   </span>
                   {member.discord_id && <span className="label text-[0.6rem] text-muted-foreground">Discord {member.discord_id}</span>}
+                  {member.link_group !== null && (
+                    <span className="label text-[0.6rem] text-muted-foreground">Paar {member.link_group + 1}</span>
+                  )}
                   <div className="ml-auto flex flex-wrap gap-1">
                     <Button size="sm" variant="ghost" onClick={() => setEditing(editing === member.id ? null : member.id)}>
                       <Pencil /> Bearbeiten
@@ -418,5 +423,71 @@ function OwnerSettings({ data, onChanged }: { data: ChallengeData; onChanged: ()
         </form>
       </Section>
     </>
+  )
+}
+
+/** Soul-Link-Modus: alle Spieler gemeinsam oder Paare in Sitzreihenfolge (wie im Discord-Bot) */
+function LinkGroupsSection({ data, onChanged }: { data: ChallengeData; onChanged: () => Promise<void> }) {
+  const [busy, setBusy] = useState(false)
+  const pairs = data.players.length > 0 && data.players.every((p, i) => p.link_group === Math.floor(i / 2))
+  const all = data.players.every((p) => p.link_group === null)
+
+  const apply = async (mode: 'all' | 'pairs') => {
+    setBusy(true)
+    let ok = true
+    for (const [index, player] of data.players.entries()) {
+      const group = mode === 'pairs' ? Math.floor(index / 2) : null
+      if (player.link_group === group) continue
+      const done = await attempt(() => rpc('set_member_link_group', { p_member_id: player.id, p_link_group: group }).then(() => true))
+      if (!done) {
+        ok = false
+        break
+      }
+    }
+    await onChanged()
+    setBusy(false)
+    if (ok) toast(mode === 'pairs' ? 'Soul-Links jetzt paarweise' : 'Soul-Links jetzt für alle gemeinsam')
+  }
+
+  const pairLabel = (index: number) =>
+    data.players
+      .filter((_, i) => Math.floor(i / 2) === index)
+      .map((p) => p.display_name)
+      .join(' ↔ ')
+
+  return (
+    <Section
+      title="Soul-Links"
+      description="Wer ist mit wem verbunden? Gilt für neue Begegnungen; bestehende Soul-Links bleiben, wie sie sind."
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        {(
+          [
+            { mode: 'all', title: 'Alle verbunden', text: 'Stirbt ein Pokémon, sterben die Pokémon aller Spieler auf dieser Route.', active: all },
+            {
+              mode: 'pairs',
+              title: 'Paare',
+              text: Array.from({ length: Math.ceil(data.players.length / 2) }, (_, i) => pairLabel(i)).join(' · ') || 'Spieler 1↔2, 3↔4 …',
+              active: pairs,
+            },
+          ] as const
+        ).map((option) => (
+          <button
+            key={option.mode}
+            type="button"
+            disabled={busy || option.active}
+            onClick={() => void apply(option.mode)}
+            className={
+              option.active
+                ? 'rounded-xl border-2 border-primary bg-primary/5 p-4 text-left'
+                : 'rounded-xl border-2 border-border p-4 text-left transition-colors hover:border-primary/50 disabled:opacity-60'
+            }
+          >
+            <span className="font-display tracking-tight text-xl font-bold">{option.title}</span>
+            <span className="mt-1 block text-sm text-muted-foreground">{option.text}</span>
+          </button>
+        ))}
+      </div>
+    </Section>
   )
 }

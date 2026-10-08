@@ -3,7 +3,7 @@ import { motion } from 'motion/react'
 import { Pokeball } from '@/components/Pokeball'
 import { Button } from '@/components/ui/button'
 import { Field, Input } from '@/components/ui/input'
-import { linkProps, navigate } from '@/lib/router'
+import { linkProps, navigate, withBase } from '@/lib/router'
 import { ensureSession, rpc } from '@/lib/supabase'
 import { toast } from '@/lib/toast'
 import type { InvitePreview, Member } from '@/lib/types'
@@ -37,7 +37,7 @@ export function Join() {
     try {
       await ensureSession()
       const member = await rpc<Member>('join_challenge', { p_token: token, p_display_name: name || null })
-      window.history.replaceState(null, '', '/join')
+      window.history.replaceState(null, '', withBase('/join'))
       toast(`Willkommen, ${member.display_name}! Dieses Gerät ist jetzt verbunden.`)
       navigate(`/c/${preview.challenge_slug}`, { replace: true })
     } catch (e) {
@@ -48,7 +48,7 @@ export function Join() {
   }
 
   return (
-    <main className="grid-bg flex min-h-svh items-center justify-center px-4 pt-20">
+    <main className="dot-bg flex min-h-svh items-center justify-center px-4 pt-20">
       <motion.div
         className="w-full max-w-md rounded-2xl border bg-card/90 p-8 shadow-2xl backdrop-blur"
         initial={{ opacity: 0, y: 24, scale: 0.97 }}
@@ -58,7 +58,7 @@ export function Join() {
         {error ? (
           <div className="grid gap-4 text-center">
             <p className="label text-destructive">Einladung</p>
-            <h1 className="font-display text-4xl font-black uppercase">Das hat nicht geklappt</h1>
+            <h1 className="font-display tracking-tight text-4xl font-extrabold">Das hat nicht geklappt</h1>
             <p className="text-muted-foreground">{error}</p>
             <p className="text-sm text-muted-foreground">Lass dir von der Leitung einen neuen Link geben.</p>
             <a {...linkProps('/')} className="text-primary underline-offset-4 hover:underline">
@@ -71,7 +71,7 @@ export function Join() {
           <form onSubmit={join} className="grid gap-5">
             <div>
               <p className="label text-primary">Einladung {roleLabel[preview.role]}</p>
-              <h1 className="mt-2 font-display text-5xl leading-none font-black uppercase">{preview.challenge_name}</h1>
+              <h1 className="mt-2 font-display tracking-tight text-5xl leading-none font-extrabold">{preview.challenge_name}</h1>
             </div>
             {preview.member_name ? (
               <p className="text-muted-foreground">

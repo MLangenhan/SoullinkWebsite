@@ -3,7 +3,7 @@ import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Field, Input, Select } from '@/components/ui/input'
-import { navigate } from '@/lib/router'
+import { navigate, withBase } from '@/lib/router'
 import { ensureSession, rpc } from '@/lib/supabase'
 import { toast, toastError } from '@/lib/toast'
 import { toSlug } from '@/lib/slug'
@@ -50,7 +50,7 @@ export function CreateChallengeDialog() {
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle className="font-display text-3xl font-black uppercase">Neue Challenge</DialogTitle>
+          <DialogTitle className="font-display tracking-tight text-3xl font-extrabold">Neue Challenge</DialogTitle>
           <DialogDescription>
             Kein Konto nötig: Dieses Gerät wird mit deinem Platz verbunden. Weitere Geräte und Mitspieler kommen per Link dazu.
           </DialogDescription>
@@ -59,7 +59,7 @@ export function CreateChallengeDialog() {
           <Field label="Name">
             <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Platin Randomizer" required maxLength={80} autoFocus />
           </Field>
-          <Field label="Adresse" hint={`soullink…/c/${effectiveSlug || '…'}`}>
+          <Field label="Adresse" hint={`${window.location.host}${withBase(`/c/${effectiveSlug || '…'}`)}`}>
             <Input
               value={effectiveSlug}
               onChange={(e) => {

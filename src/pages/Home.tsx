@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { motion } from 'motion/react'
+import { motion, useReducedMotion } from 'motion/react'
 import { ArrowUpRight, Lock, Radio } from 'lucide-react'
 import { CreateChallengeDialog } from '@/components/CreateChallengeDialog'
 import { SplitReveal } from '@/components/fx/SplitReveal'
@@ -62,20 +62,50 @@ function useMyChallenges(userId: string | null | undefined) {
   return userId === null ? [] : state
 }
 
+/** Weiche, langsam treibende Farbflächen im Hero (Pokémon-Blau, -Gelb und -Rot) */
+function Blobs() {
+  const reduce = useReducedMotion()
+  const blobs = [
+    { className: 'left-[-10%] top-[5%] size-[42vw] bg-primary/20', x: [0, 40, 0], y: [0, 30, 0] },
+    { className: 'right-[-8%] top-[20%] size-[34vw] bg-highlight/35', x: [0, -30, 0], y: [0, 40, 0] },
+    { className: 'left-[30%] bottom-[-15%] size-[30vw] bg-pokeball/10', x: [0, 20, 0], y: [0, -25, 0] },
+  ]
+  return (
+    <div className="pointer-events-none absolute inset-0" aria-hidden>
+      {blobs.map((b, i) => (
+        <motion.div
+          key={i}
+          className={`absolute rounded-full blur-3xl ${b.className}`}
+          animate={reduce ? undefined : { x: b.x, y: b.y }}
+          transition={{ duration: 14 + i * 3, repeat: Infinity, ease: 'easeInOut' }}
+        />
+      ))}
+    </div>
+  )
+}
+
 export function Home() {
   const userId = useSessionUserId()
   const mine = useMyChallenges(userId)
 
   return (
     <main>
-      <section className="grid-bg relative flex min-h-[92svh] flex-col justify-end overflow-hidden pt-28 pb-10">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,transparent_20%,var(--background)_75%)]" />
+      <section className="dot-bg relative flex min-h-[92svh] flex-col justify-end overflow-hidden pt-28 pb-10">
+        <Blobs />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,transparent_30%,var(--background)_80%)]" />
         <div className="relative mx-auto w-full max-w-7xl px-4 md:px-8">
           <p className="label mb-4 text-primary">Nuzlocke · Soul Link · Live</p>
-          <h1 className="font-display text-[19vw] leading-[0.82] font-black tracking-tight uppercase md:text-[12rem]">
+          <h1 className="font-display text-[19vw] leading-[0.82] font-extrabold tracking-tight md:text-[12rem]">
             <SplitReveal text="Soul" by="chars" />
             <br />
             <SplitReveal text="Link" by="chars" delay={0.15} className="text-primary" />
+            <motion.span
+              aria-hidden
+              className="ml-[0.08em] inline-block size-[0.18em] rounded-full bg-highlight align-baseline"
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ delay: 0.6, type: 'spring', stiffness: 300, damping: 12 }}
+            />
           </h1>
           <motion.p
             className="mt-6 max-w-xl text-lg text-muted-foreground"
@@ -102,7 +132,7 @@ export function Home() {
 
       <section className="mx-auto max-w-7xl px-4 py-20 md:px-8">
         <div className="mb-8 flex items-end justify-between gap-4">
-          <h2 className="font-display text-5xl font-black uppercase md:text-6xl">
+          <h2 className="font-display tracking-tight text-5xl font-extrabold md:text-6xl">
             <SplitReveal text="Meine Challenges" />
           </h2>
           <span className="label hidden text-muted-foreground md:block">auf diesem Gerät</span>
@@ -111,7 +141,7 @@ export function Home() {
         {mine === null ? (
           <Pokeball className="py-16" />
         ) : mine.length === 0 ? (
-          <div className="rounded-xl border border-dashed p-10 text-center text-muted-foreground">
+          <div className="rounded-2xl border-2 border-dashed p-10 text-center text-muted-foreground">
             <p className="text-lg text-foreground">Noch keine Challenge auf diesem Gerät.</p>
             <p className="mt-2">Starte eine neue oder öffne den Einladungslink, den du bekommen hast.</p>
           </div>
@@ -121,7 +151,7 @@ export function Home() {
               <motion.a
                 key={challenge.id}
                 {...linkProps(`/c/${challenge.slug}`)}
-                className="group relative flex flex-col gap-5 overflow-hidden rounded-xl border bg-card p-6 transition-colors hover:border-primary/60"
+                className="soft-card group relative flex flex-col gap-5 overflow-hidden rounded-2xl p-6 transition-colors hover:border-primary/50"
                 initial={{ opacity: 0, y: 24 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: '-10% 0px' }}
@@ -133,7 +163,7 @@ export function Home() {
                     <p className="label text-muted-foreground">
                       Run {stats?.current_run ?? 1} · {stats?.wipes_total ?? 0} Wipes · {stats?.wins_total ?? 0} Siege
                     </p>
-                    <h3 className="mt-2 font-display text-3xl font-extrabold uppercase">{challenge.name}</h3>
+                    <h3 className="mt-2 font-display tracking-tight text-3xl font-extrabold">{challenge.name}</h3>
                   </div>
                   <ArrowUpRight className="size-6 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-1 group-hover:-translate-y-1 group-hover:text-primary" />
                 </div>
