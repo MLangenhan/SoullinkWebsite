@@ -288,6 +288,7 @@ Basis-Pfad (`/SoullinkWebsite/`) kommt aus `VITE_BASE`, Unterseiten lädt die Ap
 | Start | Hero mit Split-Reveal, Sprite-Laufband (Tempo folgt der Scroll-Geschwindigkeit), „Meine Challenges“ dieses Geräts, neue Challenge |
 | Einladung | Vorschau (welche Challenge, welcher Platz), Beitritt ohne Konto |
 | Routen | pro Route eine Zeile, Spieler als Spalten; Static-Begegnungen als eigene Zeile; je Soul-Link (alle oder Paar) ein Band, das schimmert, solange alle leben, und bei einem Tod reißt |
+| Gebiete | alle Orte des Spiels (wild bzw. Static/Geschenk) mit Stand je Spieler im gezeigten Run, Eintragen direkt aus der Liste |
 | Teams | Team und Box je Spieler; Wechsel fliegen animiert an den neuen Platz (Shared Layout) |
 | Friedhof | Grabsteine mit Ursache, Gegner, Level, Ort und den mitgerissenen Partnern |
 | Timeline | alle Ereignisse des Runs, Undo direkt am Eintrag, Undos durchgestrichen |
@@ -325,6 +326,11 @@ ohne Zugriff, Paar-Modus (nur der Partner stirbt mit), Basis-Pfad wie auf GitHub
 - **Pokédex**: `tools/generate_dex.py` erzeugt aus den PokeAPI-CSVs pro Edition eine statische Datei
   (Typen der Generation, Basiswerte, Level-Attacken mit den Werten dieser Generation inkl. physisch/speziell
   vor Gen 4, Entwicklungen mit Bedingungen). Die Website lädt nur die Datei der gespielten Edition.
+- **Offene Gebiete**: `tools/generate_areas.py` schreibt pro Edition die Orte mit Begegnungen (deutsch/englisch,
+  Region, Arten „wild“ und „Static/Geschenk“; Tausch, Ranger und umherstreifende Legenden ausgenommen). Der Client
+  (`src/lib/areas.ts`) ordnet die Routen der Challenge über einen normalisierten Namen zu und wertet nur
+  vorhandene Daten aus: Ein Spieler hat einen Ort erledigt, wenn er dort ein Pokémon der Art eingetragen oder die
+  Begegnung verpasst hat (`encounter_missed` mit `kind`). Keine Migration nötig.
 
 ## Sprachen
 
