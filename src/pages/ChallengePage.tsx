@@ -6,6 +6,7 @@ import { Board } from '@/components/challenge/Board'
 import { DexPanel } from '@/components/challenge/DexPanel'
 import { EndRunDialog } from '@/components/challenge/EndRunDialog'
 import { Graveyard } from '@/components/challenge/Graveyard'
+import { HeaderStat } from '@/components/challenge/HeaderStat'
 import { LevelCapControl } from '@/components/challenge/LevelCapControl'
 import { LogEncounterDialog } from '@/components/challenge/LogEncounterDialog'
 import { SettingsPanel } from '@/components/challenge/SettingsPanel'
@@ -23,7 +24,7 @@ import { useSessionUserId } from '@/hooks/useSession'
 import { useSpecies } from '@/hooks/useSpecies'
 import { linkProps } from '@/lib/router'
 import { useT } from '@/lib/i18n'
-import type { EncounterKind } from '@/lib/types'
+import type { Encounter, EncounterKind } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 // Der Schadensrechner (mit den Daten aller Generationen) wird erst im Calc-Tab geladen
@@ -103,8 +104,9 @@ export function ChallengePage({ slug }: { slug: string }) {
 
   const d = state.data
   const isCurrent = d.shownRun === d.stats.current_run
-  const alive = d.encounters.filter((e) => e.state === 'team' || e.state === 'box').length
-  const lost = d.encounters.length - alive
+  const aliveMons = d.encounters.filter((e) => e.state === 'team' || e.state === 'box').length
+  const lostMons = d.encounters.length - aliveMons
+  const links = countLinks(d.encounters)
   const tabs = TABS.filter((entry) => entry.id !== 'einstellungen' || d.me)
 
   return (
@@ -125,11 +127,13 @@ export function ChallengePage({ slug }: { slug: string }) {
           <SplitReveal text={d.challenge.name} />
         </h1>
 
-        <div className="flex flex-wrap items-end justify-between gap-6">
-          <div className="flex flex-wrap items-end gap-x-8 gap-y-4">
-            <div>
-              <p className="label text-muted-foreground">{t('Run')}</p>
-              <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-end justify-between gap-8">
+          <div className="flex flex-wrap items-start gap-x-10 gap-y-6 sm:gap-x-14">
+            <HeaderStat
+              label={t('Run')}
+              caption={<span className={isCurrent ? 'text-ok' : undefined}>{isCurrent ? t('läuft') : t('beendet')}</span>}
+            >
+              <div className="-ml-2.5 flex items-center gap-1">
                 <Button variant="ghost" size="icon" disabled={d.shownRun <= 1} onClick={() => setRun(d.shownRun - 1)} aria-label={t('Vorheriger Run')}>
                   <ChevronLeft />
                 </Button>
@@ -139,7 +143,7 @@ export function ChallengePage({ slug }: { slug: string }) {
                     initial={{ y: 20, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
                     exit={{ y: -20, opacity: 0 }}
-                    className="min-w-[2ch] text-center font-display tracking-tight text-6xl font-extrabold tabular-nums"
+                    className="min-w-[2ch] text-center font-display tracking-tight text-6xl leading-none font-extrabold tabular-nums"
                   >
                     {d.shownRun}
                   </motion.span>
@@ -154,18 +158,13 @@ export function ChallengePage({ slug }: { slug: string }) {
                   <ChevronRight />
                 </Button>
               </div>
-              <p className={cn('label text-[0.6rem]', isCurrent ? 'text-ok' : 'text-muted-foreground')}>
-                {isCurrent ? t('läuft') : t('beendet')}
-              </p>
-            </div>
-            <div>
-              <p className="label text-muted-foreground">{t('Leben')}</p>
-              <Counter to={alive} className="font-display tracking-tight text-6xl font-extrabold text-ok" />
-            </div>
-            <div>
-              <p className="label text-muted-foreground">{t('Verloren')}</p>
-              <Counter to={lost} className="font-display tracking-tight text-6xl font-extrabold text-destructive" />
-            </div>
+            </HeaderStat>
+            <HeaderStat label={t('Lebende Links')} caption={t('{n} Pokémon', { n: aliveMons })}>
+              <Counter to={links.alive} className="font-display tracking-tight text-6xl leading-none font-extrabold text-ok" />
+            </HeaderStat>
+            <HeaderStat label={t('Verlorene Links')} caption={t('{n} Pokémon', { n: lostMons })}>
+              <Counter to={links.lost} className="font-display tracking-tight text-6xl leading-none font-extrabold text-destructive" />
+            </HeaderStat>
             {isCurrent && <LevelCapControl data={d} />}
           </div>
 
@@ -236,4 +235,16 @@ export function ChallengePage({ slug }: { slug: string }) {
       )}
     </main>
   )
+}
+
+/**
+ * Soul-Links statt einzelner Pokémon: Ein Link lebt, solange eins seiner Pokémon lebt (stirbt eins, sterben
+ * alle mit). Bei „alle verbunden“ ist das die Zahl der Pokémon geteilt durch die Spieler, bei Paaren zählt
+ * jedes Paar für sich.
+ */
+function countLinks(encounters: Encounter[]) {
+  const alive = new Map<string, boolean>()
+  for (const e of encounters) alive.set(e.link_id, (alive.get(e.link_id) ?? false) || e.state === 'team' || e.state === 'box')
+  const living = [...alive.values()].filter(Boolean).length
+  return { alive: living, lost: alive.size - living }
 }

@@ -321,7 +321,8 @@ ohne Zugriff, Paar-Modus (nur der Partner stirbt mit), Basis-Pfad wie auf GitHub
   ausgeblendet. Die Route bleibt für den Spieler abgehakt (Grundlage für eine spätere Liste offener Orte).
 - **Team oder Box** beim Eintragen: Team, wenn der Soul-Link damit vollständig ist und alle Beteiligten
   Platz haben; die Partner aus der Box kommen per `change_team` mit.
-- **Level-Cap**: Vorlagen in `src/data/levelCaps.ts`, erkannt am Spielnamen oder in `challenges.level_cap_preset`
+- **Level-Cap**: Vorlagen in `src/data/levelCaps.ts` (Einträge deutsch und englisch; Gen 1–4 gegen die Trainerdaten
+  der pret-Disassemblies geprüft, Gen 5/6 aus dem Bot), erkannt am Spielnamen oder in `challenges.level_cap_preset`
   gewählt. `level_cap_index` gilt für `level_cap_run`; ein neuer Run beginnt beim ersten Cap, ohne Schreibzugriff.
 - **Pokédex**: `tools/generate_dex.py` erzeugt aus den PokeAPI-CSVs pro Edition eine statische Datei
   (Typen der Generation, Basiswerte, Level-Attacken mit den Werten dieser Generation inkl. physisch/speziell

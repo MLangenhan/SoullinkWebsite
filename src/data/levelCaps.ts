@@ -1,10 +1,17 @@
 import { getLang } from '@/lib/i18n'
 
-// Level-Caps pro Spiel, übernommen aus dem Discord-Bot. Einträge ohne Level sind Zwischenüberschriften.
+// Level-Caps pro Spiel. Einträge ohne Level sind Zwischenüberschriften. Cap = höchstes Level im Team des
+// Gegners beim ersten Kampf. Gen 1–4 geprüft gegen die Trainerdaten der pret-Disassemblies (pokered,
+// pokeyellow, pokecrystal, pokeruby, pokeemerald, pokefirered, pokediamond, pokeplatinum, pokeheartgold);
+// Gen 5 und 6 stammen aus dem Discord-Bot und sind noch ungeprüft.
 // versionGroup: welche Attacken- und Entwicklungsdaten (public/dex/<versionGroup>.json) dazu passen.
+// Wichtig: Die Zahl und Reihenfolge der Einträge nicht ändern, laufende Challenges speichern den Index.
 
 export interface LevelCap {
+  /** Deutsch, z. B. „Orden 1 – Viola City (Falk)“ */
   label: string
+  /** Englisch, z. B. „Badge 1 – Violet City (Falkner)“ */
+  labelEn: string
   level: number | null
 }
 
@@ -16,168 +23,195 @@ export interface LevelCapPreset {
   caps: LevelCap[]
 }
 
-const kanto: LevelCap[] = [
-  { label: 'Orden 1 – Pewter City (Rocko)', level: 14 },
-  { label: 'Orden 2 – Cerulean City (Maren)', level: 21 },
-  { label: 'Orden 3 – Vermillion City (Surge)', level: 24 },
-  { label: 'Orden 4 – Celadon City (Erika)', level: 29 },
-  { label: 'Orden 5 – Fuchsia City (Koga)', level: 43 },
-  { label: 'Orden 6 – Saffron City (Sabrina)', level: 47 },
-  { label: 'Orden 7 – Cinnabar Island (Pyro)', level: 50 },
-  { label: 'Orden 8 – Viridian City (Giovanni)', level: 53 },
-  { label: 'Elite Four 1 – Lorelei', level: 54 },
-  { label: 'Elite Four 2 – Bruno', level: 54 },
-  { label: 'Elite Four 3 – Agatha', level: 56 },
-  { label: 'Elite Four 4 – Lance', level: 60 },
-  { label: 'Champion – Gary/Blau', level: 65 },
+/** Ort und Person, jeweils [deutsch, englisch] */
+type Name = [string, string]
+
+const badge = (n: number, place: Name, leader: Name, level: number): LevelCap => ({
+  label: `Orden ${n} – ${place[0]} (${leader[0]})`,
+  labelEn: `Badge ${n} – ${place[1]} (${leader[1]})`,
+  level,
+})
+const gym = (place: Name, leader: Name, level: number): LevelCap => ({
+  label: `${place[0]} (${leader[0]})`,
+  labelEn: `${place[1]} (${leader[1]})`,
+  level,
+})
+const elite = (n: number, member: Name, level: number): LevelCap => ({
+  label: `Top Vier ${n} – ${member[0]}`,
+  labelEn: `Elite Four ${n} – ${member[1]}`,
+  level,
+})
+const champ = (champion: Name, level: number): LevelCap => ({
+  label: `Champ – ${champion[0]}`,
+  labelEn: `Champion – ${champion[1]}`,
+  level,
+})
+const heading = (de: string, en: string): LevelCap => ({ label: de, labelEn: en, level: null })
+
+/** Arenen, Top Vier und Champ: je acht, vier und ein Level */
+const league = (badges: [Name, Name][], gyms: number[], elites: Name[], e4: number[], champion: Name, championLevel: number) => [
+  ...badges.map(([place, leader], i) => badge(i + 1, place, leader, gyms[i])),
+  ...elites.map((member, i) => elite(i + 1, member, e4[i])),
+  champ(champion, championLevel),
 ]
 
-const johtoLeague = (first: number, fifth: number, sixth: number, seventh: number): LevelCap[] => [
-  { label: 'Orden 1 – Violastadt (Falkner)', level: first },
-  { label: 'Orden 2 – Azaleaburg (Knospe)', level: 17 },
-  { label: 'Orden 3 – Dukatiastadt (Whitney)', level: 19 },
-  { label: 'Orden 4 – Teakstadt (Morty)', level: 25 },
-  { label: 'Orden 5 – Olivianastadt (Chuck)', level: fifth },
-  { label: 'Orden 6 – Anemoniastadt (Jasmine)', level: sixth },
-  { label: 'Orden 7 – Mahagoniastadt (Pryce)', level: seventh },
-  { label: 'Orden 8 – Ebenholzstadt (Clair)', level: 41 },
-  { label: 'Elite Four 1 – Will', level: 42 },
-  { label: 'Elite Four 2 – Koga', level: 44 },
-  { label: 'Elite Four 3 – Bruno', level: 46 },
-  { label: 'Elite Four 4 – Karen', level: 47 },
-  { label: 'Champion – Lance', level: 50 },
-  { label: 'Kanto (optionale Reihenfolge)', level: null },
+// Kanto
+const KANTO_BADGES: [Name, Name][] = [
+  [['Marmoria City', 'Pewter City'], ['Rocko', 'Brock']],
+  [['Azuria City', 'Cerulean City'], ['Misty', 'Misty']],
+  [['Orania City', 'Vermilion City'], ['Major Bob', 'Lt. Surge']],
+  [['Prismania City', 'Celadon City'], ['Erika', 'Erika']],
+  [['Fuchsania City', 'Fuchsia City'], ['Koga', 'Koga']],
+  [['Saffronia City', 'Saffron City'], ['Sabrina', 'Sabrina']],
+  [['Zinnoberinsel', 'Cinnabar Island'], ['Pyro', 'Blaine']],
+  [['Vertania City', 'Viridian City'], ['Giovanni', 'Giovanni']],
+]
+const KANTO_ELITE: Name[] = [['Lorelei', 'Lorelei'], ['Bruno', 'Bruno'], ['Agathe', 'Agatha'], ['Siegfried', 'Lance']]
+const BLUE: Name = ['Blau', 'Blue']
+
+// Johto
+const JOHTO_BADGES: [Name, Name][] = [
+  [['Viola City', 'Violet City'], ['Falk', 'Falkner']],
+  [['Azalea City', 'Azalea Town'], ['Kai', 'Bugsy']],
+  [['Dukatia City', 'Goldenrod City'], ['Bianka', 'Whitney']],
+  [['Teak City', 'Ecruteak City'], ['Jens', 'Morty']],
+  [['Anemonia City', 'Cianwood City'], ['Hartwig', 'Chuck']],
+  [['Oliviana City', 'Olivine City'], ['Jasmin', 'Jasmine']],
+  [['Mahagonia City', 'Mahogany Town'], ['Norbert', 'Pryce']],
+  [['Ebenholz City', 'Blackthorn City'], ['Sandra', 'Clair']],
+]
+const JOHTO_ELITE: Name[] = [['Willi', 'Will'], ['Koga', 'Koga'], ['Bruno', 'Bruno'], ['Melanie', 'Karen']]
+
+/** Johto-Liga, danach die Kanto-Arenen in beliebiger Reihenfolge und Rot */
+const johto = (gyms: number[], kanto: number[], red: number): LevelCap[] => [
+  ...league(JOHTO_BADGES, gyms, JOHTO_ELITE, [42, 44, 46, 47], ['Siegfried', 'Lance'], 50),
+  heading('Kanto (beliebige Reihenfolge)', 'Kanto (any order)'),
+  ...(
+    [
+      [['Marmoria City', 'Pewter City'], ['Rocko', 'Brock']],
+      [['Azuria City', 'Cerulean City'], ['Misty', 'Misty']],
+      [['Orania City', 'Vermilion City'], ['Major Bob', 'Lt. Surge']],
+      [['Prismania City', 'Celadon City'], ['Erika', 'Erika']],
+      [['Fuchsania City', 'Fuchsia City'], ['Janina', 'Janine']],
+      [['Saffronia City', 'Saffron City'], ['Sabrina', 'Sabrina']],
+      [['Seeschauminseln', 'Seafoam Islands'], ['Pyro', 'Blaine']],
+      [['Vertania City', 'Viridian City'], BLUE],
+    ] as [Name, Name][]
+  ).map(([place, leader], i) => gym(place, leader, kanto[i])),
+  { label: 'Rot (Silberberg)', labelEn: 'Red (Mt. Silver)', level: red },
 ]
 
-const sinnohLeague = (eighth: number): LevelCap[] => [
-  { label: 'Orden 1 – Sandgemme (Roxy)', level: 14 },
-  { label: 'Orden 2 – Erzelingen (Gardenia)', level: 22 },
-  { label: 'Orden 3 – Herzhofen (Maylene)', level: 28 },
-  { label: 'Orden 4 – Weideburg (Crasher Wake)', level: 30 },
-  { label: 'Orden 5 – Elyses (Fantina)', level: 36 },
-  { label: 'Orden 6 – Fleetburg (Byron)', level: 40 },
-  { label: 'Orden 7 – Blizzach (Candice)', level: 44 },
-  { label: 'Orden 8 – Sonnewik (Volkner)', level: eighth },
-  { label: 'Elite Four 1 – Aaron', level: 53 },
-  { label: 'Elite Four 2 – Bertha', level: 55 },
-  { label: 'Elite Four 3 – Flint', level: 57 },
-  { label: 'Elite Four 4 – Lucian', level: 59 },
-  { label: 'Champion – Cynthia', level: 66 },
-]
+// Hoenn
+const hoennBadges = (sixthFortree: boolean, eighth: Name): [Name, Name][] => {
+  const fortree: [Name, Name] = [['Baumhausen City', 'Fortree City'], ['Wibke', 'Winona']]
+  const mossdeep: [Name, Name] = [['Moosbach City', 'Mossdeep City'], ['Ben & Svenja', 'Tate & Liza']]
+  return [
+    [['Metarost City', 'Rustboro City'], ['Felizia', 'Roxanne']],
+    [['Faustauhaven', 'Dewford Town'], ['Kamillo', 'Brawly']],
+    [['Malvenfroh City', 'Mauville City'], ['Walter', 'Wattson']],
+    [['Bad Lavastadt', 'Lavaridge Town'], ['Flavia', 'Flannery']],
+    [['Blütenburg City', 'Petalburg City'], ['Norman', 'Norman']],
+    sixthFortree ? fortree : mossdeep,
+    sixthFortree ? mossdeep : fortree,
+    [['Xeneroville', 'Sootopolis City'], eighth],
+  ]
+}
+const HOENN_ELITE: Name[] = [['Ulrich', 'Sidney'], ['Antonia', 'Phoebe'], ['Frosina', 'Glacia'], ['Dragan', 'Drake']]
+const WALLACE: Name = ['Wassili', 'Wallace']
+const STEVEN: Name = ['Troy', 'Steven']
 
-const hoennLeague = (sixth: LevelCap, seventh: LevelCap, eighth: string, champion: string): LevelCap[] => [
-  { label: 'Orden 1 – Wurzelheim (Roxanne)', level: 15 },
-  { label: 'Orden 2 – Metarost City (Brawly)', level: 18 },
-  { label: 'Orden 3 – Ewigenau (Wattson)', level: 24 },
-  { label: 'Orden 4 – Herzhofen (Flannery)', level: 29 },
-  { label: 'Orden 5 – Petalburg City (Norman)', level: 31 },
-  sixth,
-  seventh,
-  { label: `Orden 8 – Sootopolis City (${eighth})`, level: 46 },
-  { label: 'Elite Four 1 – Sidney', level: 47 },
-  { label: 'Elite Four 2 – Phoebe', level: 48 },
-  { label: 'Elite Four 3 – Glacia', level: 50 },
-  { label: 'Elite Four 4 – Drake', level: 52 },
-  { label: `Champion – ${champion}`, level: 58 },
-]
+// Sinnoh: in Platin kommt Lamina vor Hilda und Marinus
+const ROARK: [Name, Name] = [['Erzelingen', 'Oreburgh City'], ['Veit', 'Roark']]
+const GARDENIA: [Name, Name] = [['Ewigenau', 'Eterna City'], ['Silvana', 'Gardenia']]
+const MAYLENE: [Name, Name] = [['Schleiede', 'Veilstone City'], ['Hilda', 'Maylene']]
+const WAKE: [Name, Name] = [['Weideburg', 'Pastoria City'], ['Wellenbrecher Marinus', 'Crasher Wake']]
+const FANTINA: [Name, Name] = [['Herzhofen', 'Hearthome City'], ['Lamina', 'Fantina']]
+const BYRON: [Name, Name] = [['Fleetburg', 'Canalave City'], ['Adam', 'Byron']]
+const CANDICE: [Name, Name] = [['Blizzach', 'Snowpoint City'], ['Frida', 'Candice']]
+const VOLKNER: [Name, Name] = [['Sonnewik', 'Sunyshore City'], ['Volkner', 'Volkner']]
+const SINNOH_ELITE: Name[] = [['Herbaro', 'Aaron'], ['Teresa', 'Bertha'], ['Ignaz', 'Flint'], ['Lucian', 'Lucian']]
+const CYNTHIA: Name = ['Cynthia', 'Cynthia']
 
+/** Gen 5 und 6: Orte und Namen wie im Bot (englisch), Level ungeprüft */
+const english = (n: number, place: string, leader: string, level: number) => badge(n, [place, place], [leader, leader], level)
 const unovaLeague = (gyms: LevelCap[], e4: number, champion: LevelCap): LevelCap[] => [
   ...gyms,
-  { label: 'Elite Four 1 – Shauntal', level: e4 },
-  { label: 'Elite Four 2 – Marshal', level: e4 },
-  { label: 'Elite Four 3 – Grimsley', level: e4 },
-  { label: 'Elite Four 4 – Caitlin', level: e4 },
+  ...['Shauntal', 'Marshal', 'Grimsley', 'Caitlin'].map((name, i) => elite(i + 1, [name, name], e4)),
   champion,
 ]
 
 export const LEVEL_CAP_PRESETS: LevelCapPreset[] = [
   {
     key: 'kanto_rby',
-    name: 'Rot, Blau, Gelb',
+    name: 'Rot, Blau',
     versionGroup: 'red-blue',
-    gameNames: ['Rote Edition', 'Blaue Edition', 'Gelbe Edition', 'Pokemon Rot', 'Pokemon Blau', 'Pokemon Gelb', 'Red', 'Blue', 'Yellow'],
-    caps: kanto,
+    gameNames: ['Rote Edition', 'Blaue Edition', 'Pokemon Rot', 'Pokemon Blau', 'Red', 'Blue'],
+    caps: league(KANTO_BADGES, [14, 21, 24, 29, 43, 43, 47, 50], KANTO_ELITE, [56, 58, 60, 62], BLUE, 65),
+  },
+  {
+    key: 'kanto_yellow',
+    name: 'Gelb',
+    versionGroup: 'red-blue',
+    gameNames: ['Gelbe Edition', 'Pokemon Gelb', 'Gelb', 'Yellow'],
+    caps: league(KANTO_BADGES, [12, 21, 28, 32, 50, 50, 54, 55], KANTO_ELITE, [56, 58, 60, 62], BLUE, 65),
   },
   {
     key: 'kanto_frlg',
     name: 'Feuerrot, Blattgrün',
     versionGroup: 'firered-leafgreen',
     gameNames: ['Feuerrote Edition', 'Blattgrüne Edition', 'Pokemon Feuerrot', 'Pokemon Blattgrün', 'Feuerrot', 'Blattgrün', 'FireRed', 'LeafGreen'],
-    caps: kanto,
+    caps: league(KANTO_BADGES, [14, 21, 24, 29, 43, 43, 47, 50], KANTO_ELITE, [54, 56, 58, 60], BLUE, 63),
   },
   {
     key: 'johto_gsc',
     name: 'Gold, Silber, Kristall',
     versionGroup: 'crystal',
     gameNames: ['Goldene Edition', 'Silberne Edition', 'Kristall-Edition', 'Pokemon Gold', 'Pokemon Silber', 'Pokemon Kristall', 'Gold', 'Silver', 'Crystal', 'Silber', 'Kristall'],
-    caps: [
-      ...johtoLeague(9, 29, 31, 35),
-      { label: 'Pewter City Gym (Rocko)', level: 54 },
-      { label: 'Cerulean City Gym (Maren)', level: 54 },
-      { label: 'Vermillion City Gym (Surge)', level: 53 },
-      { label: 'Celadon City Gym (Erika)', level: 56 },
-      { label: 'Fuchsia City Gym (Koga Ersatz)', level: 50 },
-      { label: 'Saffron City Gym (Sabrina)', level: 55 },
-      { label: 'Seafoam Island Gym (Pyro Ersatz)', level: 59 },
-      { label: 'Viridian City Gym (Giovanni Ersatz)', level: 60 },
-      { label: 'Rot (Mt. Silver)', level: 88 },
-    ],
+    // Werte aus Kristall (Bianka hat dort Level 20, in Gold/Silber 19)
+    caps: johto([9, 16, 20, 25, 30, 35, 31, 40], [44, 47, 46, 46, 39, 48, 50, 58], 81),
   },
   {
     key: 'johto_hgss',
     name: 'HeartGold, SoulSilver',
     versionGroup: 'heartgold-soulsilver',
     gameNames: ['HeartGold', 'SoulSilver', 'HGSS', 'Heart Gold', 'Soul Silver', 'Goldene Edition HeartGold', 'Silberne Edition SoulSilver'],
-    caps: [
-      ...johtoLeague(13, 31, 35, 34),
-      { label: 'Pewter City Gym (Rocko)', level: 54 },
-      { label: 'Cerulean City Gym (Maren)', level: 54 },
-      { label: 'Vermillion City Gym (Surge)', level: 53 },
-      { label: 'Celadon City Gym (Erika)', level: 56 },
-      { label: 'Fuchsia City Gym (Janine)', level: 50 },
-      { label: 'Saffron City Gym (Sabrina)', level: 55 },
-      { label: 'Seafoam Island Gym (Blaine)', level: 59 },
-      { label: 'Viridian City Gym (Blue)', level: 60 },
-      { label: 'Rot (Mt. Silver)', level: 88 },
-    ],
+    caps: johto([13, 17, 19, 25, 31, 35, 34, 41], [54, 54, 53, 56, 50, 55, 59, 60], 88),
+  },
+  {
+    key: 'hoenn_rs',
+    name: 'Rubin, Saphir',
+    versionGroup: 'emerald',
+    gameNames: ['Rubin-Edition', 'Saphir-Edition', 'Pokemon Rubin', 'Pokemon Saphir', 'Ruby', 'Sapphire', 'Rubin', 'Saphir'],
+    caps: league(hoennBadges(true, WALLACE), [15, 18, 23, 28, 31, 33, 42, 43], HOENN_ELITE, [49, 51, 53, 55], STEVEN, 58),
   },
   {
     key: 'hoenn_rse',
-    name: 'Rubin, Saphir, Smaragd',
+    name: 'Smaragd',
     versionGroup: 'emerald',
-    gameNames: ['Rubin-Edition', 'Saphir-Edition', 'Smaragd-Edition', 'Pokemon Rubin', 'Pokemon Saphir', 'Pokemon Smaragd', 'Ruby', 'Sapphire', 'Emerald', 'Rubin', 'Saphir', 'Smaragd'],
-    caps: hoennLeague(
-      { label: 'Orden 6 – Mossdeep City (Tate & Liza)', level: 42 },
-      { label: 'Orden 7 – Fortree City (Winona)', level: 33 },
-      'Juan/Wallace',
-      'Steven/Wallace',
-    ),
+    gameNames: ['Smaragd-Edition', 'Pokemon Smaragd', 'Emerald', 'Smaragd'],
+    caps: league(hoennBadges(true, ['Juan', 'Juan']), [15, 19, 24, 29, 31, 33, 42, 46], HOENN_ELITE, [49, 51, 53, 55], WALLACE, 58),
   },
   {
     key: 'hoenn_oras',
     name: 'Omega Rubin, Alpha Saphir',
     versionGroup: 'omega-ruby-alpha-sapphire',
     gameNames: ['Omega Rubin', 'Alpha Saphir', 'Pokemon Omega Rubin', 'Pokemon Alpha Saphir', 'Omega Ruby', 'Alpha Sapphire', 'ORAS'],
-    caps: hoennLeague(
-      { label: 'Orden 6 – Fortree City (Winona)', level: 33 },
-      { label: 'Orden 7 – Mossdeep City (Tate & Liza)', level: 42 },
-      'Wallace',
-      'Steven',
-    ),
+    // Level aus dem Bot, ungeprüft
+    caps: league(hoennBadges(true, WALLACE), [15, 18, 24, 29, 31, 33, 42, 46], HOENN_ELITE, [47, 48, 50, 52], STEVEN, 58),
   },
   {
     key: 'sinnoh_dp',
     name: 'Diamant, Perl',
     versionGroup: 'diamond-pearl',
     gameNames: ['Diamant-Edition', 'Perl-Edition', 'Pokemon Diamant', 'Pokemon Perl', 'Diamond', 'Pearl', 'Diamant', 'Perl', 'Strahlender Diamant', 'Leuchtende Perle', 'Brilliant Diamond', 'Shining Pearl', 'BDSP'],
-    caps: sinnohLeague(46),
+    caps: league([ROARK, GARDENIA, MAYLENE, WAKE, FANTINA, BYRON, CANDICE, VOLKNER], [14, 22, 30, 30, 36, 39, 42, 49], SINNOH_ELITE, [57, 59, 61, 63], CYNTHIA, 66),
   },
   {
     key: 'sinnoh_pt',
     name: 'Platin',
     versionGroup: 'platinum',
     gameNames: ['Platin-Edition', 'Pokemon Platin', 'Platinum', 'Platin', 'Platin Randomizer', 'Platin Rand'],
-    caps: sinnohLeague(50),
+    caps: league([ROARK, GARDENIA, FANTINA, MAYLENE, WAKE, BYRON, CANDICE, VOLKNER], [14, 22, 26, 32, 37, 41, 44, 50], SINNOH_ELITE, [53, 55, 57, 59], CYNTHIA, 62),
   },
   {
     key: 'einall_bw',
@@ -186,17 +220,17 @@ export const LEVEL_CAP_PRESETS: LevelCapPreset[] = [
     gameNames: ['Schwarze Edition', 'Weiße Edition', 'Pokemon Schwarz', 'Pokemon Weiß', 'Black', 'White', 'Schwarz', 'Weiß', 'BW'],
     caps: unovaLeague(
       [
-        { label: 'Orden 1 – Striaton City (Cilan/Chili/Cress)', level: 15 },
-        { label: 'Orden 2 – Nacrene City (Lenora)', level: 20 },
-        { label: 'Orden 3 – Castelia City (Burgh)', level: 24 },
-        { label: 'Orden 4 – Nimbasa City (Elesa)', level: 29 },
-        { label: 'Orden 5 – Driftveil City (Clay)', level: 32 },
-        { label: 'Orden 6 – Mistralton City (Skyla)', level: 37 },
-        { label: 'Orden 7 – Icirrus City (Brycen)', level: 41 },
-        { label: 'Orden 8 – Opelucid City (Drayden/Iris)', level: 48 },
+        english(1, 'Striaton City', 'Cilan/Chili/Cress', 15),
+        english(2, 'Nacrene City', 'Lenora', 20),
+        english(3, 'Castelia City', 'Burgh', 24),
+        english(4, 'Nimbasa City', 'Elesa', 29),
+        english(5, 'Driftveil City', 'Clay', 32),
+        english(6, 'Mistralton City', 'Skyla', 37),
+        english(7, 'Icirrus City', 'Brycen', 41),
+        english(8, 'Opelucid City', 'Drayden/Iris', 48),
       ],
       50,
-      { label: 'Champion – Alder', level: 54 },
+      champ(['Alder', 'Alder'], 54),
     ),
   },
   {
@@ -206,17 +240,17 @@ export const LEVEL_CAP_PRESETS: LevelCapPreset[] = [
     gameNames: ['Schwarze Edition 2', 'Weiße Edition 2', 'Pokemon Schwarz 2', 'Pokemon Weiß 2', 'Black 2', 'White 2', 'BW2', 'Schwarz 2', 'Weiß 2'],
     caps: unovaLeague(
       [
-        { label: 'Orden 1 – Aspertia City (Cheren)', level: 13 },
-        { label: 'Orden 2 – Virbank City (Roxie)', level: 18 },
-        { label: 'Orden 3 – Castelia City (Burgh)', level: 24 },
-        { label: 'Orden 4 – Nimbasa City (Elesa)', level: 28 },
-        { label: 'Orden 5 – Driftveil City (Clay)', level: 32 },
-        { label: 'Orden 6 – Mistralton City (Skyla)', level: 37 },
-        { label: 'Orden 7 – Opelucid City (Drayden)', level: 46 },
-        { label: 'Orden 8 – Humilau City (Marlon)', level: 49 },
+        english(1, 'Aspertia City', 'Cheren', 13),
+        english(2, 'Virbank City', 'Roxie', 18),
+        english(3, 'Castelia City', 'Burgh', 24),
+        english(4, 'Nimbasa City', 'Elesa', 28),
+        english(5, 'Driftveil City', 'Clay', 32),
+        english(6, 'Mistralton City', 'Skyla', 37),
+        english(7, 'Opelucid City', 'Drayden', 46),
+        english(8, 'Humilau City', 'Marlon', 49),
       ],
       52,
-      { label: 'Champion – Iris', level: 57 },
+      champ(['Iris', 'Iris'], 57),
     ),
   },
   {
@@ -225,19 +259,16 @@ export const LEVEL_CAP_PRESETS: LevelCapPreset[] = [
     versionGroup: 'x-y',
     gameNames: ['X', 'Y', 'Pokemon X', 'Pokemon Y', 'XY', 'Pokemon X und Y', 'X und Y'],
     caps: [
-      { label: 'Orden 1 – Santalune City (Viola)', level: 12 },
-      { label: 'Orden 2 – Cyllage City (Grant)', level: 25 },
-      { label: 'Orden 3 – Shalour City (Korrina)', level: 30 },
-      { label: 'Orden 4 – Coumarine City (Ramos)', level: 34 },
-      { label: 'Orden 5 – Lumiose City (Clemont)', level: 38 },
-      { label: 'Orden 6 – Laverre City (Valerie)', level: 42 },
-      { label: 'Orden 7 – Anistar City (Olympia)', level: 48 },
-      { label: 'Orden 8 – Snowbelle City (Wulfric)', level: 51 },
-      { label: 'Elite Four 1 – Malva', level: 55 },
-      { label: 'Elite Four 2 – Siebold', level: 56 },
-      { label: 'Elite Four 3 – Wikstrom', level: 57 },
-      { label: 'Elite Four 4 – Drasna', level: 59 },
-      { label: 'Champion – Diantha', level: 65 },
+      english(1, 'Santalune City', 'Viola', 12),
+      english(2, 'Cyllage City', 'Grant', 25),
+      english(3, 'Shalour City', 'Korrina', 30),
+      english(4, 'Coumarine City', 'Ramos', 34),
+      english(5, 'Lumiose City', 'Clemont', 38),
+      english(6, 'Laverre City', 'Valerie', 42),
+      english(7, 'Anistar City', 'Olympia', 48),
+      english(8, 'Snowbelle City', 'Wulfric', 51),
+      ...['Malva', 'Siebold', 'Wikstrom', 'Drasna'].map((name, i) => elite(i + 1, [name, name], [55, 56, 57, 59][i])),
+      champ(['Diantha', 'Diantha'], 65),
     ],
   },
 ]
@@ -314,8 +345,7 @@ export function versionGroupFor(challenge: { game: string; level_cap_preset: str
   return preset?.versionGroup ?? FALLBACK_VERSION_GROUP
 }
 
-/** Eintrag in der eingestellten Sprache (Orte bleiben, wie sie in der Vorlage stehen) */
-export function capLabel(label: string) {
-  if (getLang() !== 'en') return label
-  return label.replace(/^Orden (\d)/, 'Badge $1').replace('(optionale Reihenfolge)', '(any order)').replace(' Ersatz', ' replacement')
+/** Eintrag in der eingestellten Sprache */
+export function capLabel(cap: LevelCap) {
+  return getLang() === 'en' ? cap.labelEn : cap.label
 }
