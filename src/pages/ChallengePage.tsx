@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { ChevronLeft, ChevronRight, Eye, Flag, Lock, Plus, Radio } from 'lucide-react'
+import { AreasPanel } from '@/components/challenge/AreasPanel'
 import { Board } from '@/components/challenge/Board'
 import { DexPanel } from '@/components/challenge/DexPanel'
 import { EndRunDialog } from '@/components/challenge/EndRunDialog'
@@ -22,6 +23,7 @@ import { useSessionUserId } from '@/hooks/useSession'
 import { useSpecies } from '@/hooks/useSpecies'
 import { linkProps } from '@/lib/router'
 import { useT } from '@/lib/i18n'
+import type { EncounterKind } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 // Der Schadensrechner (mit den Daten aller Generationen) wird erst im Calc-Tab geladen
@@ -29,6 +31,7 @@ const CalcPanel = lazy(() => import('@/components/challenge/CalcPanel'))
 
 const TABS = [
   { id: 'routen', label: 'Routen' },
+  { id: 'gebiete', label: 'Gebiete' },
   { id: 'teams', label: 'Teams' },
   { id: 'pokedex', label: 'Pokédex' },
   { id: 'calc', label: 'Calc' },
@@ -51,6 +54,11 @@ export function ChallengePage({ slug }: { slug: string }) {
   const [run, setRun] = useState<number | null>(null)
   const [tab, setTab] = useState<TabId>(readTab)
   const [logOpen, setLogOpen] = useState(false)
+  const [logPreset, setLogPreset] = useState<{ route: string; kind: EncounterKind } | null>(null)
+  const openLog = (preset: { route: string; kind: EncounterKind } | null = null) => {
+    setLogPreset(preset)
+    setLogOpen(true)
+  }
   const [endOpen, setEndOpen] = useState(false)
   const state = useChallenge(slug, run, userId)
   const data = state.status === 'ready' ? state.data : null
@@ -167,7 +175,7 @@ export function ChallengePage({ slug }: { slug: string }) {
                 <Flag /> {t('Run beenden')}
               </Button>
               <Magnetic className="block sm:inline-block">
-                <Button size="lg" className="w-full" onClick={() => setLogOpen(true)}>
+                <Button size="lg" className="w-full" onClick={() => openLog()}>
                   <Plus /> {t('Begegnung eintragen')}
                 </Button>
               </Magnetic>
@@ -204,7 +212,8 @@ export function ChallengePage({ slug }: { slug: string }) {
           exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
         >
-          {tab === 'routen' && <Board data={d} species={species} lookups={lookups} onLog={() => setLogOpen(true)} />}
+          {tab === 'routen' && <Board data={d} species={species} lookups={lookups} onLog={() => openLog()} />}
+          {tab === 'gebiete' && <AreasPanel data={d} onLog={openLog} />}
           {tab === 'teams' && <TeamsPanel data={d} species={species} lookups={lookups} onChanged={state.refresh} />}
           {tab === 'pokedex' && <DexPanel data={d} species={species} />}
           {tab === 'calc' && (
@@ -221,7 +230,7 @@ export function ChallengePage({ slug }: { slug: string }) {
 
       {d.canWrite && (
         <>
-          <LogEncounterDialog open={logOpen} onOpenChange={setLogOpen} data={d} species={species} />
+          <LogEncounterDialog open={logOpen} onOpenChange={setLogOpen} data={d} species={species} preset={logPreset} />
           <EndRunDialog open={endOpen} onOpenChange={setEndOpen} data={d} />
         </>
       )}

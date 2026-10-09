@@ -39,11 +39,14 @@ export function LogEncounterDialog({
   onOpenChange,
   data,
   species,
+  preset,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   data: ChallengeData
   species: SpeciesIndex | null
+  /** Vorausgefüllte Route und Art, z. B. aus der Liste der offenen Gebiete */
+  preset?: { route: string; kind: EncounterKind } | null
 }) {
   const t = useT()
   return (
@@ -57,17 +60,27 @@ export function LogEncounterDialog({
               : t('Alle Pokémon dieser Route bilden einen Soul-Link. Stirbt eins, sterben alle.')}
           </DialogDescription>
         </DialogHeader>
-        {open && (species ? <LogForm data={data} species={species} close={() => onOpenChange(false)} /> : <Pokeball className="py-10" />)}
+        {open && (species ? <LogForm data={data} species={species} preset={preset ?? null} close={() => onOpenChange(false)} /> : <Pokeball className="py-10" />)}
       </DialogContent>
     </Dialog>
   )
 }
 
-function LogForm({ data, species, close }: { data: ChallengeData; species: SpeciesIndex; close: () => void }) {
+function LogForm({
+  data,
+  species,
+  preset,
+  close,
+}: {
+  data: ChallengeData
+  species: SpeciesIndex
+  preset: { route: string; kind: EncounterKind } | null
+  close: () => void
+}) {
   const t = useT()
   const listId = useId()
-  const [routeName, setRouteName] = useState('')
-  const [kind, setKind] = useState<EncounterKind>('wild')
+  const [routeName, setRouteName] = useState(preset?.route ?? '')
+  const [kind, setKind] = useState<EncounterKind>(preset?.kind ?? 'wild')
   const [entries, setEntries] = useState(() => freshEntries(data))
   const [busy, setBusy] = useState(false)
 
@@ -148,7 +161,7 @@ function LogForm({ data, species, close }: { data: ChallengeData; species: Speci
             placeholder="Route 201"
             required
             maxLength={60}
-            autoFocus
+            autoFocus={!preset}
           />
           <datalist id={listId}>
             {data.routes.map((r) => (

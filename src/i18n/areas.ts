@@ -1,0 +1,25 @@
+// Englische Texte: Tab „Gebiete“ (offene Gebiete pro Run)
+export default {
+  Gebiete: 'Areas',
+  'Gebiete erledigt': 'Areas done',
+  'Statics & Geschenke erledigt': 'Statics & gifts done',
+  'Art der Begegnung': 'Encounter type',
+  Filter: 'Filter',
+  Offen: 'Open',
+  Alle: 'All',
+  'Gebiet suchen …': 'Search area …',
+  'Gebiet suchen': 'Search area',
+  'Kein Gebiet passt zur Suche.': 'No area matches your search.',
+  'Alles abgehakt: Hier ist kein Gebiet mehr offen.': 'All done: no area left open here.',
+  'Diese Routen passen zu keinem Gebiet des Spiels und zählen hier nicht mit:': 'These routes match no area of the game and are not counted here:',
+  'Gebiete laut PokeAPI für das Originalspiel. Ein Randomizer tauscht die Pokémon, nicht die Orte.':
+    'Areas from PokeAPI for the original game. A randomizer swaps the Pokémon, not the places.',
+  'Für dieses Spiel gibt es noch keine Gebietsliste.': 'There is no area list for this game yet.',
+  erledigt: 'done',
+  'fehlt noch: {names}': 'still missing: {names}',
+  '{area} eintragen': 'Log {area}',
+  Eintragen: 'Log',
+  gefangen: 'caught',
+  verpasst: 'missed',
+  offen: 'open',
+}

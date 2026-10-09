@@ -63,6 +63,7 @@ Gerät verbinden** selbst einen neuen Link.
 | Soul-Link verfallen | Hat nicht jeder auf einer Route etwas gefangen: in der Routen-Zeile **Verfallen lassen**. Die Fehlenden gelten als „verpasst“ (zählt und hakt die Route ab), die Route wird ausgeblendet (**Verfallene Routen zeigen** blendet sie wieder ein) |
 | Level-Cap | im Kopf der Challenge mit − und + zum vorherigen bzw. nächsten Cap des Spiels; ein neuer Run beginnt wieder beim ersten. Das Spiel wird am Namen erkannt oder unter **Einstellungen → Spielregeln** gewählt |
 | Dupes | Suche im Tab **Routen** findet ganze Entwicklungsreihen und sagt, ob die Reihe in diesem Run schon gefangen wurde; beim Eintragen warnt der Dialog. Gilt für alle Spieler zusammen, abschaltbar unter **Spielregeln** |
+| Offene Gebiete | Tab **Gebiete**: alle Orte des Spiels mit wilden Begegnungen bzw. Statics und Geschenken, wer dort im Run noch fehlt (Punkte je Spieler: gefangen, verpasst, offen), Fortschritt, Suche. **+** öffnet „Begegnung eintragen“ mit dem Ort vorausgefüllt. Routen werden über den deutschen oder englischen Namen zugeordnet |
 | Pokédex | Tab **Pokédex**: gegnerisches oder eigenes Pokémon nachschlagen. Typen, Schwächen, Basiswerte, Attacken per Level der gespielten Edition (über dem Level-Cap abgeblendet), wie das eigene Team dagegen steht, Entwicklungen mit Bedingungen, Link ins PokéWiki |
 | Calc | Tab **Calc**: Schadensrechner wie im Showdown-Calc (Engine `@smogon/calc`) mit der Generation eures Spiels. Links ein eigenes Pokémon (Level, Wesen, IVs/EVs, Fähigkeit, Item, Attacken; bleibt auf dem Gerät gespeichert), rechts der Gegner. Für Randomizer lassen sich Typen und Basiswerte überschreiben. Ergebnis in beide Richtungen: Schaden in % und KP, KO-Chance, wer schneller ist |
 | Sprache | oben rechts **DE/EN**; beim ersten Besuch nach Browsersprache. Pokémon-, Attacken- und Typnamen wechseln mit, eingetragene Daten (Routen, Namen) bleiben |
@@ -331,9 +332,11 @@ supabase/
 tools/
   generate_species.py    Stammdaten aus PokeAPI
   generate_dex.py        Pokédex-Daten pro Edition (public/dex/) aus PokeAPI
+  generate_areas.py      Gebietslisten pro Edition (public/areas/) aus PokeAPI
   migration/             Import eines Bot-Runs (mit Testdaten im Bot-Format)
 data/species.json        Stammdaten als JSON
 public/dex/              Attacken, Werte, Typen, Entwicklungen pro Edition (generiert)
+public/areas/            Orte mit Begegnungen pro Edition (generiert)
 src/data/levelCaps.ts    Level-Caps pro Spiel (aus dem Discord-Bot)
 scripts/test-db.sh       Datenbank-Tests
 .github/workflows/       CI und Veröffentlichung auf GitHub Pages
