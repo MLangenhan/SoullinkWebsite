@@ -332,6 +332,9 @@ ohne Zugriff, Paar-Modus (nur der Partner stirbt mit), Basis-Pfad wie auf GitHub
   (`src/lib/areas.ts`) ordnet die Routen der Challenge über einen normalisierten Namen zu und wertet nur
   vorhandene Daten aus: Ein Spieler hat einen Ort erledigt, wenn er dort ein Pokémon der Art eingetragen oder die
   Begegnung verpasst hat (`encounter_missed` mit `kind`). Keine Migration nötig.
+- **Routennamen DE/EN**: `routes.name` bleibt, wie eingetragen (auch vom Bot). `src/lib/routeNames.ts` übersetzt
+  über die Gebietsliste (`useLookups` liefert die Namen schon in der eingestellten Sprache) und findet beim Eintragen
+  die bestehende Route auch über den Namen in der anderen Sprache, damit keine doppelten Routen entstehen.
 
 ## Sprachen
 

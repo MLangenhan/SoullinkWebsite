@@ -9,6 +9,7 @@ import type { ChallengeData } from '@/hooks/useChallenge'
 import { DupeWarning } from '@/components/challenge/DupeWarning'
 import { appendEvent, changeTeam, createRoute } from '@/lib/actions'
 import { autoStatus } from '@/lib/links'
+import { useRouteNames } from '@/lib/routeNames'
 import { speciesName } from '@/lib/describe'
 import { useT } from '@/lib/i18n'
 import type { SpeciesIndex } from '@/lib/species'
@@ -86,7 +87,9 @@ function LogForm({
 
   // Gibt es die Route schon, zeigen wir, wer dort (wild) bereits eingetragen ist; nur die Fehlenden
   // werden ergänzt. Den passenden Soul-Link (alle oder Paar) wählt die Datenbank selbst.
-  const existingRoute = data.routes.find((r) => r.name.trim().toLowerCase() === routeName.trim().toLowerCase())
+  const routeNames = useRouteNames(data.challenge)
+  // Auch über die andere Sprache: „Azalea Town“ trägt in die bestehende Route „Azalea City“ ein
+  const existingRoute = routeNames.find(data.routes, routeName)
   const existing = new Map(
     kind === 'wild' && existingRoute
       ? data.encounters
@@ -109,7 +112,7 @@ function LogForm({
       // Team oder Box: Team nur, wenn der Soul-Link damit vollständig ist und alle Platz haben
       const caught = open.filter((p) => entries[p.id].speciesId !== null && !entries[p.id].missed).map((p) => p.id)
       const plan = autoStatus(data.players, data.encounters, existingRoute?.id ?? null, kind, caught)
-      const route = await createRoute(data.challenge.id, routeName)
+      const route = await createRoute(data.challenge.id, existingRoute?.name ?? routeName)
       for (const player of open) {
         const entry = entries[player.id]
         if (entry.missed) {
@@ -139,8 +142,8 @@ function LogForm({
       }
       toast(
         filled.length === 1
-          ? t('{route}: 1 Eintrag gespeichert', { route: route.name })
-          : t('{route}: {n} Einträge gespeichert', { route: route.name, n: filled.length }),
+          ? t('{route}: 1 Eintrag gespeichert', { route: routeNames.display(route.name) })
+          : t('{route}: {n} Einträge gespeichert', { route: routeNames.display(route.name), n: filled.length }),
       )
       close()
     } catch (error) {
@@ -164,8 +167,9 @@ function LogForm({
             autoFocus={!preset}
           />
           <datalist id={listId}>
-            {data.routes.map((r) => (
-              <option key={r.id} value={r.name} />
+            {/* Schon benutzte Routen zuerst, dann alle Orte des Spiels (feste Namen, übersetzbar) */}
+            {[...new Set([...data.routes.map((r) => routeNames.display(r.name)), ...routeNames.suggestions])].map((name) => (
+              <option key={name} value={name} />
             ))}
           </datalist>
         </Field>

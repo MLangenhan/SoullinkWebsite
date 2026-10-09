@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useRouteNames } from '@/lib/routeNames'
 import { db } from '@/lib/supabase'
 import type {
   Challenge,
@@ -148,10 +149,12 @@ export function useChallenge(slug: string, run: number | null, userId: string | 
 
 /** Hilfsfunktionen auf den geladenen Daten */
 export function useLookups(data: ChallengeData | null) {
+  const routeNames = useRouteNames(data?.challenge)
   return useMemo(() => {
     const members = new Map((data?.members ?? []).map((m) => [m.id, m]))
-    const routes = new Map((data?.routes ?? []).map((r) => [r.id, r]))
+    // Routennamen in der eingestellten Sprache (Orte des Spiels werden übersetzt)
+    const routes = new Map((data?.routes ?? []).map((r) => [r.id, { ...r, name: routeNames.display(r.name) }]))
     const encounters = new Map((data?.encounters ?? []).map((e) => [e.encounter_id, e]))
     return { members, routes, encounters }
-  }, [data])
+  }, [data, routeNames])
 }

@@ -28,9 +28,10 @@ export function loadAreas(versionGroup: string): Promise<AreaData> {
   return promise
 }
 
-export function useAreas(versionGroup: string): AreaData | null | 'error' {
+export function useAreas(versionGroup: string | null): AreaData | null | 'error' {
   const [state, setState] = useState<{ key: string; data: AreaData | 'error' } | null>(null)
   useEffect(() => {
+    if (!versionGroup) return
     let active = true
     loadAreas(versionGroup)
       .then((data) => active && setState({ key: versionGroup, data }))

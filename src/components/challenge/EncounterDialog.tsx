@@ -270,7 +270,7 @@ function EncounterBody({
                     <option value="">{t('Unbekannt')}</option>
                     {data.routes.map((r) => (
                       <option key={r.id} value={r.id}>
-                        {r.name}
+                        {lookups.routes.get(r.id)?.name ?? r.name}
                       </option>
                     ))}
                   </Select>
