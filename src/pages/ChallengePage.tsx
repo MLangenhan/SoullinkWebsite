@@ -162,12 +162,12 @@ export function ChallengePage({ slug }: { slug: string }) {
           </div>
 
           {d.canWrite && isCurrent && (
-            <div className="flex flex-wrap gap-3">
+            <div className="flex w-full flex-col-reverse gap-3 sm:w-auto sm:flex-row">
               <Button variant="outline" size="lg" onClick={() => setEndOpen(true)}>
                 <Flag /> {t('Run beenden')}
               </Button>
-              <Magnetic>
-                <Button size="lg" onClick={() => setLogOpen(true)}>
+              <Magnetic className="block sm:inline-block">
+                <Button size="lg" className="w-full" onClick={() => setLogOpen(true)}>
                   <Plus /> {t('Begegnung eintragen')}
                 </Button>
               </Magnetic>
@@ -176,7 +176,7 @@ export function ChallengePage({ slug }: { slug: string }) {
         </div>
       </header>
 
-      <nav className="sticky top-0 z-30 -mx-4 mb-8 overflow-x-auto border-b bg-background/85 px-4 backdrop-blur-md md:-mx-8 md:px-8" aria-label={t('Bereiche')}>
+      <nav className="sticky top-0 z-30 -mx-4 mb-8 overflow-x-auto border-b bg-background/85 px-4 backdrop-blur-md [scrollbar-width:none] max-md:[mask-image:linear-gradient(to_right,transparent,black_1rem,black_calc(100%-2.5rem),transparent)] md:-mx-8 md:px-8" aria-label={t('Bereiche')}>
         <ul className="flex gap-1">
           {tabs.map((entry) => (
             <li key={entry.id}>

@@ -4,7 +4,7 @@ import { useT } from '@/lib/i18n'
 export function Setup() {
   const t = useT()
   return (
-    <main className="mx-auto flex min-h-screen max-w-2xl flex-col justify-center gap-6 px-4 pt-24">
+    <main className="mx-auto flex min-h-dvh max-w-2xl flex-col justify-center gap-6 px-4 pt-24">
       <p className="label text-primary">{t('Einrichtung')}</p>
       <h1 className="font-display tracking-tight text-5xl font-extrabold">{t('Supabase fehlt noch')}</h1>
       <p className="text-muted-foreground">

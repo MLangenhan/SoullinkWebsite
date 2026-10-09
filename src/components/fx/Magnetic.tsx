@@ -2,7 +2,7 @@ import { useRef, type ReactNode } from 'react'
 import { motion, useMotionValue, useReducedMotion, useSpring } from 'motion/react'
 
 /** Element, das sich leicht zum Mauszeiger hinzieht. */
-export function Magnetic({ children, strength = 0.35 }: { children: ReactNode; strength?: number }) {
+export function Magnetic({ children, strength = 0.35, className = 'inline-block' }: { children: ReactNode; strength?: number; className?: string }) {
   const ref = useRef<HTMLDivElement>(null)
   const reduce = useReducedMotion()
   const x = useSpring(useMotionValue(0), { stiffness: 220, damping: 16, mass: 0.4 })
@@ -12,7 +12,7 @@ export function Magnetic({ children, strength = 0.35 }: { children: ReactNode; s
     <motion.div
       ref={ref}
       style={{ x, y }}
-      className="inline-block"
+      className={className}
       onPointerMove={(e) => {
         if (reduce || e.pointerType !== 'mouse' || !ref.current) return
         const r = ref.current.getBoundingClientRect()

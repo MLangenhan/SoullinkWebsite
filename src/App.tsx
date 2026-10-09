@@ -20,10 +20,30 @@ function ScrollProgress() {
   return <motion.div style={{ scaleX }} className="fixed inset-x-0 top-0 z-[60] h-0.5 origin-left bg-primary" aria-hidden />
 }
 
+/** Für Tastatur: direkt zum Inhalt springen, ohne den Hash der Adresse anzufassen (Einladungslinks tragen dort ihr Geheimnis) */
+function SkipLink() {
+  const t = useT()
+  return (
+    <a
+      href="#inhalt"
+      onClick={(e) => {
+        e.preventDefault()
+        const main = document.querySelector('main')
+        if (!main) return
+        main.setAttribute('tabindex', '-1')
+        main.focus()
+      }}
+      className="fixed top-3 left-3 z-[90] -translate-y-24 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-transform focus:translate-y-0"
+    >
+      {t('Zum Inhalt springen')}
+    </a>
+  )
+}
+
 function NotFound() {
   const t = useT()
   return (
-    <main className="mx-auto flex min-h-[70vh] max-w-xl flex-col items-center justify-center gap-4 px-4 text-center">
+    <main className="mx-auto flex min-h-[70dvh] max-w-xl flex-col items-center justify-center gap-4 px-4 text-center">
       <p className="label text-primary">404</p>
       <h1 className="font-display tracking-tight text-5xl font-extrabold">{t('Hier ist nur hohes Gras')}</h1>
       <a {...linkProps('/')} className="text-primary underline-offset-4 hover:underline">
@@ -40,6 +60,7 @@ export default function App() {
   return (
     <ReactLenis root options={{ lerp: 0.1, smoothWheel: !reduce }}>
       <MotionConfig reducedMotion="user">
+        <SkipLink />
         <ScrollProgress />
         <Nav />
         {!supabase ? (

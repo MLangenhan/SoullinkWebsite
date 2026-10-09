@@ -641,9 +641,9 @@ function PcBox({
         isOver && fromTeam ? 'border-box' : 'border-box/25',
       )}
     >
-      <header className="flex items-center justify-between bg-box/90 px-4 py-2.5 text-white">
+      <header className="flex items-center justify-between border-b border-box/15 bg-box/[0.09] px-4 py-2.5 text-box">
         <h3 className="font-display tracking-tight text-xl font-extrabold">{t('Box')}</h3>
-        <span className="label text-[0.65rem] text-white/85">{t('{count} Pokémon', { count: box.length })}</span>
+        <span className="label text-[0.65rem] text-box/75">{t('{count} Pokémon', { count: box.length })}</span>
       </header>
       <div
         className="grid grid-cols-6 gap-1.5 p-3"
