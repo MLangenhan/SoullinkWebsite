@@ -13,7 +13,8 @@ import { Field, Input, Select } from '@/components/ui/input'
 import type { ChallengeData } from '@/hooks/useChallenge'
 import { appendEvent } from '@/lib/actions'
 import { formatTime, speciesName, type Lookups } from '@/lib/describe'
-import type { SpeciesIndex } from '@/lib/species'
+import { useT } from '@/lib/i18n'
+import { speciesLabel, type SpeciesIndex } from '@/lib/species'
 import { toast, toastError } from '@/lib/toast'
 import type { Encounter } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -63,6 +64,7 @@ function EncounterBody({
   lookups: Lookups
   close: () => void
 }) {
+  const t = useT()
   const [busy, setBusy] = useState(false)
   const [deathOpen, setDeathOpen] = useState(false)
   const [correcting, setCorrecting] = useState(false)
@@ -77,8 +79,8 @@ function EncounterBody({
   // Falsches Pokémon eingetragen? Korrigieren geht auch bei toten Pokémon, aber nur im laufenden Run
   const correctable = data.canWrite && encounter.run_number === data.stats.current_run
   const name = speciesName(species, encounter.species_id)
-  const owner = lookups.members.get(encounter.member_id)?.display_name ?? 'Unbekannt'
-  const route = lookups.routes.get(encounter.route_id)?.name ?? 'Route'
+  const owner = lookups.members.get(encounter.member_id)?.display_name ?? t('Unbekannt')
+  const route = lookups.routes.get(encounter.route_id)?.name ?? t('Route')
   const chain = species?.chain(encounter.species_id).filter((s) => s.id !== encounter.species_id) ?? []
   const partners = data.encounters.filter((e) => e.link_id === encounter.link_id && e.encounter_id !== encounter.encounter_id)
 
@@ -104,7 +106,7 @@ function EncounterBody({
             <DialogTitle className="font-display tracking-tight text-4xl font-extrabold">{encounter.nickname ?? name}</DialogTitle>
             <DialogDescription className="mt-1">
               {owner} · {route}
-              {encounter.kind === 'static' && ' · Static'}
+              {encounter.kind === 'static' && ` · ${t('Static')}`}
               {encounter.nickname && ` · ${name}`}
             </DialogDescription>
             <div className="mt-2">
@@ -117,8 +119,8 @@ function EncounterBody({
       {dex && species && dex.types[encounter.species_id] && (
         <div className="grid gap-3 rounded-lg border bg-card/60 p-3">
           <div className="flex flex-wrap items-center gap-1.5">
-            {dex.types[encounter.species_id].map((t) => (
-              <TypeChip key={t} type={t} small />
+            {dex.types[encounter.species_id].map((type) => (
+              <TypeChip key={type} type={type} small />
             ))}
             <a
               href={pokewikiUrl(species.byId.get(encounter.species_id)?.name_de ?? name)}
@@ -135,7 +137,7 @@ function EncounterBody({
 
       {partners.length > 0 && (
         <div className="rounded-lg border bg-card/60 p-3">
-          <p className="label mb-2 text-muted-foreground">Soul-Link mit</p>
+          <p className="label mb-2 text-muted-foreground">{t('Soul-Link mit')}</p>
           <div className="flex flex-wrap gap-4">
             {partners.map((p) => (
               <div key={p.encounter_id} className="flex items-center gap-2 text-sm">
@@ -154,34 +156,36 @@ function EncounterBody({
       {encounter.state === 'dead' && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm">
           <p className="flex items-center gap-2 font-medium text-destructive">
-            <Skull className="size-4" /> Gestorben {encounter.lost_at && `am ${formatTime(encounter.lost_at)}`}
+            <Skull className="size-4" />{' '}
+            {encounter.lost_at ? t('Gestorben am {date}', { date: formatTime(encounter.lost_at) }) : t('Gestorben')}
           </p>
           <p className="mt-1 text-muted-foreground">
             {[
               encounter.death_cause,
-              encounter.death_opponent && `gegen ${encounter.death_opponent}`,
-              encounter.death_level && `Lv. ${encounter.death_level}`,
-              encounter.death_route_id && `auf ${lookups.routes.get(encounter.death_route_id)?.name}`,
+              encounter.death_opponent && t('gegen {opponent}', { opponent: encounter.death_opponent }),
+              encounter.death_level && t('Lv. {level}', { level: encounter.death_level }),
+              encounter.death_route_id && t('auf {route}', { route: lookups.routes.get(encounter.death_route_id)?.name ?? '–' }),
             ]
               .filter(Boolean)
-              .join(' · ') || 'Keine Details eingetragen.'}
+              .join(' · ') || t('Keine Details eingetragen.')}
           </p>
-          {data.canWrite && <p className="mt-2 text-xs text-muted-foreground">Versehen? In der Timeline rückgängig machen.</p>}
+          {data.canWrite && <p className="mt-2 text-xs text-muted-foreground">{t('Versehen? In der Timeline rückgängig machen.')}</p>}
         </div>
       )}
       {encounter.state === 'linked_dead' && (
         <p className="rounded-lg border border-destructive/30 p-3 text-sm text-muted-foreground">
-          Durch den Soul-Link mitgestorben
-          {encounter.lost_with_encounter_id &&
-            ` (mit ${speciesName(species, lookups.encounters.get(encounter.lost_with_encounter_id)?.species_id)})`}
-          .
+          {encounter.lost_with_encounter_id
+            ? t('Durch den Soul-Link mitgestorben (mit {species}).', {
+                species: speciesName(species, lookups.encounters.get(encounter.lost_with_encounter_id)?.species_id),
+              })
+            : t('Durch den Soul-Link mitgestorben.')}
         </p>
       )}
 
       {editable && (
         <div className="grid gap-5">
           <div className="grid gap-2">
-            <p className="label text-muted-foreground">Status</p>
+            <p className="label text-muted-foreground">{t('Status')}</p>
             <div className="grid grid-cols-2 gap-2">
               {(['team', 'box'] as const).map((status) => (
                 <Button
@@ -191,11 +195,11 @@ function EncounterBody({
                   onClick={() =>
                     run(
                       () => appendEvent(data.challenge.id, 'encounter_status_changed', { encounter_id: encounter.encounter_id, status }),
-                      status === 'team' ? `${name} ist jetzt im Team` : `${name} ist jetzt in der Box`,
+                      status === 'team' ? t('{name} ist jetzt im Team', { name }) : t('{name} ist jetzt in der Box', { name }),
                     )
                   }
                 >
-                  {status === 'team' ? 'Ins Team' : 'In die Box'}
+                  {status === 'team' ? t('Ins Team') : t('In die Box')}
                 </Button>
               ))}
             </div>
@@ -203,7 +207,7 @@ function EncounterBody({
 
           {chain.length > 0 && (
             <div className="grid gap-2">
-              <p className="label text-muted-foreground">Entwicklung</p>
+              <p className="label text-muted-foreground">{t('Entwicklung')}</p>
               <div className="flex flex-wrap gap-2">
                 {chain.map((s) => (
                   <motion.button
@@ -214,13 +218,13 @@ function EncounterBody({
                     onClick={() =>
                       run(
                         () => appendEvent(data.challenge.id, 'encounter_evolved', { encounter_id: encounter.encounter_id, species_id: s.id }),
-                        `${name} hat sich zu ${s.name_de} entwickelt!`,
+                        t('{name} hat sich zu {species} entwickelt!', { name, species: speciesLabel(s) }),
                       )
                     }
                     className="flex flex-col items-center rounded-lg border bg-card px-3 py-2 text-sm hover:border-primary/60"
                   >
-                    <Sprite id={s.id} name={s.name_de} size="sm" />
-                    {s.name_de}
+                    <Sprite id={s.id} name={speciesLabel(s)} size="sm" />
+                    {speciesLabel(s)}
                   </motion.button>
                 ))}
               </div>
@@ -229,7 +233,7 @@ function EncounterBody({
 
           {!deathOpen ? (
             <Button variant="outline" className="border-destructive/50 text-destructive hover:bg-destructive/10" onClick={() => setDeathOpen(true)}>
-              <Skull /> Tod eintragen
+              <Skull /> {t('Tod eintragen')}
             </Button>
           ) : (
             <motion.form
@@ -247,23 +251,23 @@ function EncounterBody({
                       opponent: opponent || null,
                       level: level ? Number(level) : null,
                     }),
-                  `${name} ist gestorben. Ruhe in Frieden.`,
+                  t('{name} ist gestorben. Ruhe in Frieden.', { name }),
                 )
               }}
             >
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Ursache">
-                  <Input value={cause} onChange={(e) => setCause(e.target.value)} placeholder="Volltreffer" maxLength={200} />
+                <Field label={t('Ursache')}>
+                  <Input value={cause} onChange={(e) => setCause(e.target.value)} placeholder={t('Volltreffer')} maxLength={200} />
                 </Field>
-                <Field label="Gegner">
-                  <Input value={opponent} onChange={(e) => setOpponent(e.target.value)} placeholder="Arenaleiterin Silvana" maxLength={80} />
+                <Field label={t('Gegner')}>
+                  <Input value={opponent} onChange={(e) => setOpponent(e.target.value)} placeholder={t('Arenaleiterin Silvana')} maxLength={80} />
                 </Field>
-                <Field label="Level">
+                <Field label={t('Level')}>
                   <Input type="number" min={1} max={100} value={level} onChange={(e) => setLevel(e.target.value)} />
                 </Field>
-                <Field label="Todesort">
+                <Field label={t('Todesort')}>
                   <Select value={deathRoute} onChange={(e) => setDeathRoute(e.target.value)}>
-                    <option value="">Unbekannt</option>
+                    <option value="">{t('Unbekannt')}</option>
                     {data.routes.map((r) => (
                       <option key={r.id} value={r.id}>
                         {r.name}
@@ -274,11 +278,13 @@ function EncounterBody({
               </div>
               {partners.length > 0 && (
                 <p className="text-sm text-muted-foreground">
-                  Soul-Link: {partners.map((p) => speciesName(species, p.species_id)).join(', ')} {partners.length === 1 ? 'stirbt' : 'sterben'} mit.
+                  {t(partners.length === 1 ? 'Soul-Link: {names} stirbt mit.' : 'Soul-Link: {names} sterben mit.', {
+                    names: partners.map((p) => speciesName(species, p.species_id)).join(', '),
+                  })}
                 </p>
               )}
               <Button type="submit" variant="destructive" disabled={busy} className={cn(busy && 'opacity-60')}>
-                Tod bestätigen
+                {t('Tod bestätigen')}
               </Button>
             </motion.form>
           )}
@@ -288,11 +294,11 @@ function EncounterBody({
         <div className="grid gap-2 border-t pt-4">
           {!correcting ? (
             <Button variant="ghost" className="w-fit text-muted-foreground" onClick={() => setCorrecting(true)}>
-              <PencilLine /> Falsches Pokémon? Ändern
+              <PencilLine /> {t('Falsches Pokémon? Ändern')}
             </Button>
           ) : (
             <>
-              <p className="label text-muted-foreground">Richtiges Pokémon</p>
+              <p className="label text-muted-foreground">{t('Richtiges Pokémon')}</p>
               <SpeciesPicker
                 index={species}
                 value={null}
@@ -301,7 +307,7 @@ function EncounterBody({
                   if (id === null) return
                   void run(
                     () => appendEvent(data.challenge.id, 'encounter_corrected', { encounter_id: encounter.encounter_id, species_id: id }),
-                    `Geändert zu ${species.byId.get(id)?.name_de ?? 'Pokémon'} (rückgängig über die Timeline)`,
+                    t('Geändert zu {species} (rückgängig über die Timeline)', { species: speciesName(species, id) }),
                   )
                 }}
               />

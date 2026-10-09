@@ -1,3 +1,5 @@
+import { getLang } from '@/lib/i18n'
+
 // Level-Caps pro Spiel, übernommen aus dem Discord-Bot. Einträge ohne Level sind Zwischenüberschriften.
 // versionGroup: welche Attacken- und Entwicklungsdaten (public/dex/<versionGroup>.json) dazu passen.
 
@@ -310,4 +312,10 @@ export function versionGroupFor(challenge: { game: string; level_cap_preset: str
   const preset =
     challenge.level_cap_preset === 'none' ? detectPreset(challenge.game) : presetFor(challenge)
   return preset?.versionGroup ?? FALLBACK_VERSION_GROUP
+}
+
+/** Eintrag in der eingestellten Sprache (Orte bleiben, wie sie in der Vorlage stehen) */
+export function capLabel(label: string) {
+  if (getLang() !== 'en') return label
+  return label.replace(/^Orden (\d)/, 'Badge $1').replace('(optionale Reihenfolge)', '(any order)').replace(' Ersatz', ' replacement')
 }

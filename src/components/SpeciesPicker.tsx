@@ -3,7 +3,8 @@ import { AnimatePresence, motion } from 'motion/react'
 import { X } from 'lucide-react'
 import { Sprite } from '@/components/Sprite'
 import { Input } from '@/components/ui/input'
-import type { SpeciesIndex } from '@/lib/species'
+import { useT } from '@/lib/i18n'
+import { speciesLabel, type SpeciesIndex } from '@/lib/species'
 import { cn } from '@/lib/utils'
 
 /** Suchfeld für Pokémon (deutscher oder englischer Name, Dex-Nummer) mit Sprite-Vorschau. */
@@ -11,7 +12,7 @@ export function SpeciesPicker({
   index,
   value,
   onChange,
-  placeholder = 'Pokémon suchen …',
+  placeholder,
   restrictTo,
   autoFocus,
 }: {
@@ -23,6 +24,7 @@ export function SpeciesPicker({
   restrictTo?: number[]
   autoFocus?: boolean
 }) {
+  const t = useT()
   const listId = useId()
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
@@ -47,18 +49,18 @@ export function SpeciesPicker({
   if (selected) {
     return (
       <div className="flex h-14 items-center gap-3 rounded-md border bg-card px-2">
-        <Sprite id={selected.id} name={selected.name_de} size="sm" />
+        <Sprite id={selected.id} name={speciesLabel(selected)} size="sm" />
         <div className="min-w-0 flex-1">
-          <div className="truncate font-medium">{selected.name_de}</div>
+          <div className="truncate font-medium">{speciesLabel(selected)}</div>
           <div className="label text-[0.65rem] text-muted-foreground">
-            #{String(selected.id).padStart(4, '0')} · {selected.name_en}
+            #{String(selected.id).padStart(4, '0')} · {speciesLabel(selected) === selected.name_de ? selected.name_en : selected.name_de}
           </div>
         </div>
         <button
           type="button"
           onClick={() => onChange(null)}
           className="rounded p-1 text-muted-foreground hover:text-foreground"
-          aria-label={`${selected.name_de} entfernen`}
+          aria-label={t('{name} entfernen', { name: speciesLabel(selected) })}
         >
           <X className="size-4" />
         </button>
@@ -71,7 +73,7 @@ export function SpeciesPicker({
       <Input
         value={query}
         autoFocus={autoFocus}
-        placeholder={placeholder}
+        placeholder={placeholder ?? t('Pokémon suchen …')}
         role="combobox"
         aria-expanded={open && results.length > 0}
         aria-controls={listId}
@@ -123,8 +125,8 @@ export function SpeciesPicker({
                   i === active && 'bg-secondary',
                 )}
               >
-                <Sprite id={s.id} name={s.name_de} size="sm" idle={false} />
-                <span className="flex-1 truncate">{s.name_de}</span>
+                <Sprite id={s.id} name={speciesLabel(s)} size="sm" idle={false} />
+                <span className="flex-1 truncate">{speciesLabel(s)}</span>
                 <span className="label text-[0.65rem] text-muted-foreground">#{s.id}</span>
               </li>
             ))}

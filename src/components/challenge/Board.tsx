@@ -6,7 +6,8 @@ import { EncounterDialog } from '@/components/challenge/EncounterDialog'
 import { StateChip } from '@/components/challenge/StateChip'
 import type { ChallengeData } from '@/hooks/useChallenge'
 import { speciesName, type Lookups } from '@/lib/describe'
-import { normalize, type SpeciesIndex } from '@/lib/species'
+import { useT } from '@/lib/i18n'
+import { normalize, speciesLabel, type SpeciesIndex } from '@/lib/species'
 import type { Encounter, Member } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { Ban, Check, CopyX, Eye, EyeOff, Plus, Search, X } from 'lucide-react'
@@ -83,13 +84,14 @@ function Cell({
   /** Nur gesetzt, wenn hier nachgetragen werden darf (Spieler, laufender Run) */
   onAdd?: () => void
 }) {
+  const t = useT()
   if (!encounter && missed) {
     return (
       <div className="flex flex-col items-center justify-center gap-1 py-3 text-destructive/70">
         <span className="flex size-16 items-center justify-center rounded-full border-2 border-dashed border-current/40">
           <Ban className="size-5" />
         </span>
-        <span className="label text-[0.6rem]">Verpasst</span>
+        <span className="label text-[0.6rem]">{t('Verpasst')}</span>
       </div>
     )
   }
@@ -103,7 +105,7 @@ function Cell({
         <span className="flex size-16 items-center justify-center rounded-full border-2 border-dashed border-current/40 transition-transform group-hover:scale-105">
           <Plus className="size-5" />
         </span>
-        <span className="label text-[0.6rem]">Nachtragen</span>
+        <span className="label text-[0.6rem]">{t('Nachtragen')}</span>
       </button>
     )
   }
@@ -111,7 +113,7 @@ function Cell({
     return (
       <div className="flex flex-col items-center justify-center gap-1 py-3 text-muted-foreground/50">
         <span className="size-16" />
-        <span className="label text-[0.6rem]">keine</span>
+        <span className="label text-[0.6rem]">{t('keine')}</span>
       </div>
     )
   }
@@ -146,6 +148,7 @@ export function Board({
   lookups: Lookups
   onLog: () => void
 }) {
+  const t = useT()
   const [selected, setSelected] = useState<Encounter | null>(null)
   const [adding, setAdding] = useState<AddTarget | null>(null)
   const [query, setQuery] = useState('')
@@ -259,7 +262,7 @@ export function Board({
       for (const memberId of rowOpen(row)) {
         await appendEvent(data.challenge.id, 'encounter_missed', { member_id: memberId, route_id: row.routeId, kind: row.kind })
       }
-      toast(`${lookups.routes.get(row.routeId)?.name ?? 'Route'}: Soul-Link verfallen, Route ausgeblendet`)
+      toast(t('{route}: Soul-Link verfallen, Route ausgeblendet', { route: lookups.routes.get(row.routeId)?.name ?? t('Route') }))
     } catch (error) {
       toastError(error)
     }
@@ -276,10 +279,10 @@ export function Board({
             <Sprite key={id} id={id} name="" size="md" />
           ))}
         </div>
-        <p className="text-lg">Noch keine Begegnungen in Run {data.shownRun}.</p>
+        <p className="text-lg">{t('Noch keine Begegnungen in Run {run}.', { run: data.shownRun })}</p>
         {data.canWrite && data.shownRun === data.stats.current_run && (
           <button onClick={onLog} className="text-primary underline-offset-4 hover:underline">
-            Erste Begegnung eintragen
+            {t('Erste Begegnung eintragen')}
           </button>
         )}
       </div>
@@ -297,12 +300,12 @@ export function Board({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === 'Escape' && setQuery('')}
-            placeholder="Pokémon oder Route suchen …"
-            aria-label="Pokémon oder Route suchen"
+            placeholder={t('Pokémon oder Route suchen …')}
+            aria-label={t('Pokémon oder Route suchen')}
             className="h-10 w-full rounded-full border bg-card/70 pr-9 pl-9 text-sm shadow-sm outline-none transition-shadow placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/40 [&::-webkit-search-cancel-button]:hidden"
           />
           {query ? (
-            <button type="button" onClick={() => setQuery('')} className="absolute right-3 text-muted-foreground hover:text-foreground" aria-label="Suche leeren">
+            <button type="button" onClick={() => setQuery('')} className="absolute right-3 text-muted-foreground hover:text-foreground" aria-label={t('Suche leeren')}>
               <X className="size-4" />
             </button>
           ) : (
@@ -318,7 +321,8 @@ export function Board({
               exit={{ opacity: 0 }}
               className="label text-[0.65rem] text-muted-foreground"
             >
-              {hits === 1 ? '1 Pokémon' : `${hits} Pokémon`} · {visible.length === 1 ? '1 Route' : `${visible.length} Routen`}
+              {hits === 1 ? t('1 Pokémon') : t('{n} Pokémon', { n: hits })} ·{' '}
+              {visible.length === 1 ? t('1 Route') : t('{n} Routen', { n: visible.length })}
             </motion.span>
           )}
         </AnimatePresence>
@@ -329,7 +333,7 @@ export function Board({
             className="ml-auto flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
           >
             {showFailed ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-            {showFailed ? 'Verfallene Routen ausblenden' : `Verfallene Routen zeigen (${failedCount})`}
+            {showFailed ? t('Verfallene Routen ausblenden') : t('Verfallene Routen zeigen ({n})', { n: failedCount })}
           </button>
         )}
       </div>
@@ -350,17 +354,18 @@ export function Board({
             <span>
               {dupeHits.length ? (
                 <>
-                  <span className="font-medium">Dupe: {dupeLine.name_de}-Reihe schon gefangen</span> –{' '}
+                  <span className="font-medium">{t('Dupe: {name}-Reihe schon gefangen', { name: speciesLabel(dupeLine) })}</span> –{' '}
                   {dupeHits
                     .map(
                       (e) =>
-                        `${e.nickname ?? speciesName(species, e.species_id)} (${lookups.routes.get(e.route_id)?.name ?? 'Route'}, ${lookups.members.get(e.member_id)?.display_name ?? '?'})`,
+                        `${e.nickname ?? speciesName(species, e.species_id)} (${lookups.routes.get(e.route_id)?.name ?? t('Route')}, ${lookups.members.get(e.member_id)?.display_name ?? '?'})`,
                     )
                     .join(', ')}
                 </>
               ) : (
                 <>
-                  <span className="font-medium">{dupeLine.name_de}-Reihe</span> wurde in diesem Run noch nicht gefangen.
+                  <span className="font-medium">{t('{name}-Reihe', { name: speciesLabel(dupeLine) })}</span>{' '}
+                  {t('wurde in diesem Run noch nicht gefangen.')}
                 </>
               )}
             </span>
@@ -369,7 +374,7 @@ export function Board({
       </AnimatePresence>
       <div className="min-w-fit">
         <div className="label grid gap-2 border-b pb-3 text-muted-foreground" style={{ gridTemplateColumns: columns }}>
-          <span>Route</span>
+          <span>{t('Route')}</span>
           {players.map((p: Member) => (
             <span key={p.id} className="flex items-center justify-center gap-2 text-foreground">
               <span className="size-2 rounded-full" style={{ background: p.color ?? 'var(--primary)' }} />
@@ -391,20 +396,20 @@ export function Board({
             >
               <div className="py-3 pr-2">
                 <div className={cn('font-medium', (row.dead || rowFailed(row)) && 'text-muted-foreground', rowFailed(row) && 'line-through')}>
-                  {lookups.routes.get(row.routeId)?.name ?? 'Route'}
+                  {lookups.routes.get(row.routeId)?.name ?? t('Route')}
                 </div>
-                {row.kind === 'static' && <span className="label text-[0.6rem] text-primary">Static</span>}
-                {rowFailed(row) && <span className="label ml-2 text-[0.6rem] text-destructive">verfallen</span>}
+                {row.kind === 'static' && <span className="label text-[0.6rem] text-primary">{t('Static')}</span>}
+                {rowFailed(row) && <span className="label ml-2 text-[0.6rem] text-destructive">{t('verfallen')}</span>}
                 {canAdd && !rowFailed(row) && rowOpen(row).length > 0 && (
                   <div className="mt-1.5">
                     {confirming === row.key ? (
                       <span className="flex flex-wrap items-center gap-2 text-xs">
-                        <span className="text-muted-foreground">Fehlende als verpasst?</span>
+                        <span className="text-muted-foreground">{t('Fehlende als verpasst?')}</span>
                         <button type="button" onClick={() => void expire(row)} className="font-medium text-destructive hover:underline">
-                          Ja
+                          {t('Ja')}
                         </button>
                         <button type="button" onClick={() => setConfirming(null)} className="text-muted-foreground hover:underline">
-                          Nein
+                          {t('Nein')}
                         </button>
                       </span>
                     ) : (
@@ -412,9 +417,9 @@ export function Board({
                         type="button"
                         onClick={() => setConfirming(row.key)}
                         className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-destructive"
-                        title="Nicht alle haben hier etwas gefangen: Soul-Link verfällt, die Route wird ausgeblendet"
+                        title={t('Nicht alle haben hier etwas gefangen: Soul-Link verfällt, die Route wird ausgeblendet')}
                       >
-                        <Ban className="size-3.5" /> Verfallen lassen
+                        <Ban className="size-3.5" /> {t('Verfallen lassen')}
                       </button>
                     )}
                   </div>
@@ -440,7 +445,7 @@ export function Board({
           ))}
         </AnimatePresence>
         {q && shown.length === 0 && (
-          <p className="py-12 text-center text-muted-foreground">Kein Pokémon und keine Route passt zu „{query.trim()}“.</p>
+          <p className="py-12 text-center text-muted-foreground">{t('Kein Pokémon und keine Route passt zu „{query}“.', { query: query.trim() })}</p>
         )}
       </div>
       <AddEncounterDialog target={adding} onOpenChange={(open) => !open && setAdding(null)} data={data} species={species} />

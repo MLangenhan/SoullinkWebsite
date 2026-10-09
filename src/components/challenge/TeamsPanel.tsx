@@ -28,6 +28,7 @@ import { Button } from '@/components/ui/button'
 import type { ChallengeData } from '@/hooks/useChallenge'
 import { changeTeam, undoTeamChange } from '@/lib/actions'
 import { formatTime, speciesName, type Lookups } from '@/lib/describe'
+import { useT } from '@/lib/i18n'
 import type { SpeciesIndex } from '@/lib/species'
 import { EvolutionChain, TypeChip } from '@/components/challenge/DexPanel'
 import { versionGroupFor } from '@/data/levelCaps'
@@ -79,6 +80,7 @@ export function TeamsPanel({
   lookups: Lookups
   onChanged: () => Promise<void>
 }) {
+  const t = useT()
   const players = data.players
   const [memberId, setMemberId] = useState(() => (data.me && data.me.role !== 'viewer' ? data.me.id : players[0]?.id))
   const player = players.find((p) => p.id === memberId) ?? players[0]
@@ -133,7 +135,7 @@ export function TeamsPanel({
 
   if (!player || !arrangement) return null
   const name = (e: Encounter) => e.nickname ?? speciesName(species, e.species_id)
-  const routeName = (e: Encounter) => lookups.routes.get(e.route_id)?.name ?? 'Route'
+  const routeName = (e: Encounter) => lookups.routes.get(e.route_id)?.name ?? t('Route')
   const selected = selectedId ? (lookups.encounters.get(selectedId) ?? null) : null
   const teamCount = arrangement.slots.filter(Boolean).length
   // Soul-Link-Partner in anderem Zustand (nur wenn Angleichen an ist)
@@ -183,7 +185,7 @@ export function TeamsPanel({
   const undo = async (groupId: string) => {
     try {
       await undoTeamChange(data.challenge.id, groupId)
-      toast('Teamwechsel rückgängig gemacht')
+      toast(t('Teamwechsel rückgängig gemacht'))
     } catch (error) {
       toastError(error)
     }
@@ -204,9 +206,9 @@ export function TeamsPanel({
       if (arrangementAfter) setPending(ids)
       const others = effects.filter((e) => e.in.length || e.out.length).map((e) => lookups.members.get(e.memberId)?.display_name)
       if (others.length) {
-        toast(`Team geändert, angeglichen bei ${others.join(', ')}`, 'ok', {
+        toast(t('Team geändert, angeglichen bei {names}', { names: others.join(', ') }), 'ok', {
           duration: 8000,
-          action: { label: 'Rückgängig', run: () => void undo(groupId) },
+          action: { label: t('Rückgängig'), run: () => void undo(groupId) },
         })
       }
     } catch (error) {
@@ -258,14 +260,14 @@ export function TeamsPanel({
                 'flex items-center gap-2 rounded-full border px-3.5 py-2 text-sm transition-colors',
                 mineOnly ? 'border-destructive/40 text-destructive' : 'border-primary/40 text-primary',
               )}
-              title="Schalter oder Shift beim Ablegen: nur das eigene Team ändern"
+              title={t('Schalter oder Shift beim Ablegen: nur das eigene Team ändern')}
             >
               {mineOnly ? <Link2Off className="size-4" /> : <Link2 className="size-4" />}
-              {mineOnly ? 'Nur dieses Team' : 'Teams angleichen'}
+              {mineOnly ? t('Nur dieses Team') : t('Teams angleichen')}
             </button>
           ) : (
             <span className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Link2Off className="size-4" /> Angleichen ist in den Einstellungen aus
+              <Link2Off className="size-4" /> {t('Angleichen ist in den Einstellungen aus')}
             </span>
           )
         )}
@@ -285,14 +287,14 @@ export function TeamsPanel({
         }}
         accessibility={{
           screenReaderInstructions: {
-            draggable: 'Leertaste zum Aufnehmen, Pfeiltasten zum Bewegen, Leertaste zum Ablegen, Escape zum Abbrechen.',
+            draggable: t('Leertaste zum Aufnehmen, Pfeiltasten zum Bewegen, Leertaste zum Ablegen, Escape zum Abbrechen.'),
           },
         }}
       >
         <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-          <section className="soft-card rounded-2xl p-5 md:p-6" aria-label={`Team von ${player.display_name}`} aria-busy={busy}>
+          <section className="soft-card rounded-2xl p-5 md:p-6" aria-label={t('Team von {name}', { name: player.display_name })} aria-busy={busy}>
             <header className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-              <h3 className="font-display tracking-tight text-3xl font-extrabold">Team</h3>
+              <h3 className="font-display tracking-tight text-3xl font-extrabold">{t('Team')}</h3>
               <span className="label text-ok">
                 {teamCount} / {TEAM_SIZE}
               </span>
@@ -368,7 +370,7 @@ export function TeamsPanel({
                 key="impact"
                 preview={preview}
                 syncOn={syncOn}
-                reason={!data.challenge.team_sync ? 'Angleichen ist aus' : mineOnly ? 'Nur dieses Team' : 'Shift gedrückt'}
+                reason={!data.challenge.team_sync ? t('Angleichen ist aus') : mineOnly ? t('Nur dieses Team') : t('Shift gedrückt')}
                 lookups={lookups}
                 name={name}
               />
@@ -387,8 +389,10 @@ export function TeamsPanel({
 
       {editable && (
         <p className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-          <Hand className="size-4 shrink-0" /> Pokémon ziehen: zwischen Team und Box wechseln, auf einen belegten Platz
-          ziehen zum Tauschen. Am Handy kurz gedrückt halten. Shift beim Ablegen ändert nur dieses Team.
+          <Hand className="size-4 shrink-0" />{' '}
+          {t(
+            'Pokémon ziehen: zwischen Team und Box wechseln, auf einen belegten Platz ziehen zum Tauschen. Am Handy kurz gedrückt halten. Shift beim Ablegen ändert nur dieses Team.',
+          )}
         </p>
       )}
 
@@ -414,8 +418,9 @@ function PlayerTabs({
   arrangements: Map<string, Arrangement>
   onSelect: (id: string) => void
 }) {
+  const t = useT()
   return (
-    <div className="-mx-4 overflow-x-auto px-4" role="tablist" aria-label="Spieler">
+    <div className="-mx-4 overflow-x-auto px-4" role="tablist" aria-label={t('Spieler')}>
       <div className="flex min-w-fit gap-2">
         {players.map((p) => {
           const team = arrangements.get(p.id)?.slots.filter((e): e is Encounter => e !== null) ?? []
@@ -472,6 +477,7 @@ function TeamSlot({
   warn: boolean
   onSelect: (id: string) => void
 }) {
+  const t = useT()
   const { setNodeRef: dropRef, isOver } = useDroppable({ id: `slot:${index}`, data: { kind: 'slot', index } satisfies DropData, disabled: !editable })
   const { setNodeRef: dragRef, listeners, attributes } = useDraggable({
     id: encounter ? `team:${encounter.encounter_id}` : `team-empty:${index}`,
@@ -511,7 +517,7 @@ function TeamSlot({
             editable && 'cursor-grab active:cursor-grabbing',
             source && 'opacity-30',
           )}
-          aria-label={`${name} auf Platz ${index + 1}, von ${route}`}
+          aria-label={t('{name} auf Platz {slot}, von {route}', { name, slot: index + 1, route })}
         >
           <Sprite id={encounter.species_id} name={name} state={encounter.state} size="lg" />
           <span className="max-w-full truncate font-medium">{name}</span>
@@ -523,7 +529,7 @@ function TeamSlot({
       ) : (
         <div className="flex size-full flex-col items-center justify-center gap-2 text-muted-foreground/50">
           <span className="size-12 rounded-full border-2 border-dashed border-current" />
-          <span className="label text-[0.6rem]">frei</span>
+          <span className="label text-[0.6rem]">{t('frei')}</span>
         </div>
       )}
       <AnimatePresence>
@@ -534,7 +540,7 @@ function TeamSlot({
             exit={{ opacity: 0, scale: 0.8 }}
             className="label absolute inset-x-0 bottom-2 mx-auto flex w-fit items-center gap-1 rounded-full bg-primary px-2 py-1 text-[0.6rem] text-primary-foreground"
           >
-            <ArrowLeftRight className="size-3" /> Tauschen
+            <ArrowLeftRight className="size-3" /> {t('Tauschen')}
           </motion.span>
         )}
       </AnimatePresence>
@@ -560,9 +566,10 @@ function Origins({
   warn: (e: Encounter | null) => boolean
   onSelect: (id: string) => void
 }) {
+  const t = useT()
   return (
     <div className="mt-6 border-t pt-4">
-      <p className="label mb-2 text-muted-foreground">Herkunft</p>
+      <p className="label mb-2 text-muted-foreground">{t('Herkunft')}</p>
       <ol className="grid gap-0.5">
         {slots.map((e, index) => (
           <li key={index}>
@@ -581,20 +588,20 @@ function Origins({
                 <span className="truncate">
                   <span className="font-medium">{name(e)}</span>
                   {e.caught_species_id !== e.species_id && (
-                    <span className="text-muted-foreground"> · gefangen als {speciesName(species, e.caught_species_id)}</span>
+                    <span className="text-muted-foreground"> · {t('gefangen als {species}', { species: speciesName(species, e.caught_species_id) })}</span>
                   )}
                 </span>
                 <span className="flex items-center gap-1.5 text-muted-foreground">
-                  {warn(e) && <TriangleAlert className="size-3.5 text-highlight" aria-label="nicht angeglichen" />}
+                  {warn(e) && <TriangleAlert className="size-3.5 text-highlight" aria-label={t('nicht angeglichen')} />}
                   {routeName(e)}
-                  {e.kind === 'static' && <span className="label text-[0.55rem] text-primary">Static</span>}
+                  {e.kind === 'static' && <span className="label text-[0.55rem] text-primary">{t('Static')}</span>}
                 </span>
               </motion.button>
             ) : (
               <div className="grid grid-cols-[1.25rem_2rem_minmax(0,1fr)] items-center gap-2 px-2 py-1 text-sm text-muted-foreground/60">
                 <span className="label text-[0.6rem]">{index + 1}</span>
                 <span className="size-2 justify-self-center rounded-full border border-current" />
-                <span>frei</span>
+                <span>{t('frei')}</span>
               </div>
             )}
           </li>
@@ -621,21 +628,22 @@ function PcBox({
   warn: (e: Encounter | null) => boolean
   onSelect: (id: string) => void
 }) {
+  const t = useT()
   const { setNodeRef, isOver } = useDroppable({ id: 'box', data: { kind: 'box' } satisfies DropData, disabled: !editable })
   const cells = Math.max(BOX_CELLS, Math.ceil((box.length + 1) / 6) * 6)
   const fromTeam = dragging?.from === 'team'
   return (
     <section
       ref={setNodeRef}
-      aria-label="Box"
+      aria-label={t('Box')}
       className={cn(
         'overflow-hidden rounded-2xl border-2 bg-box/[0.06] transition-colors',
         isOver && fromTeam ? 'border-box' : 'border-box/25',
       )}
     >
       <header className="flex items-center justify-between bg-box/90 px-4 py-2.5 text-white">
-        <h3 className="font-display tracking-tight text-xl font-extrabold">Box</h3>
-        <span className="label text-[0.65rem] text-white/85">{box.length} Pokémon</span>
+        <h3 className="font-display tracking-tight text-xl font-extrabold">{t('Box')}</h3>
+        <span className="label text-[0.65rem] text-white/85">{t('{count} Pokémon', { count: box.length })}</span>
       </header>
       <div
         className="grid grid-cols-6 gap-1.5 p-3"
@@ -679,6 +687,7 @@ function BoxCell({
   warn: boolean
   onSelect: (id: string) => void
 }) {
+  const t = useT()
   const { setNodeRef: dragRef, listeners, attributes } = useDraggable({
     id: `box:${encounter.encounter_id}`,
     data: { encounter, from: 'box', slot: -1 } satisfies DragData,
@@ -705,7 +714,7 @@ function BoxCell({
       type="button"
       onClick={() => onSelect(encounter.encounter_id)}
       title={name}
-      aria-label={`${name} in der Box`}
+      aria-label={t('{name} in der Box', { name })}
       className={cn(
         'relative flex aspect-square items-center justify-center rounded-lg bg-card/80 outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-primary',
         editable && 'cursor-grab active:cursor-grabbing',
@@ -742,8 +751,9 @@ function Lifted({ encounter, name }: { encounter: Encounter; name: string }) {
 }
 
 function SyncWarning({ className }: { className?: string }) {
+  const t = useT()
   return (
-    <span className={cn('rounded-full bg-highlight p-1 text-foreground shadow', className)} title="Soul-Link-Partner nicht angeglichen">
+    <span className={cn('rounded-full bg-highlight p-1 text-foreground shadow', className)} title={t('Soul-Link-Partner nicht angeglichen')}>
       <TriangleAlert className="size-3" />
     </span>
   )
@@ -763,13 +773,14 @@ function ImpactBar({
   lookups: Lookups
   name: (e: Encounter) => string
 }) {
+  const t = useT()
   const changes = preview.moves.some((m) => m.encounter.state !== m.status)
   const chip = (move: Move) => (
     <span key={move.encounter.encounter_id} className="flex items-center gap-1">
       {move.status === 'team' ? <ArrowUp className="size-3.5 text-ok" /> : <ArrowDown className="size-3.5 text-box" />}
       <Sprite id={move.encounter.species_id} name="" size="xs" idle={false} />
       <span className="hidden sm:inline">{name(move.encounter)}</span>
-      {move.slot && <span className="label text-[0.55rem] text-muted-foreground">Platz {move.slot}</span>}
+      {move.slot && <span className="label text-[0.55rem] text-muted-foreground">{t('Platz {slot}', { slot: move.slot })}</span>}
     </span>
   )
   return (
@@ -782,16 +793,16 @@ function ImpactBar({
       role="status"
     >
       {!changes ? (
-        <span className="text-muted-foreground">Platzwechsel im Team, betrifft nur dieses Team</span>
+        <span className="text-muted-foreground">{t('Platzwechsel im Team, betrifft nur dieses Team')}</span>
       ) : !syncOn ? (
         <span className="flex items-center gap-2 text-destructive">
-          <Link2Off className="size-4" /> {reason}: Die anderen Teams bleiben, wie sie sind
+          <Link2Off className="size-4" /> {t('{reason}: Die anderen Teams bleiben, wie sie sind', { reason })}
         </span>
       ) : preview.effects.length === 0 ? (
-        <span className="text-muted-foreground">Keine Soul-Link-Partner betroffen</span>
+        <span className="text-muted-foreground">{t('Keine Soul-Link-Partner betroffen')}</span>
       ) : (
         <div className="grid gap-1.5">
-          <span className="label text-[0.6rem] text-muted-foreground">Wird angeglichen</span>
+          <span className="label text-[0.6rem] text-muted-foreground">{t('Wird angeglichen')}</span>
           {preview.effects.map((effect) => {
             const member = lookups.members.get(effect.memberId)
             return (
@@ -840,10 +851,11 @@ function Details({
   sync?: (e: Encounter) => void
   dex: DexData | null
 }) {
+  const t = useT()
   if (!encounter) {
     return (
       <div className="flex items-center gap-3 rounded-2xl border border-dashed px-5 py-6 text-sm text-muted-foreground">
-        <Info className="size-4 shrink-0" /> Pokémon anklicken, um Herkunft und Soul-Link zu sehen.
+        <Info className="size-4 shrink-0" /> {t('Pokémon anklicken, um Herkunft und Soul-Link zu sehen.')}
       </div>
     )
   }
@@ -859,7 +871,7 @@ function Details({
         exit={{ opacity: 0, y: -6 }}
         transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
         className="soft-card rounded-2xl p-5"
-        aria-label={`Details zu ${name(encounter)}`}
+        aria-label={t('Details zu {name}', { name: name(encounter) })}
       >
         <div className="flex items-center gap-4">
           <Sprite id={encounter.species_id} name={name(encounter)} state={encounter.state} size="lg" />
@@ -867,26 +879,26 @@ function Details({
             <p className="truncate font-display tracking-tight text-2xl font-extrabold">{name(encounter)}</p>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <StateChip state={encounter.state} />
-              {slot >= 0 && <span className="label text-[0.6rem] text-muted-foreground">Platz {slot + 1}</span>}
+              {slot >= 0 && <span className="label text-[0.6rem] text-muted-foreground">{t('Platz {slot}', { slot: slot + 1 })}</span>}
             </div>
           </div>
         </div>
         <dl className="mt-4 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-sm">
-          <dt className="text-muted-foreground">Herkunft</dt>
+          <dt className="text-muted-foreground">{t('Herkunft')}</dt>
           <dd className="font-medium">
             {routeName(encounter)}
-            {encounter.kind === 'static' && <span className="label ml-2 text-[0.6rem] text-primary">Static</span>}
+            {encounter.kind === 'static' && <span className="label ml-2 text-[0.6rem] text-primary">{t('Static')}</span>}
           </dd>
-          <dt className="text-muted-foreground">Gefangen als</dt>
+          <dt className="text-muted-foreground">{t('Gefangen als')}</dt>
           <dd>{speciesName(species, encounter.caught_species_id)}</dd>
-          <dt className="text-muted-foreground">Eingetragen</dt>
+          <dt className="text-muted-foreground">{t('Eingetragen')}</dt>
           <dd>{formatTime(encounter.logged_at)}</dd>
           {dex?.types[encounter.species_id] && (
             <>
-              <dt className="text-muted-foreground">Typ</dt>
+              <dt className="text-muted-foreground">{t('Typ')}</dt>
               <dd className="flex flex-wrap gap-1">
-                {dex.types[encounter.species_id].map((t) => (
-                  <TypeChip key={t} type={t} small />
+                {dex.types[encounter.species_id].map((type) => (
+                  <TypeChip key={type} type={type} small />
                 ))}
               </dd>
             </>
@@ -894,13 +906,13 @@ function Details({
         </dl>
         {dex && species && (
           <div className="mt-4 border-t pt-3">
-            <p className="label mb-2 text-muted-foreground">Entwicklung</p>
+            <p className="label mb-2 text-muted-foreground">{t('Entwicklung')}</p>
             <EvolutionChain speciesId={encounter.species_id} dex={dex} species={species} />
           </div>
         )}
         {partners.length > 0 && (
           <div className="mt-4 border-t pt-3">
-            <p className="label mb-2 text-muted-foreground">Soul-Link</p>
+            <p className="label mb-2 text-muted-foreground">{t('Soul-Link')}</p>
             <ul className="grid gap-1">
               {partners.map((p) => {
                 const owner = lookups.members.get(p.member_id)
@@ -923,18 +935,25 @@ function Details({
           <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-highlight/15 px-3 py-2.5 text-sm">
             <TriangleAlert className="size-4 shrink-0" />
             <span className="flex-1">
-              Nicht angeglichen:{' '}
-              {off.map((p) => `${lookups.members.get(p.member_id)?.display_name} hat ${name(p)} ${p.state === 'team' ? 'im Team' : 'in der Box'}`).join(', ')}
+              {t('Nicht angeglichen:')}{' '}
+              {off
+                .map((p) =>
+                  t(p.state === 'team' ? '{player} hat {name} im Team' : '{player} hat {name} in der Box', {
+                    player: lookups.members.get(p.member_id)?.display_name ?? '',
+                    name: name(p),
+                  }),
+                )
+                .join(', ')}
             </span>
             {sync && (
               <Button size="sm" onClick={() => sync(encounter)}>
-                Partner angleichen
+                {t('Partner angleichen')}
               </Button>
             )}
           </div>
         )}
         <Button variant="outline" size="sm" className="mt-4" onClick={() => onMore(encounter)}>
-          Entwicklung, Tod und mehr
+          {t('Entwicklung, Tod und mehr')}
         </Button>
       </motion.section>
     </AnimatePresence>

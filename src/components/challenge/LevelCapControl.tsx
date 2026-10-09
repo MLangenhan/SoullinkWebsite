@@ -1,14 +1,16 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { Minus, Plus } from 'lucide-react'
-import { capIndex, presetFor, stepCap } from '@/data/levelCaps'
+import { capIndex, capLabel, presetFor, stepCap } from '@/data/levelCaps'
 import type { ChallengeData } from '@/hooks/useChallenge'
+import { useT } from '@/lib/i18n'
 import { rpc } from '@/lib/supabase'
 import { toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
 /** Level-Cap im Kopf der Challenge: − und + springen zum vorherigen bzw. nächsten Cap der Vorlage */
 export function LevelCapControl({ data }: { data: ChallengeData }) {
+  const t = useT()
   const preset = presetFor(data.challenge)
   const saved = capIndex(data.challenge, data.stats.current_run)
   // Sofort anzeigen, bis die Änderung zurückkommt
@@ -35,10 +37,10 @@ export function LevelCapControl({ data }: { data: ChallengeData }) {
 
   return (
     <div className="min-w-0">
-      <p className="label text-muted-foreground">Level-Cap</p>
+      <p className="label text-muted-foreground">{t('Level-Cap')}</p>
       <div className="flex items-center gap-1">
         {canEdit && (
-          <StepButton label="Vorheriger Level-Cap" disabled={prev === null} onClick={() => void go(prev)}>
+          <StepButton label={t('Vorheriger Level-Cap')} disabled={prev === null} onClick={() => void go(prev)}>
             <Minus className="size-4" />
           </StepButton>
         )}
@@ -58,13 +60,13 @@ export function LevelCapControl({ data }: { data: ChallengeData }) {
           </AnimatePresence>
         </span>
         {canEdit && (
-          <StepButton label="Nächster Level-Cap" disabled={next === null} onClick={() => void go(next)}>
+          <StepButton label={t('Nächster Level-Cap')} disabled={next === null} onClick={() => void go(next)}>
             <Plus className="size-4" />
           </StepButton>
         )}
       </div>
-      <p className="label max-w-[16rem] truncate text-[0.6rem] text-muted-foreground" title={cap.label}>
-        {cap.label}
+      <p className="label max-w-[16rem] truncate text-[0.6rem] text-muted-foreground" title={capLabel(cap.label)}>
+        {capLabel(cap.label)}
       </p>
     </div>
   )

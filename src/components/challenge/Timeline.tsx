@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import type { ChallengeData } from '@/hooks/useChallenge'
 import { revertEvent } from '@/lib/actions'
 import { describeEvent, formatTime, type Lookups } from '@/lib/describe'
+import { useT } from '@/lib/i18n'
 import type { SpeciesIndex } from '@/lib/species'
 import { toast, toastError } from '@/lib/toast'
 import type { ChallengeEvent } from '@/lib/types'
@@ -21,6 +22,7 @@ const dot = {
 
 /** Alle Ereignisse des Runs, neueste oben. Rückgängig gemachte bleiben sichtbar, aber durchgestrichen. */
 export function Timeline({ data, species, lookups }: { data: ChallengeData; species: SpeciesIndex | null; lookups: Lookups }) {
+  const t = useT()
   const [busy, setBusy] = useState<number | null>(null)
   const reverted = new Set(data.events.filter((e) => e.reverts_event_id !== null).map((e) => e.reverts_event_id))
   const current = data.stats.current_run
@@ -36,7 +38,7 @@ export function Timeline({ data, species, lookups }: { data: ChallengeData; spec
     setBusy(e.id)
     try {
       await revertEvent(data.challenge.id, e.id)
-      toast('Rückgängig gemacht')
+      toast(t('Rückgängig gemacht'))
     } catch (error) {
       toastError(error)
     } finally {
@@ -45,7 +47,7 @@ export function Timeline({ data, species, lookups }: { data: ChallengeData; spec
   }
 
   if (data.events.length === 0) {
-    return <p className="rounded-xl border border-dashed px-6 py-16 text-center text-muted-foreground">Noch nichts passiert in Run {data.shownRun}.</p>
+    return <p className="rounded-xl border border-dashed px-6 py-16 text-center text-muted-foreground">{t('Noch nichts passiert in Run {run}.', { run: data.shownRun })}</p>
   }
 
   return (
@@ -73,18 +75,18 @@ export function Timeline({ data, species, lookups }: { data: ChallengeData; spec
                 <p className="label mt-0.5 flex flex-wrap items-center gap-x-2 text-[0.6rem] text-muted-foreground">
                   <span>#{event.seq}</span>
                   <span>{formatTime(event.occurred_at)}</span>
-                  {actor && <span>von {actor}</span>}
+                  {actor && <span>{t('von {actor}', { actor })}</span>}
                   {event.source === 'bot' && (
                     <span className="flex items-center gap-1">
                       <Bot className="size-3" /> Discord{event.actor_discord_id ? ` (${event.actor_discord_id})` : ''}
                     </span>
                   )}
-                  {event.source === 'migration' && <span>Altdaten</span>}
+                  {event.source === 'migration' && <span>{t('Altdaten')}</span>}
                 </p>
               </div>
               {canUndo(event) && (
-                <Button variant="ghost" size="sm" disabled={busy !== null} onClick={() => void undo(event)} aria-label="Rückgängig machen">
-                  <Undo2 /> <span className="hidden sm:inline">Rückgängig</span>
+                <Button variant="ghost" size="sm" disabled={busy !== null} onClick={() => void undo(event)} aria-label={t('Rückgängig machen')}>
+                  <Undo2 /> <span className="hidden sm:inline">{t('Rückgängig')}</span>
                 </Button>
               )}
             </div>

@@ -1,8 +1,10 @@
 import { motion, useReducedMotion } from 'motion/react'
+import { useT } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 
 /** Pokéball als Ladeanzeige: wackelt wie beim Fangen. */
-export function Pokeball({ className, label = 'Lädt …' }: { className?: string; label?: string }) {
+export function Pokeball({ className, label }: { className?: string; label?: string }) {
+  const t = useT()
   const reduce = useReducedMotion()
   return (
     <div className={cn('flex flex-col items-center gap-4 text-muted-foreground', className)} role="status">
@@ -20,7 +22,7 @@ export function Pokeball({ className, label = 'Lädt …' }: { className?: strin
         <path d="M2.5 16h27" stroke="var(--foreground)" strokeWidth="2.5" />
         <circle cx="16" cy="16" r="4.5" fill="var(--card)" stroke="var(--foreground)" strokeWidth="2.5" />
       </motion.svg>
-      <span className="label">{label}</span>
+      <span className="label">{label ?? t('Lädt …')}</span>
     </div>
   )
 }

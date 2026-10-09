@@ -326,3 +326,18 @@ ohne Zugriff, Paar-Modus (nur der Partner stirbt mit), Basis-Pfad wie auf GitHub
   (Typen der Generation, Basiswerte, Level-Attacken mit den Werten dieser Generation inkl. physisch/speziell
   vor Gen 4, Entwicklungen mit Bedingungen). Die Website lädt nur die Datei der gespielten Edition.
 
+## Sprachen
+
+`src/lib/i18n.ts` ohne Bibliothek: Der deutsche Text ist der Schlüssel (`t('Begegnung eintragen')`), die
+englischen Texte liegen nach Bereichen in `src/i18n/*.ts` und werden automatisch zusammengeführt. Fehlt
+eine Übersetzung, bleibt der deutsche Text stehen. Komponenten abonnieren die Sprache mit `useT()`.
+Fehlermeldungen der Datenbank sind deutsch und werden beim Anzeigen übersetzt (`translateError`).
+Pokémon-Namen kommen aus `species` (de/en), Attacken- und Entwicklungstexte aus den Pokédex-Dateien.
+
+## Schadensrechner
+
+`@smogon/calc` (dieselbe Rechnung wie der Showdown-Calc) wird erst im Calc-Tab nachgeladen. Unsere
+Pokémon werden über den englischen Namen zugeordnet; deutsche Namen für Attacken, Fähigkeiten, Items und
+Wesen liefert `public/dex/names.json`. Typen und Basiswerte lassen sich für Randomizer über
+`overrides` ersetzen. Eigene Werte speichert der Browser (`localStorage`), nicht die Datenbank.
+

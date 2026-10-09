@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { motion } from 'motion/react'
 import { Check, Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useT } from '@/lib/i18n'
 
 /** Zeigt einen geheimen Link einmalig an, mit Kopierknopf. */
 export function CopyLink({ url, hint }: { url: string; hint?: string }) {
+  const t = useT()
   const [copied, setCopied] = useState(false)
   return (
     <motion.div
@@ -24,10 +26,10 @@ export function CopyLink({ url, hint }: { url: string; hint?: string }) {
             })
           }}
         >
-          {copied ? <Check /> : <Copy />} {copied ? 'Kopiert' : 'Kopieren'}
+          {copied ? <Check /> : <Copy />} {copied ? t('Kopiert') : t('Kopieren')}
         </Button>
       </div>
-      <p className="text-xs text-muted-foreground">{hint ?? 'Wird nur jetzt angezeigt. Nur an die richtige Person schicken.'}</p>
+      <p className="text-xs text-muted-foreground">{hint ?? t('Wird nur jetzt angezeigt. Nur an die richtige Person schicken.')}</p>
     </motion.div>
   )
 }

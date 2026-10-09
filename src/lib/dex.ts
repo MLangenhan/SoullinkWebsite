@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { getLang } from '@/lib/i18n'
 import { withBase } from '@/lib/router'
 
 /** Pokédex-Daten einer Edition, erzeugt von tools/generate_dex.py (public/dex/<versionGroup>.json) */
@@ -8,9 +9,10 @@ export interface DexData {
   types: Record<string, number[]>
   stats: Record<string, number[]>
   learn: Record<string, [number, number][]>
-  /** Name, Typ, Kategorie (0 Status, 1 physisch, 2 speziell), Stärke, Genauigkeit, AP */
-  moves: Record<string, [string, number, number, number | null, number | null, number | null]>
-  evos: Record<string, [number, string][]>
+  /** Name, Typ, Kategorie (0 Status, 1 physisch, 2 speziell), Stärke, Genauigkeit, AP, englischer Name */
+  moves: Record<string, [string, number, number, number | null, number | null, number | null, string]>
+  /** Entwicklung, Bedingung deutsch, Bedingung englisch */
+  evos: Record<string, [number, string, string][]>
 }
 
 export const VERSION_GROUP_NAMES: Record<string, string> = {
@@ -56,25 +58,25 @@ export function useDex(versionGroup: string): DexData | null {
   return state?.key === versionGroup ? state.data : null
 }
 
-export const TYPES: Record<number, { name: string; color: string }> = {
-  1: { name: 'Normal', color: '#9fa19f' },
-  2: { name: 'Kampf', color: '#ff8000' },
-  3: { name: 'Flug', color: '#81b9ef' },
-  4: { name: 'Gift', color: '#9141cb' },
-  5: { name: 'Boden', color: '#915121' },
-  6: { name: 'Gestein', color: '#afa981' },
-  7: { name: 'Käfer', color: '#91a119' },
-  8: { name: 'Geist', color: '#704170' },
-  9: { name: 'Stahl', color: '#60a1b8' },
-  10: { name: 'Feuer', color: '#e62829' },
-  11: { name: 'Wasser', color: '#2980ef' },
-  12: { name: 'Pflanze', color: '#3fa129' },
-  13: { name: 'Elektro', color: '#e8b800' },
-  14: { name: 'Psycho', color: '#ef4179' },
-  15: { name: 'Eis', color: '#3dcef3' },
-  16: { name: 'Drache', color: '#5060e1' },
-  17: { name: 'Unlicht', color: '#624d4e' },
-  18: { name: 'Fee', color: '#ef70ef' },
+export const TYPES: Record<number, { name: string; en: string; color: string }> = {
+  1: { name: 'Normal', en: 'Normal', color: '#9fa19f' },
+  2: { name: 'Kampf', en: 'Fighting', color: '#ff8000' },
+  3: { name: 'Flug', en: 'Flying', color: '#81b9ef' },
+  4: { name: 'Gift', en: 'Poison', color: '#9141cb' },
+  5: { name: 'Boden', en: 'Ground', color: '#915121' },
+  6: { name: 'Gestein', en: 'Rock', color: '#afa981' },
+  7: { name: 'Käfer', en: 'Bug', color: '#91a119' },
+  8: { name: 'Geist', en: 'Ghost', color: '#704170' },
+  9: { name: 'Stahl', en: 'Steel', color: '#60a1b8' },
+  10: { name: 'Feuer', en: 'Fire', color: '#e62829' },
+  11: { name: 'Wasser', en: 'Water', color: '#2980ef' },
+  12: { name: 'Pflanze', en: 'Grass', color: '#3fa129' },
+  13: { name: 'Elektro', en: 'Electric', color: '#e8b800' },
+  14: { name: 'Psycho', en: 'Psychic', color: '#ef4179' },
+  15: { name: 'Eis', en: 'Ice', color: '#3dcef3' },
+  16: { name: 'Drache', en: 'Dragon', color: '#5060e1' },
+  17: { name: 'Unlicht', en: 'Dark', color: '#624d4e' },
+  18: { name: 'Fee', en: 'Fairy', color: '#ef70ef' },
 }
 
 // Angreifender Typ → verteidigender Typ → Faktor (nur Abweichungen von 1), Stand ab Gen 6
@@ -118,4 +120,17 @@ export const CATEGORY_NAMES = ['Status', 'Physisch', 'Speziell']
 
 export function pokewikiUrl(nameDe: string) {
   return `https://www.pokewiki.de/${encodeURIComponent(nameDe.replace(/ /g, '_'))}`
+}
+
+export function typeName(type: number) {
+  const entry = TYPES[type]
+  return entry ? (getLang() === 'en' ? entry.en : entry.name) : '?'
+}
+
+export function moveName(move: DexData['moves'][string]) {
+  return getLang() === 'en' ? move[6] : move[0]
+}
+
+export function evoText(entry: [number, string, string]) {
+  return getLang() === 'en' ? entry[2] : entry[1]
 }
