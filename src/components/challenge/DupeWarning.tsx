@@ -4,11 +4,13 @@ import type { ChallengeData } from '@/hooks/useChallenge'
 import { dupesOf } from '@/lib/dupes'
 import { speciesName } from '@/lib/describe'
 import { useT } from '@/lib/i18n'
+import { useRouteNames } from '@/lib/routeNames'
 import { speciesLabel, type SpeciesIndex } from '@/lib/species'
 
 /** Warnung beim Eintragen: Entwicklungsreihe ist in diesem Run schon gefangen (Dupes-Clause) */
 export function DupeWarning({ speciesId, data, species }: { speciesId: number | null; data: ChallengeData; species: SpeciesIndex }) {
   const t = useT()
+  const routeNames = useRouteNames(data.challenge)
   const found = speciesId !== null && data.challenge.dupes_clause ? dupesOf(speciesId, data.encounters, species) : []
   const first = speciesId !== null ? species.chain(speciesId)[0] : undefined
   const line = first ? speciesLabel(first) : ''
@@ -28,7 +30,8 @@ export function DupeWarning({ speciesId, data, species }: { speciesId: number | 
             {found
               .map((e) => {
                 const who = data.members.find((m) => m.id === e.member_id)?.display_name ?? t('Jemand')
-                const where = data.routes.find((r) => r.id === e.route_id)?.name ?? t('Route')
+                const stored = data.routes.find((r) => r.id === e.route_id)?.name
+                const where = stored ? routeNames.display(stored) : t('Route')
                 return `${e.nickname ?? speciesName(species, e.species_id)} (${where}, ${who})`
               })
               .join(', ')}

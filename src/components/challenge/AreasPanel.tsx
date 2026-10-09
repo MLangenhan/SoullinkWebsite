@@ -191,7 +191,7 @@ function AreaRow({ area, canLog, onLog }: { area: AreaStatus; canLog: boolean; o
           variant="ghost"
           size="icon"
           className="-mr-2 shrink-0"
-          onClick={() => onLog({ route: area.routeName, kind: area.kind })}
+          onClick={() => onLog({ route: area.name, kind: area.kind })}
           aria-label={t('{area} eintragen', { area: area.name })}
           title={t('Eintragen')}
         >
