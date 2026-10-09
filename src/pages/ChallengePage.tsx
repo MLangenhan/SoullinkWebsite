@@ -24,7 +24,8 @@ import { useSessionUserId } from '@/hooks/useSession'
 import { useSpecies } from '@/hooks/useSpecies'
 import { linkProps } from '@/lib/router'
 import { useT } from '@/lib/i18n'
-import type { Encounter, EncounterKind } from '@/lib/types'
+import { countLinks } from '@/lib/links'
+import type { EncounterKind } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 // Der Schadensrechner (mit den Daten aller Generationen) wird erst im Calc-Tab geladen
@@ -235,16 +236,4 @@ export function ChallengePage({ slug }: { slug: string }) {
       )}
     </main>
   )
-}
-
-/**
- * Soul-Links statt einzelner Pokémon: Ein Link lebt, solange eins seiner Pokémon lebt (stirbt eins, sterben
- * alle mit). Bei „alle verbunden“ ist das die Zahl der Pokémon geteilt durch die Spieler, bei Paaren zählt
- * jedes Paar für sich.
- */
-function countLinks(encounters: Encounter[]) {
-  const alive = new Map<string, boolean>()
-  for (const e of encounters) alive.set(e.link_id, (alive.get(e.link_id) ?? false) || e.state === 'team' || e.state === 'box')
-  const living = [...alive.values()].filter(Boolean).length
-  return { alive: living, lost: alive.size - living }
 }

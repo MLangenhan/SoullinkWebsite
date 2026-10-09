@@ -1,4 +1,9 @@
-# Prüft jeden Pull Request: Datenbank (Schema, RLS, Import) und Website (Lint, Typen, Build).
+# Prüft jeden Pull Request und jeden Push auf main:
+#   database  Schema-, Sicherheits-, Import- und Demo-Tests auf PostgreSQL 16 und 17 (Supabase nutzt 17)
+#   web       Abhängigkeiten (npm audit), Lint, Typen, Unit-Tests mit Abdeckung, Build
+#   e2e       Produktions-Build mit Content Security Policy gegen eine echte lokale Supabase (Playwright)
+#   workflows Sicherheits-Lint der GitHub-Workflows selbst (zizmor)
+# Actions sind auf Commit-Hashes festgelegt (Dependabot hält sie aktuell), Rechte so knapp wie möglich.
 name: CI
 
 on:
@@ -6,15 +11,25 @@ on:
   push:
     branches: [main]
 
-permissions:
-  contents: read
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   database:
+    name: database (PostgreSQL ${{ matrix.postgres }})
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: [16, 17]
     services:
       postgres:
-        image: postgres:16
+        image: postgres:${{ matrix.postgres }}
         env:
           POSTGRES_PASSWORD: postgres
         ports:
@@ -25,20 +40,90 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v4
-      - name: Schema-, RLS- und Import-Tests
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Schema-, Sicherheits-, Import- und Demo-Tests
         run: scripts/test-db.sh
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
 
   web:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      # Ohne Install-Skripte: ein kompromittiertes Paket kann beim Installieren nichts ausführen
+      - run: npm ci --ignore-scripts
+      - name: Bekannte Schwachstellen (ab „high“)
+        run: npm audit --audit-level=high
       - run: npm run lint
-      - run: npm run build
+      - name: Unit-Tests mit Abdeckung
+        run: npm run test:coverage
+      - name: Typen und Build
+        run: npm run build
+      - name: Abdeckung als Zusammenfassung
+        if: always()
+        run: |
+          if [ -f coverage/coverage-summary.json ]; then
+            node -e "const s=require('./coverage/coverage-summary.json').total; console.log('| | Abdeckung |\n|---|---|\n' + ['lines','statements','functions','branches'].map(k => '| ' + k + ' | ' + s[k].pct + ' % |').join('\n'))" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: coverage
+          path: coverage
+          retention-days: 14
+
+  e2e:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+        with:
+          version: 2.120.0
+      - name: Lokale Supabase mit allen Migrationen starten
+        run: supabase start -x studio,imgproxy,inbucket,edge-runtime,logflare,vector,supavisor,postgres-meta
+      - name: Verbindungsdaten für den Build
+        run: |
+          status="$(supabase status -o json)"
+          echo "VITE_SUPABASE_URL=$(jq -r '.API_URL' <<<"$status")" >> "$GITHUB_ENV"
+          echo "VITE_SUPABASE_PUBLISHABLE_KEY=$(jq -r '.PUBLISHABLE_KEY // .ANON_KEY' <<<"$status")" >> "$GITHUB_ENV"
+          echo "DATABASE_URL=$(jq -r '.DB_URL' <<<"$status")" >> "$GITHUB_ENV"
+      - run: npx playwright install --with-deps chromium
+      - name: End-to-End-Tests
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 14
+
+  workflows:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Workflows auf Sicherheitsprobleme prüfen
+        run: pipx run zizmor==1.30.1 --offline --min-severity low .github/

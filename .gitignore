@@ -20,3 +20,7 @@ migration.sql
 .vscode/*
 !.vscode/extensions.json
 *.log
+coverage
+e2e/.links.json
+playwright-report
+test-results
