@@ -12,14 +12,26 @@ import { navigate } from '@/lib/router'
 import { db, rpc } from '@/lib/supabase'
 import { toast, toastError } from '@/lib/toast'
 import type { BotToken, Device, Invite, Member, Role, Visibility } from '@/lib/types'
+import { cn } from '@/lib/utils'
 
 const roleLabel: Record<Role, string> = { owner: 'Leitung', player: 'Spieler', viewer: 'Zuschauer' }
 
-function Section({ title, children, description }: { title: string; description?: string; children?: React.ReactNode }) {
+function Section({
+  title,
+  children,
+  description,
+  danger,
+}: {
+  title: string
+  description?: string
+  children?: React.ReactNode
+  /** Unwiderrufliche Aktionen optisch absetzen */
+  danger?: boolean
+}) {
   return (
-    <section className="grid gap-4 soft-card rounded-2xl p-6">
+    <section className={cn('grid gap-4 soft-card rounded-2xl p-6', danger && 'border-destructive/30 bg-destructive/[0.03]')}>
       <div>
-        <h3 className="font-display tracking-tight text-3xl font-extrabold">{title}</h3>
+        <h3 className={cn('font-display tracking-tight text-3xl font-extrabold', danger && 'text-destructive')}>{title}</h3>
         {description && <p className="mt-1 text-sm text-muted-foreground">{description}</p>}
       </div>
       {children}
@@ -46,7 +58,7 @@ function MemberForm({ member, onDone }: { member: Member; onDone?: () => void })
   const t = useT()
   return (
     <form
-      className="grid gap-3 sm:grid-cols-[1fr_auto_1fr_auto] sm:items-end"
+      className="grid gap-3 sm:grid-cols-[1fr_auto_1fr_auto] sm:items-start"
       onSubmit={async (e) => {
         e.preventDefault()
         setBusy(true)
@@ -67,7 +79,8 @@ function MemberForm({ member, onDone }: { member: Member; onDone?: () => void })
       <Field label={t('Discord-ID')} hint={t('Für den Bot: Rechtsklick auf dich → „Nutzer-ID kopieren“')}>
         <Input value={discord} onChange={(e) => setDiscord(e.target.value.replace(/\D/g, ''))} inputMode="numeric" maxLength={25} />
       </Field>
-      <Button type="submit" disabled={busy}>
+      {/* Auf Höhe der Eingabefelder (unter den Beschriftungen), auch wenn die Discord-ID einen Hinweis darunter hat */}
+      <Button type="submit" disabled={busy} className="sm:mt-[1.375rem] sm:h-10">
         {t('Speichern')}
       </Button>
     </form>
@@ -423,7 +436,7 @@ function OwnerSettings({ data, onChanged }: { data: ChallengeData; onChanged: ()
         )}
       </Section>
 
-      <Section title={t('Challenge löschen')} description={t('Löscht alle Runs, Begegnungen und Ereignisse endgültig.')}>
+      <Section danger title={t('Challenge löschen')} description={t('Löscht alle Runs, Begegnungen und Ereignisse endgültig.')}>
         <form
           className="flex flex-wrap items-end gap-3"
           onSubmit={async (e) => {

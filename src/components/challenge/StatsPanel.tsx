@@ -8,6 +8,7 @@ import type { ChallengeData } from '@/hooks/useChallenge'
 import { appendEvent } from '@/lib/actions'
 import { useT } from '@/lib/i18n'
 import { toast, toastError } from '@/lib/toast'
+import { cn } from '@/lib/utils'
 
 /** Alle Zähler des Bots: Tode und verpasste Begegnungen (Run/gesamt), Wipes, Siege. */
 export function StatsPanel({ data }: { data: ChallengeData }) {
@@ -37,14 +38,16 @@ export function StatsPanel({ data }: { data: ChallengeData }) {
 
   return (
     <div className="grid gap-8">
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        {overview.map((o) => (
-          <div key={o.label} className="soft-card rounded-2xl p-5">
-            <p className="label text-muted-foreground">{o.label}</p>
-            <Counter to={o.value} className="mt-2 block font-display tracking-tight text-6xl font-extrabold" />
+      <dl className="grid grid-cols-2 border-y md:grid-cols-4">
+        {overview.map((o, i) => (
+          <div key={o.label} className={cn('py-5 pr-5', i % 2 === 1 && 'border-l pl-5', i >= 2 && 'max-md:border-t', i === 2 && 'md:border-l md:pl-5')}>
+            <dt className="label text-muted-foreground">{o.label}</dt>
+            <dd>
+              <Counter to={o.value} className="mt-2 block font-display tracking-tight text-6xl font-extrabold" />
+            </dd>
           </div>
         ))}
-      </div>
+      </dl>
 
       <div className="grid gap-5 md:grid-cols-2">
         {data.memberStats.map((m, i) => {
@@ -77,9 +80,9 @@ export function StatsPanel({ data }: { data: ChallengeData }) {
               </dl>
               <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-secondary" title={t('Tode gesamt im Vergleich')}>
                 <motion.div
-                  className="h-full rounded-full bg-destructive"
-                  initial={{ width: 0 }}
-                  whileInView={{ width: `${(m.deaths_total / max) * 100}%` }}
+                  className="h-full origin-left rounded-full bg-destructive"
+                  initial={{ scaleX: 0 }}
+                  whileInView={{ scaleX: m.deaths_total / max }}
                   viewport={{ once: true }}
                   transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
                 />

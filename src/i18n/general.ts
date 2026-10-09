@@ -22,6 +22,7 @@ export default {
   'Das hat nicht geklappt': 'That didn’t work',
   'Lass dir von der Leitung einen neuen Link geben.': 'Ask the host for a new link.',
   'Zur Startseite': 'Back to home',
+  'Zum Inhalt springen': 'Skip to content',
   'Prüfe Einladung …': 'Checking invite …',
   'Dieser Link verbindet dieses Gerät mit dem Platz von': 'This link connects this device to the seat of',
   'Dein Name': 'Your name',
