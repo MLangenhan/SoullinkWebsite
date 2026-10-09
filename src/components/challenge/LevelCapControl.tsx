@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { Minus, Plus } from 'lucide-react'
 import { capIndex, capLabel, presetFor, stepCap } from '@/data/levelCaps'
 import type { ChallengeData } from '@/hooks/useChallenge'
+import { HeaderStat } from '@/components/challenge/HeaderStat'
 import { useT } from '@/lib/i18n'
 import { rpc } from '@/lib/supabase'
 import { toastError } from '@/lib/toast'
@@ -36,9 +37,8 @@ export function LevelCapControl({ data }: { data: ChallengeData }) {
   }
 
   return (
-    <div className="min-w-0">
-      <p className="label text-muted-foreground">{t('Level-Cap')}</p>
-      <div className="flex items-center gap-1">
+    <HeaderStat label={t('Level-Cap')} caption={<span title={capLabel(cap)}>{capLabel(cap)}</span>}>
+      <div className="flex items-center gap-1.5">
         {canEdit && (
           <StepButton label={t('Vorheriger Level-Cap')} disabled={prev === null} onClick={() => void go(prev)}>
             <Minus className="size-4" />
@@ -53,7 +53,7 @@ export function LevelCapControl({ data }: { data: ChallengeData }) {
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: direction >= 0 ? -28 : 28, opacity: 0 }}
               transition={{ type: 'spring', stiffness: 420, damping: 30 }}
-              className="font-display tracking-tight text-6xl font-extrabold text-primary tabular-nums"
+              className="font-display tracking-tight text-6xl leading-none font-extrabold text-primary tabular-nums"
             >
               {cap.level}
             </motion.span>
@@ -65,10 +65,7 @@ export function LevelCapControl({ data }: { data: ChallengeData }) {
           </StepButton>
         )}
       </div>
-      <p className="label max-w-[16rem] truncate text-[0.6rem] text-muted-foreground" title={capLabel(cap.label)}>
-        {capLabel(cap.label)}
-      </p>
-    </div>
+    </HeaderStat>
   )
 }
 

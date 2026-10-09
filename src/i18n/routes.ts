@@ -25,6 +25,8 @@ export default {
   beendet: 'ended',
   Leben: 'Alive',
   Verloren: 'Lost',
+  'Lebende Links': 'Alive links',
+  'Verlorene Links': 'Lost links',
   'Run beenden': 'End run',
   'Begegnung eintragen': 'Log encounter',
   Bereiche: 'Sections',

@@ -61,7 +61,8 @@ Gerät verbinden** selbst einen neuen Link.
 | Später nachtragen | im Tab **Routen** in der eigenen Spalte auf **Nachtragen** klicken; das Pokémon kommt automatisch in den richtigen Soul-Link. Alternativ **Begegnung eintragen** mit derselben Route: Wer schon eingetragen ist, wird angezeigt, nur die Fehlenden werden ergänzt |
 | Team oder Box | ergibt sich von selbst: Ein Soul-Link kommt ins Team, sobald alle seine Pokémon da sind und jeder Beteiligte weniger als sechs im Team hat (die schon Gefangenen rücken dann mit nach); sonst in die Box. Unvollständige Soul-Links tauchen in der Box nicht auf |
 | Soul-Link verfallen | Hat nicht jeder auf einer Route etwas gefangen: in der Routen-Zeile **Verfallen lassen**. Die Fehlenden gelten als „verpasst“ (zählt und hakt die Route ab), die Route wird ausgeblendet (**Verfallene Routen zeigen** blendet sie wieder ein) |
-| Level-Cap | im Kopf der Challenge mit − und + zum vorherigen bzw. nächsten Cap des Spiels; ein neuer Run beginnt wieder beim ersten. Das Spiel wird am Namen erkannt oder unter **Einstellungen → Spielregeln** gewählt |
+| Level-Cap | im Kopf der Challenge mit − und + zum vorherigen bzw. nächsten Cap des Spiels; ein neuer Run beginnt wieder beim ersten. Das Spiel wird am Namen erkannt oder unter **Einstellungen → Spielregeln** gewählt. Cap = höchstes Level des nächsten Arenaleiters bzw. der Top Vier; Gen 1–4 geprüft gegen die Spieldaten |
+| Lebende/verlorene Links | im Kopf zählen Soul-Links, nicht einzelne Pokémon (bei „alle verbunden“ = Pokémon geteilt durch Spieler); darunter die Zahl der Pokémon |
 | Dupes | Suche im Tab **Routen** findet ganze Entwicklungsreihen und sagt, ob die Reihe in diesem Run schon gefangen wurde; beim Eintragen warnt der Dialog. Gilt für alle Spieler zusammen, abschaltbar unter **Spielregeln** |
 | Offene Gebiete | Tab **Gebiete**: alle Orte des Spiels mit wilden Begegnungen bzw. Statics und Geschenken, wer dort im Run noch fehlt (Punkte je Spieler: gefangen, verpasst, offen), Fortschritt, Suche. **+** öffnet „Begegnung eintragen“ mit dem Ort vorausgefüllt. Routen werden über den deutschen oder englischen Namen zugeordnet |
 | Pokédex | Tab **Pokédex**: gegnerisches oder eigenes Pokémon nachschlagen. Typen, Schwächen, Basiswerte, Attacken per Level der gespielten Edition (über dem Level-Cap abgeblendet), wie das eigene Team dagegen steht, Entwicklungen mit Bedingungen, Link ins PokéWiki |
@@ -337,7 +338,7 @@ tools/
 data/species.json        Stammdaten als JSON
 public/dex/              Attacken, Werte, Typen, Entwicklungen pro Edition (generiert)
 public/areas/            Orte mit Begegnungen pro Edition (generiert)
-src/data/levelCaps.ts    Level-Caps pro Spiel (aus dem Discord-Bot)
+src/data/levelCaps.ts    Level-Caps pro Spiel (Gen 1–4 geprüft gegen die pret-Disassemblies)
 scripts/test-db.sh       Datenbank-Tests
 .github/workflows/       CI und Veröffentlichung auf GitHub Pages
 docs/architektur.md      Architektur und Entscheidungen
