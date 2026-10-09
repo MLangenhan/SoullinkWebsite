@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Field, Input, Select } from '@/components/ui/input'
 import type { ChallengeData } from '@/hooks/useChallenge'
 import { appendEvent } from '@/lib/actions'
+import { useT } from '@/lib/i18n'
 import { toast, toastError } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
@@ -17,6 +18,7 @@ export function EndRunDialog({
   onOpenChange: (open: boolean) => void
   data: ChallengeData
 }) {
+  const t = useT()
   const [result, setResult] = useState<'wipe' | 'won'>('wipe')
   const [culprit, setCulprit] = useState('')
   const [note, setNote] = useState('')
@@ -32,7 +34,7 @@ export function EndRunDialog({
         caused_by_member_id: result === 'wipe' && culprit ? culprit : null,
         note: note || null,
       })
-      toast(result === 'won' ? `Run ${run} gewonnen! Glückwunsch!` : `Run ${run} ist vorbei. Run ${run + 1} beginnt.`)
+      toast(result === 'won' ? t('Run {run} gewonnen! Glückwunsch!', { run }) : t('Run {run} ist vorbei. Run {next} beginnt.', { run, next: run + 1 }))
       onOpenChange(false)
       setCulprit('')
       setNote('')
@@ -47,10 +49,12 @@ export function EndRunDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle className="font-display tracking-tight text-4xl font-extrabold">Run {run} beenden</DialogTitle>
+          <DialogTitle className="font-display tracking-tight text-4xl font-extrabold">{t('Run {run} beenden', { run })}</DialogTitle>
           <DialogDescription>
-            Danach beginnt Run {run + 1}; die Zähler des Runs starten wieder bei null. Rückgängig geht nur, solange im neuen
-            Run noch nichts eingetragen ist.
+            {t(
+              'Danach beginnt Run {next}; die Zähler des Runs starten wieder bei null. Rückgängig geht nur, solange im neuen Run noch nichts eingetragen ist.',
+              { next: run + 1 },
+            )}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="grid gap-4">
@@ -71,14 +75,14 @@ export function EndRunDialog({
                 )}
               >
                 <Icon className="size-7" />
-                <span className="font-display tracking-tight text-2xl font-extrabold">{label}</span>
+                <span className="font-display tracking-tight text-2xl font-extrabold">{t(label)}</span>
               </button>
             ))}
           </div>
           {result === 'wipe' && (
-            <Field label="Wer war schuld?" hint="Optional, zählt in der Statistik als verursachter Wipe.">
+            <Field label={t('Wer war schuld?')} hint={t('Optional, zählt in der Statistik als verursachter Wipe.')}>
               <Select value={culprit} onChange={(e) => setCulprit(e.target.value)}>
-                <option value="">Niemand bestimmtes</option>
+                <option value="">{t('Niemand bestimmtes')}</option>
                 {data.players.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.display_name}
@@ -87,11 +91,11 @@ export function EndRunDialog({
               </Select>
             </Field>
           )}
-          <Field label="Notiz">
-            <Input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder="Top 4, Lucian …" />
+          <Field label={t('Notiz')}>
+            <Input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder={t('Top 4, Lucian …')} />
           </Field>
           <Button type="submit" size="lg" variant={result === 'wipe' ? 'destructive' : 'default'} disabled={busy}>
-            {busy ? 'Speichere …' : result === 'wipe' ? 'Wipe bestätigen' : 'Sieg eintragen'}
+            {busy ? t('Speichere …') : result === 'wipe' ? t('Wipe bestätigen') : t('Sieg eintragen')}
           </Button>
         </form>
       </DialogContent>

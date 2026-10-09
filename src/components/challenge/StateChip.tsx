@@ -1,3 +1,4 @@
+import { useT } from '@/lib/i18n'
 import type { PokemonState } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -16,5 +17,6 @@ const stateClass: Record<PokemonState, string> = {
 }
 
 export function StateChip({ state }: { state: PokemonState }) {
-  return <span className={cn('label rounded border px-1.5 py-0.5 text-[0.6rem]', stateClass[state])}>{stateLabel[state]}</span>
+  const t = useT()
+  return <span className={cn('label rounded border px-1.5 py-0.5 text-[0.6rem]', stateClass[state])}>{t(stateLabel[state])}</span>
 }

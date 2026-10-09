@@ -3,18 +3,20 @@ import { motion } from 'motion/react'
 import { Pokeball } from '@/components/Pokeball'
 import { Button } from '@/components/ui/button'
 import { Field, Input } from '@/components/ui/input'
+import { useT } from '@/lib/i18n'
 import { linkProps, navigate, withBase } from '@/lib/router'
 import { ensureSession, rpc } from '@/lib/supabase'
-import { toast } from '@/lib/toast'
+import { toast, translateError } from '@/lib/toast'
 import type { InvitePreview, Member } from '@/lib/types'
 
-const roleLabel = { owner: 'als Leitung', player: 'als Spieler', viewer: 'als Zuschauer' } as const
+const roleLabel = { owner: 'Einladung als Leitung', player: 'Einladung als Spieler', viewer: 'Einladung als Zuschauer' } as const
 
 /**
  * Einladungslink einlösen. Der Token steht im #-Teil der Adresse und wird so nie an einen Server
  * (auch nicht an Vercel) übertragen. Nach dem Lesen wird er aus der Adresszeile entfernt.
  */
 export function Join() {
+  const t = useT()
   const [token] = useState(() => window.location.hash.slice(1))
   const [preview, setPreview] = useState<InvitePreview | null>(null)
   const [error, setError] = useState<string | null>(() =>
@@ -38,7 +40,7 @@ export function Join() {
       await ensureSession()
       const member = await rpc<Member>('join_challenge', { p_token: token, p_display_name: name || null })
       window.history.replaceState(null, '', withBase('/join'))
-      toast(`Willkommen, ${member.display_name}! Dieses Gerät ist jetzt verbunden.`)
+      toast(t('Willkommen, {name}! Dieses Gerät ist jetzt verbunden.', { name: member.display_name }))
       navigate(`/c/${preview.challenge_slug}`, { replace: true })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Beitritt fehlgeschlagen')
@@ -57,38 +59,39 @@ export function Join() {
       >
         {error ? (
           <div className="grid gap-4 text-center">
-            <p className="label text-destructive">Einladung</p>
-            <h1 className="font-display tracking-tight text-4xl font-extrabold">Das hat nicht geklappt</h1>
-            <p className="text-muted-foreground">{error}</p>
-            <p className="text-sm text-muted-foreground">Lass dir von der Leitung einen neuen Link geben.</p>
+            <p className="label text-destructive">{t('Einladung')}</p>
+            <h1 className="font-display tracking-tight text-4xl font-extrabold">{t('Das hat nicht geklappt')}</h1>
+            <p className="text-muted-foreground">{translateError(error)}</p>
+            <p className="text-sm text-muted-foreground">{t('Lass dir von der Leitung einen neuen Link geben.')}</p>
             <a {...linkProps('/')} className="text-primary underline-offset-4 hover:underline">
-              Zur Startseite
+              {t('Zur Startseite')}
             </a>
           </div>
         ) : !preview ? (
-          <Pokeball label="Prüfe Einladung …" className="py-10" />
+          <Pokeball label={t('Prüfe Einladung …')} className="py-10" />
         ) : (
           <form onSubmit={join} className="grid gap-5">
             <div>
-              <p className="label text-primary">Einladung {roleLabel[preview.role]}</p>
+              <p className="label text-primary">{t(roleLabel[preview.role])}</p>
               <h1 className="mt-2 font-display tracking-tight text-5xl leading-none font-extrabold">{preview.challenge_name}</h1>
             </div>
             {preview.member_name ? (
               <p className="text-muted-foreground">
-                Dieser Link verbindet dieses Gerät mit dem Platz von{' '}
+                {t('Dieser Link verbindet dieses Gerät mit dem Platz von')}{' '}
                 <strong className="text-foreground">{preview.member_name}</strong>.
               </p>
             ) : (
-              <Field label="Dein Name">
+              <Field label={t('Dein Name')}>
                 <Input value={name} onChange={(e) => setName(e.target.value)} required maxLength={40} autoFocus />
               </Field>
             )}
             <p className="text-xs text-muted-foreground">
-              Kein Konto, kein Passwort: Dein Browser merkt sich die Verbindung. Für ein weiteres Gerät erstellst du dir
-              später in den Einstellungen einen eigenen Link.
+              {t(
+                'Kein Konto, kein Passwort: Dein Browser merkt sich die Verbindung. Für ein weiteres Gerät erstellst du dir später in den Einstellungen einen eigenen Link.',
+              )}
             </p>
             <Button type="submit" size="lg" disabled={busy}>
-              {busy ? 'Verbinde …' : 'Beitreten'}
+              {busy ? t('Verbinde …') : t('Beitreten')}
             </Button>
           </form>
         )}

@@ -3,6 +3,7 @@ import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Field, Input, Select } from '@/components/ui/input'
+import { useT } from '@/lib/i18n'
 import { navigate, withBase } from '@/lib/router'
 import { ensureSession, rpc } from '@/lib/supabase'
 import { toast, toastError } from '@/lib/toast'
@@ -10,6 +11,7 @@ import { toSlug } from '@/lib/slug'
 import type { Challenge, Visibility } from '@/lib/types'
 
 export function CreateChallengeDialog() {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const [name, setName] = useState('')
   const [slug, setSlug] = useState('')
@@ -33,7 +35,7 @@ export function CreateChallengeDialog() {
         p_visibility: visibility,
         p_game: game.trim() || 'Pokémon',
       })
-      toast('Challenge angelegt. Lade jetzt deine Mitspieler ein.')
+      toast(t('Challenge angelegt. Lade jetzt deine Mitspieler ein.'))
       setOpen(false)
       navigate(`/c/${challenge.slug}?tab=einstellungen`)
     } catch (error) {
@@ -47,21 +49,21 @@ export function CreateChallengeDialog() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button size="lg">
-          <Plus /> Neue Challenge
+          <Plus /> {t('Neue Challenge')}
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle className="font-display tracking-tight text-3xl font-extrabold">Neue Challenge</DialogTitle>
+          <DialogTitle className="font-display tracking-tight text-3xl font-extrabold">{t('Neue Challenge')}</DialogTitle>
           <DialogDescription>
-            Kein Konto nötig: Dieses Gerät wird mit deinem Platz verbunden. Weitere Geräte und Mitspieler kommen per Link dazu.
+            {t('Kein Konto nötig: Dieses Gerät wird mit deinem Platz verbunden. Weitere Geräte und Mitspieler kommen per Link dazu.')}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="grid gap-4">
-          <Field label="Name">
-            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Platin Randomizer" required maxLength={80} autoFocus />
+          <Field label={t('Name')}>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('Platin Randomizer')} required maxLength={80} autoFocus />
           </Field>
-          <Field label="Adresse" hint={`${window.location.host}${withBase(`/c/${effectiveSlug || '…'}`)}`}>
+          <Field label={t('Adresse')} hint={`${window.location.host}${withBase(`/c/${effectiveSlug || '…'}`)}`}>
             <Input
               value={effectiveSlug}
               onChange={(e) => {
@@ -74,20 +76,20 @@ export function CreateChallengeDialog() {
               pattern="[a-z0-9]+(-[a-z0-9]+)*"
             />
           </Field>
-          <Field label="Spiel">
-            <Input value={game} onChange={(e) => setGame(e.target.value)} placeholder="Pokémon Platin" required maxLength={40} />
+          <Field label={t('Spiel')}>
+            <Input value={game} onChange={(e) => setGame(e.target.value)} placeholder={t('Pokémon Platin')} required maxLength={40} />
           </Field>
-          <Field label="Dein Name">
+          <Field label={t('Dein Name')}>
             <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Moritz" required maxLength={40} />
           </Field>
-          <Field label="Sichtbarkeit" hint="Öffentlich: Jeder mit der Adresse kann zuschauen (nur lesen).">
+          <Field label={t('Sichtbarkeit')} hint={t('Öffentlich: Jeder mit der Adresse kann zuschauen (nur lesen).')}>
             <Select value={visibility} onChange={(e) => setVisibility(e.target.value as Visibility)}>
-              <option value="private">Privat</option>
-              <option value="public">Öffentlich</option>
+              <option value="private">{t('Privat')}</option>
+              <option value="public">{t('Öffentlich')}</option>
             </Select>
           </Field>
           <Button type="submit" size="lg" disabled={busy}>
-            {busy ? 'Wird angelegt …' : 'Challenge starten'}
+            {busy ? t('Wird angelegt …') : t('Challenge starten')}
           </Button>
         </form>
       </DialogContent>

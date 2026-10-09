@@ -9,6 +9,8 @@ import type { ChallengeData } from '@/hooks/useChallenge'
 import { DupeWarning } from '@/components/challenge/DupeWarning'
 import { appendEvent, changeTeam, createRoute } from '@/lib/actions'
 import { autoStatus } from '@/lib/links'
+import { speciesName } from '@/lib/describe'
+import { useT } from '@/lib/i18n'
 import type { SpeciesIndex } from '@/lib/species'
 import { toast, toastError } from '@/lib/toast'
 import type { EncounterKind } from '@/lib/types'
@@ -43,15 +45,16 @@ export function LogEncounterDialog({
   data: ChallengeData
   species: SpeciesIndex | null
 }) {
+  const t = useT()
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="font-display tracking-tight text-4xl font-extrabold">Begegnung eintragen</DialogTitle>
+          <DialogTitle className="font-display tracking-tight text-4xl font-extrabold">{t('Begegnung eintragen')}</DialogTitle>
           <DialogDescription>
             {data.players.some((p) => p.link_group !== null)
-              ? 'Die Pokémon jedes Soul-Link-Paars sind verbunden. Stirbt eins, stirbt der Partner mit.'
-              : 'Alle Pokémon dieser Route bilden einen Soul-Link. Stirbt eins, sterben alle.'}
+              ? t('Die Pokémon jedes Soul-Link-Paars sind verbunden. Stirbt eins, stirbt der Partner mit.')
+              : t('Alle Pokémon dieser Route bilden einen Soul-Link. Stirbt eins, sterben alle.')}
           </DialogDescription>
         </DialogHeader>
         {open && (species ? <LogForm data={data} species={species} close={() => onOpenChange(false)} /> : <Pokeball className="py-10" />)}
@@ -61,6 +64,7 @@ export function LogEncounterDialog({
 }
 
 function LogForm({ data, species, close }: { data: ChallengeData; species: SpeciesIndex; close: () => void }) {
+  const t = useT()
   const listId = useId()
   const [routeName, setRouteName] = useState('')
   const [kind, setKind] = useState<EncounterKind>('wild')
@@ -120,7 +124,11 @@ function LogForm({ data, species, close }: { data: ChallengeData; species: Speci
           plan.promote.map((e) => ({ encounter_id: e.encounter_id, status: 'team' as const })),
         )
       }
-      toast(`${route.name}: ${filled.length} ${filled.length === 1 ? 'Eintrag' : 'Einträge'} gespeichert`)
+      toast(
+        filled.length === 1
+          ? t('{route}: 1 Eintrag gespeichert', { route: route.name })
+          : t('{route}: {n} Einträge gespeichert', { route: route.name, n: filled.length }),
+      )
       close()
     } catch (error) {
       toastError(error)
@@ -132,7 +140,7 @@ function LogForm({ data, species, close }: { data: ChallengeData; species: Speci
   return (
     <form onSubmit={submit} className="grid gap-5">
       <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-        <Field label="Route">
+        <Field label={t('Route')}>
           <Input
             list={listId}
             value={routeName}
@@ -148,7 +156,7 @@ function LogForm({ data, species, close }: { data: ChallengeData; species: Speci
             ))}
           </datalist>
         </Field>
-        <Field label="Art">
+        <Field label={t('Art')}>
           <div className="grid h-10 grid-cols-2 rounded-md border p-0.5">
             {(['wild', 'static'] as const).map((k) => (
               <button
@@ -157,7 +165,7 @@ function LogForm({ data, species, close }: { data: ChallengeData; species: Speci
                 onClick={() => setKind(k)}
                 className={cn('rounded px-3 text-sm transition-colors', kind === k ? 'bg-primary text-primary-foreground' : 'text-muted-foreground')}
               >
-                {k === 'wild' ? 'Wild' : 'Static'}
+                {k === 'wild' ? t('Wild') : t('Static')}
               </button>
             ))}
           </div>
@@ -169,14 +177,14 @@ function LogForm({ data, species, close }: { data: ChallengeData; species: Speci
           const entry = entries[player.id]
           const already = existing.get(player.id)
           if (already) {
-            const name = already.nickname ?? species.byId.get(already.species_id)?.name_de ?? `#${already.species_id}`
+            const name = already.nickname ?? speciesName(species, already.species_id)
             return (
               <div key={player.id} className="flex items-center gap-3 rounded-xl border border-dashed p-3 text-sm text-muted-foreground">
                 <span className="size-2 rounded-full" style={{ background: player.color ?? 'var(--primary)' }} />
                 <span className="font-medium text-foreground">{player.display_name}</span>
                 <span className="ml-auto flex items-center gap-2">
                   <Sprite id={already.species_id} name={name} size="sm" state={already.state} idle={false} />
-                  {name} · schon eingetragen
+                  {name} · {t('schon eingetragen')}
                 </span>
               </div>
             )
@@ -197,13 +205,13 @@ function LogForm({ data, species, close }: { data: ChallengeData; species: Speci
                       entry.missed ? 'border-destructive text-destructive' : 'text-muted-foreground',
                     )}
                   >
-                    Verpasst
+                    {t('Verpasst')}
                   </button>
                 </div>
               </div>
               {entry.missed ? (
                 <p className="flex h-14 items-center rounded-md border border-dashed px-3 text-sm text-muted-foreground">
-                  Begegnung verpasst – zählt bei {player.display_name}.
+                  {t('Begegnung verpasst – zählt bei {player}.', { player: player.display_name })}
                 </p>
               ) : (
                 <>
@@ -217,10 +225,10 @@ function LogForm({ data, species, close }: { data: ChallengeData; species: Speci
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Team oder Box ergibt sich von selbst: ins Team, sobald alle Pokémon des Soul-Links da sind und jeder noch Platz hat.
+        {t('Team oder Box ergibt sich von selbst: ins Team, sobald alle Pokémon des Soul-Links da sind und jeder noch Platz hat.')}
       </p>
       <Button type="submit" size="lg" disabled={busy || filled.length === 0 || !routeName.trim()}>
-        {busy ? 'Speichere …' : `Speichern (${filled.length}/${open.length})`}
+        {busy ? t('Speichere …') : t('Speichern ({done}/{total})', { done: filled.length, total: open.length })}
       </Button>
     </form>
   )

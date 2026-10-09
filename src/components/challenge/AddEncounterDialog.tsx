@@ -7,6 +7,8 @@ import type { ChallengeData } from '@/hooks/useChallenge'
 import { DupeWarning } from '@/components/challenge/DupeWarning'
 import { appendEvent, changeTeam } from '@/lib/actions'
 import { autoStatus } from '@/lib/links'
+import { useT } from '@/lib/i18n'
+import { speciesName } from '@/lib/describe'
 import type { SpeciesIndex } from '@/lib/species'
 import { toast, toastError } from '@/lib/toast'
 import type { EncounterKind, Member, Route } from '@/lib/types'
@@ -31,16 +33,20 @@ export function AddEncounterDialog({
   data: ChallengeData
   species: SpeciesIndex | null
 }) {
+  const t = useT()
   return (
     <Dialog open={target !== null} onOpenChange={onOpenChange}>
       <DialogContent>
         {target && (
           <>
             <DialogHeader>
-              <DialogTitle className="font-display tracking-tight text-3xl font-extrabold">Nachtragen</DialogTitle>
+              <DialogTitle className="font-display tracking-tight text-3xl font-extrabold">{t('Nachtragen')}</DialogTitle>
               <DialogDescription>
-                {target.member.display_name} auf {target.route.name}
-                {target.kind === 'static' && ' (Static)'}. Das Pokémon kommt in den bestehenden Soul-Link.
+                {t(target.kind === 'static' ? '{player} auf {route} (Static).' : '{player} auf {route}.', {
+                  player: target.member.display_name,
+                  route: target.route.name,
+                })}{' '}
+                {t('Das Pokémon kommt in den bestehenden Soul-Link.')}
               </DialogDescription>
             </DialogHeader>
             {species ? (
@@ -56,6 +62,7 @@ export function AddEncounterDialog({
 }
 
 function AddForm({ target, data, species, close }: { target: AddTarget; data: ChallengeData; species: SpeciesIndex; close: () => void }) {
+  const t = useT()
   const [speciesId, setSpeciesId] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
   // Feste IDs pro geöffnetem Dialog: Erneutes Absenden nach einem Fehler erzeugt keine Duplikate
@@ -71,7 +78,7 @@ function AddForm({ target, data, species, close }: { target: AddTarget; data: Ch
           { member_id: target.member.id, route_id: target.route.id, kind: target.kind },
           ids.missed,
         )
-        toast(`${target.member.display_name}: Begegnung auf ${target.route.name} verpasst`)
+        toast(t('{player}: Begegnung auf {route} verpasst', { player: target.member.display_name, route: target.route.name }))
       } else if (speciesId !== null) {
         // Team, wenn der Soul-Link damit vollständig ist und alle Platz haben; die Partner kommen mit
         const plan = autoStatus(data.players, data.encounters, target.route.id, target.kind, [target.member.id])
@@ -97,7 +104,7 @@ function AddForm({ target, data, species, close }: { target: AddTarget; data: Ch
             plan.promote.map((e) => ({ encounter_id: e.encounter_id, status: 'team' as const })),
           )
         }
-        toast(`${species.byId.get(speciesId)?.name_de ?? 'Pokémon'} für ${target.member.display_name} nachgetragen`)
+        toast(t('{pokemon} für {player} nachgetragen', { pokemon: speciesName(species, speciesId), player: target.member.display_name }))
       }
       close()
     } catch (error) {
@@ -113,10 +120,10 @@ function AddForm({ target, data, species, close }: { target: AddTarget; data: Ch
       <DupeWarning speciesId={speciesId} data={data} species={species} />
       <div className="grid grid-cols-[1fr_auto] gap-2">
         <Button size="lg" disabled={busy || speciesId === null} onClick={() => void save(false)}>
-          {busy ? 'Speichere …' : 'Nachtragen'}
+          {busy ? t('Speichere …') : t('Nachtragen')}
         </Button>
         <Button size="lg" variant="outline" disabled={busy} onClick={() => void save(true)}>
-          Verpasst
+          {t('Verpasst')}
         </Button>
       </div>
     </div>

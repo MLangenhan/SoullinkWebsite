@@ -7,8 +7,12 @@ Website für Gegner und eigene Pokémon zeigt, mit den Werten dieser Generation:
   types   {Pokémon: [Typ-IDs]}             Typen in dieser Generation (z. B. Pixie erst ab Gen 6)
   stats   {Pokémon: [KP, Ang, Vert, SpAng, SpVert, Init]}
   learn   {Pokémon: [[Level, Attacke], ...]} per Levelaufstieg
-  moves   {Attacke: [Name, Typ, Kategorie, Stärke, Genauigkeit, AP]}  Kategorie: 0 Status, 1 physisch, 2 speziell
-  evos    {Pokémon: [[Entwicklung, "Lv. 16"], ...]}
+  moves   {Attacke: [Name, Typ, Kategorie, Stärke, Genauigkeit, AP, englischer Name]}
+          Kategorie: 0 Status, 1 physisch, 2 speziell
+  evos    {Pokémon: [[Entwicklung, "Lv. 16", "Lv. 16"], ...]}  Bedingung deutsch und englisch
+
+Dazu public/dex/names.json: deutsche Namen von Attacken, Fähigkeiten, Items und Wesen, Schlüssel wie
+in @smogon/calc (englischer Name ohne Sonderzeichen, klein), für den Schadensrechner.
 
 Einmalig bzw. bei neuen Daten ausführen (nur Standardbibliothek):
   python3 tools/generate_dex.py
@@ -19,6 +23,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import re
 import urllib.request
 from collections import defaultdict
 from pathlib import Path
@@ -27,6 +32,7 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "public" / "dex"
 CSV_BASE = "https://raw.githubusercontent.com/PokeAPI/pokeapi/master/data/v2/csv"
 DE = "6"
+EN = "9"
 MAX_SPECIES = 1025
 
 # Editionen, für die es Level-Caps gibt (src/data/levelCaps.ts)
@@ -35,6 +41,10 @@ VERSION_GROUPS = [
     "omega-ruby-alpha-sapphire", "diamond-pearl", "platinum", "black-white", "black-2-white-2", "x-y",
 ]
 
+TYPE_EN = {
+    1: "Normal", 2: "Fighting", 3: "Flying", 4: "Poison", 5: "Ground", 6: "Rock", 7: "Bug", 8: "Ghost", 9: "Steel",
+    10: "Fire", 11: "Water", 12: "Grass", 13: "Electric", 14: "Psychic", 15: "Ice", 16: "Dragon", 17: "Dark", 18: "Fairy",
+}
 TYPE_DE = {
     1: "Normal", 2: "Kampf", 3: "Flug", 4: "Gift", 5: "Boden", 6: "Gestein", 7: "Käfer", 8: "Geist", 9: "Stahl",
     10: "Feuer", 11: "Wasser", 12: "Pflanze", 13: "Elektro", 14: "Psycho", 15: "Eis", 16: "Drache", 17: "Unlicht",
@@ -52,6 +62,35 @@ def load(name: str) -> list[dict[str, str]]:
     return list(csv.DictReader(io.StringIO(cache.read_text(encoding="utf-8"))))
 
 
+def to_id(name: str) -> str:
+    """Wie toID in @smogon/calc"""
+    return re.sub(r"[^a-z0-9]+", "", name.lower())
+
+
+# Texte für Entwicklungsbedingungen
+LABELS = {
+    "de": {
+        "trade": "Tausch", "with": "mit {}", "for": "gegen {}", "level": "Lv. {}", "happiness": "Freundschaft",
+        "affection": "Zuneigung", "beauty": "Schönheit", "holds": "trägt {}", "knows": "kennt {}",
+        "knows_type": "kennt {}-Attacke", "at": "bei {}", "party": "mit {} im Team", "party_type": "mit {}-Pokémon im Team",
+        "stats": {"1": "Ang > Vert", "-1": "Ang < Vert", "0": "Ang = Vert"}, "rain": "bei Regen",
+        "upside_down": "Gerät umdrehen", "level_up": "Levelaufstieg", "shed": "Lv. 20 mit freiem Platz und Pokéball",
+        "special": "besondere Bedingung", "time": {"day": "tagsüber", "night": "nachts", "dusk": "abends"},
+        "gender": {"1": "weiblich", "2": "männlich"}, "or": " oder ", "item": "Item", "move": "Attacke",
+        "place": "besonderem Ort",
+    },
+    "en": {
+        "trade": "Trade", "with": "holding {}", "for": "for {}", "level": "Lv. {}", "happiness": "Friendship",
+        "affection": "Affection", "beauty": "Beauty", "holds": "holding {}", "knows": "knows {}",
+        "knows_type": "knows a {} move", "at": "at {}", "party": "with {} in party", "party_type": "with a {} Pokémon in party",
+        "stats": {"1": "Atk > Def", "-1": "Atk < Def", "0": "Atk = Def"}, "rain": "in rain",
+        "upside_down": "turn console upside down", "level_up": "Level up", "shed": "Lv. 20 with free slot and Poké Ball",
+        "special": "special condition", "time": {"day": "during the day", "night": "at night", "dusk": "at dusk"},
+        "gender": {"1": "female", "2": "male"}, "or": " or ", "item": "Item", "move": "Move", "place": "special place",
+    },
+}
+
+
 def num(value: str) -> int | None:
     return int(value) if value not in ("", None) else None
 
@@ -60,14 +99,21 @@ def main() -> None:
     version_groups = {r["identifier"]: r for r in load("version_groups")}
     vg_order = {r["id"]: int(r["order"]) for r in version_groups.values()}
     species = {int(r["id"]): r for r in load("pokemon_species") if int(r["id"]) <= MAX_SPECIES}
-    species_names = {int(r["pokemon_species_id"]): r["name"] for r in load("pokemon_species_names") if r["local_language_id"] == DE}
+    def names(table: str, key: str) -> dict[str, dict[str, str]]:
+        rows = load(table)
+        return {
+            lang: {r[key]: r["name"] for r in rows if r["local_language_id"] == lid}
+            for lang, lid in (("de", DE), ("en", EN))
+        }
+
+    species_names = {lang: {int(k): v for k, v in table.items()} for lang, table in names("pokemon_species_names", "pokemon_species_id").items()}
     moves = {r["id"]: r for r in load("moves")}
-    move_names = {r["move_id"]: r["name"] for r in load("move_names") if r["local_language_id"] == DE}
+    move_names = names("move_names", "move_id")
     changelog = defaultdict(list)
     for r in load("move_changelog"):
         changelog[r["move_id"]].append(r)
-    item_names = {r["item_id"]: r["name"] for r in load("item_names") if r["local_language_id"] == DE}
-    location_names = {r["location_id"]: r["name"] for r in load("location_names") if r["local_language_id"] == DE}
+    item_names = names("item_names", "item_id")
+    location_names = names("location_names", "location_id")
     location_region = {r["id"]: r["region_id"] for r in load("locations")}
     vg_regions: dict[str, set[str]] = defaultdict(set)
     for r in load("version_group_regions"):
@@ -124,8 +170,10 @@ def main() -> None:
                 category = 1 if type_id in PHYSICAL_TYPES else 2
             if gen < 6 and type_id == 18:
                 type_id = 1
-            name = move_names.get(mid) or m["identifier"].replace("-", " ").title()
-            return [name, type_id, category, num(values["power"]), num(values["accuracy"]), num(values["pp"])]
+            fallback = m["identifier"].replace("-", " ").title()
+            name = move_names["de"].get(mid) or move_names["en"].get(mid) or fallback
+            return [name, type_id, category, num(values["power"]), num(values["accuracy"]), num(values["pp"]),
+                    move_names["en"].get(mid) or fallback]
 
         learn = {}
         used_moves: set[int] = set()
@@ -135,55 +183,58 @@ def main() -> None:
                 learn[pid] = [[lvl, mid] for lvl, mid in entries]
                 used_moves.update(mid for _, mid in entries)
 
-        def describe(r: dict[str, str]) -> str:
+        def describe(r: dict[str, str], lang: str) -> str:
+            L = LABELS[lang]
+            items, moves_l, places, species_l = item_names[lang], move_names[lang], location_names[lang], species_names[lang]
+            type_names = TYPE_DE if lang == "de" else TYPE_EN
             parts: list[str] = []
             trigger = r["evolution_trigger_id"]
             if trigger == "3":
-                parts.append(item_names.get(r["trigger_item_id"], "Item"))
+                parts.append(items.get(r["trigger_item_id"], L["item"]))
             elif trigger == "2":
-                parts.append("Tausch")
+                parts.append(L["trade"])
                 if r["held_item_id"]:
-                    parts.append(f"mit {item_names.get(r['held_item_id'], 'Item')}")
+                    parts.append(L["with"].format(items.get(r["held_item_id"], L["item"])))
                 if r["trade_species_id"]:
-                    parts.append(f"gegen {species_names.get(int(r['trade_species_id']), '?')}")
+                    parts.append(L["for"].format(species_l.get(int(r["trade_species_id"]), "?")))
             elif trigger == "1":
                 if r["minimum_level"]:
-                    parts.append(f"Lv. {r['minimum_level']}")
+                    parts.append(L["level"].format(r["minimum_level"]))
                 if r["minimum_happiness"]:
-                    parts.append("Freundschaft")
+                    parts.append(L["happiness"])
                 if r["minimum_affection"]:
-                    parts.append("Zuneigung")
+                    parts.append(L["affection"])
                 if r["minimum_beauty"]:
-                    parts.append("Schönheit")
+                    parts.append(L["beauty"])
                 if r["held_item_id"]:
-                    parts.append(f"trägt {item_names.get(r['held_item_id'], 'Item')}")
+                    parts.append(L["holds"].format(items.get(r["held_item_id"], L["item"])))
                 if r["known_move_id"]:
-                    parts.append(f"kennt {move_names.get(r['known_move_id'], 'Attacke')}")
+                    parts.append(L["knows"].format(moves_l.get(r["known_move_id"], L["move"])))
                 if r["known_move_type_id"]:
-                    parts.append(f"kennt {TYPE_DE[int(r['known_move_type_id'])]}-Attacke")
+                    parts.append(L["knows_type"].format(type_names[int(r["known_move_type_id"])]))
                 if r["location_id"]:
-                    parts.append(f"bei {location_names.get(r['location_id'], 'besonderem Ort')}")
+                    parts.append(L["at"].format(places.get(r["location_id"], L["place"])))
                 if r["party_species_id"]:
-                    parts.append(f"mit {species_names.get(int(r['party_species_id']), '?')} im Team")
+                    parts.append(L["party"].format(species_l.get(int(r["party_species_id"]), "?")))
                 if r["party_type_id"]:
-                    parts.append(f"mit {TYPE_DE[int(r['party_type_id'])]}-Pokémon im Team")
+                    parts.append(L["party_type"].format(type_names[int(r["party_type_id"])]))
                 stat = r["relative_physical_stats"]
                 if stat:
-                    parts.append({"1": "Ang > Vert", "-1": "Ang < Vert", "0": "Ang = Vert"}[stat])
+                    parts.append(L["stats"][stat])
                 if r["needs_overworld_rain"] == "1":
-                    parts.append("bei Regen")
+                    parts.append(L["rain"])
                 if r["turn_upside_down"] == "1":
-                    parts.append("Gerät umdrehen")
+                    parts.append(L["upside_down"])
                 if not parts:
-                    parts.append("Levelaufstieg")
+                    parts.append(L["level_up"])
             elif trigger == "4":
-                parts.append("Lv. 20 mit freiem Platz und Pokéball")
+                parts.append(L["shed"])
             else:
-                parts.append("besondere Bedingung")
+                parts.append(L["special"])
             if r["time_of_day"]:
-                parts.append({"day": "tagsüber", "night": "nachts", "dusk": "abends"}.get(r["time_of_day"], r["time_of_day"]))
+                parts.append(L["time"].get(r["time_of_day"], r["time_of_day"]))
             if r["gender_id"]:
-                parts.append({"1": "weiblich", "2": "männlich"}.get(r["gender_id"], ""))
+                parts.append(L["gender"].get(r["gender_id"], ""))
             return ", ".join(p for p in parts if p)
 
         evos: dict[int, list[list]] = defaultdict(list)
@@ -209,8 +260,8 @@ def main() -> None:
                 chosen = general
             if not chosen:
                 continue
-            text = " oder ".join(dict.fromkeys(describe(r) for r in chosen))
-            evos[int(s["evolves_from_species_id"])].append([target, text])
+            texts = [LABELS[lang]["or"].join(dict.fromkeys(describe(r, lang) for r in chosen)) for lang in ("de", "en")]
+            evos[int(s["evolves_from_species_id"])].append([target, *texts])
 
         data = {
             "versionGroup": vg,
@@ -224,6 +275,21 @@ def main() -> None:
         path = OUT / f"{vg}.json"
         path.write_text(json.dumps(data, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
         print(f"{path.relative_to(ROOT)}: {len(in_game)} Pokémon, {len(used_moves)} Attacken, {path.stat().st_size // 1024} KB")
+
+    # Deutsche Namen für den Schadensrechner (Schlüssel: englischer Name wie toID in @smogon/calc)
+    def german(table: str, key: str) -> dict[str, str]:
+        n = names(table, key)
+        return {to_id(en): n["de"][k] for k, en in n["en"].items() if k in n["de"]}
+
+    extra = {
+        "moves": {to_id(en): move_names["de"][k] for k, en in move_names["en"].items() if k in move_names["de"]},
+        "abilities": german("ability_names", "ability_id"),
+        "items": german("item_names", "item_id"),
+        "natures": german("nature_names", "nature_id"),
+    }
+    path = OUT / "names.json"
+    path.write_text(json.dumps(extra, ensure_ascii=False, separators=(",", ":"), sort_keys=True), encoding="utf-8")
+    print(f"{path.relative_to(ROOT)}: {path.stat().st_size // 1024} KB")
 
 
 if __name__ == "__main__":

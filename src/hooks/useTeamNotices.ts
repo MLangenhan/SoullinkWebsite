@@ -3,6 +3,7 @@ import type { ChallengeData } from '@/hooks/useChallenge'
 import { undoTeamChange } from '@/lib/actions'
 import { speciesName, type Lookups } from '@/lib/describe'
 import type { SpeciesIndex } from '@/lib/species'
+import { t } from '@/lib/i18n'
 import { toast, toastError } from '@/lib/toast'
 import type { ChallengeEvent } from '@/lib/types'
 
@@ -46,20 +47,21 @@ export function useTeamNotices(
         .sort((a, b) => (a.event.payload.status === 'team' ? -1 : 1) - (b.event.payload.status === 'team' ? -1 : 1))
       if (mine.length === 0) continue
 
-      const actor = lookups.members.get(events[0].actor_member_id ?? '')?.display_name ?? 'Jemand'
+      const actor = lookups.members.get(events[0].actor_member_id ?? '')?.display_name ?? t('Jemand')
       const parts = mine.map(({ event, encounter }) => {
         const name = encounter!.nickname ?? speciesName(species, encounter!.species_id)
-        return event.payload.status === 'team'
-          ? `${name} ins Team${typeof event.payload.slot === 'number' ? ` (Platz ${event.payload.slot})` : ''}`
-          : `${name} in die Box`
+        if (event.payload.status !== 'team') return t('{name} in die Box', { name })
+        return typeof event.payload.slot === 'number'
+          ? t('{name} ins Team (Platz {slot})', { name, slot: event.payload.slot })
+          : t('{name} ins Team', { name })
       })
-      toast(`${actor} hat das Team geändert. Bei dir: ${parts.join(', ')}. Bitte im Spiel nachziehen.`, 'info', {
+      toast(t('{actor} hat das Team geändert. Bei dir: {changes}. Bitte im Spiel nachziehen.', { actor, changes: parts.join(', ') }), 'info', {
         duration: 15000,
         action: {
-          label: 'Rückgängig',
+          label: t('Rückgängig'),
           run: () =>
             void undoTeamChange(data.challenge.id, group)
-              .then(() => toast('Teamwechsel rückgängig gemacht'))
+              .then(() => toast(t('Teamwechsel rückgängig gemacht')))
               .catch(toastError)
               .finally(() => void refresh?.()),
         },

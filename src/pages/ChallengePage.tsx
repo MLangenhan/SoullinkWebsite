@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import { ChevronLeft, ChevronRight, Eye, Flag, Lock, Plus, Radio } from 'lucide-react'
 import { Board } from '@/components/challenge/Board'
@@ -21,12 +21,17 @@ import { useTeamNotices } from '@/hooks/useTeamNotices'
 import { useSessionUserId } from '@/hooks/useSession'
 import { useSpecies } from '@/hooks/useSpecies'
 import { linkProps } from '@/lib/router'
+import { useT } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
+
+// Der Schadensrechner (mit den Daten aller Generationen) wird erst im Calc-Tab geladen
+const CalcPanel = lazy(() => import('@/components/challenge/CalcPanel'))
 
 const TABS = [
   { id: 'routen', label: 'Routen' },
   { id: 'teams', label: 'Teams' },
   { id: 'pokedex', label: 'Pokédex' },
+  { id: 'calc', label: 'Calc' },
   { id: 'friedhof', label: 'Friedhof' },
   { id: 'timeline', label: 'Timeline' },
   { id: 'zaehler', label: 'Zähler' },
@@ -36,10 +41,11 @@ type TabId = (typeof TABS)[number]['id']
 
 function readTab(): TabId {
   const tab = new URLSearchParams(window.location.search).get('tab')
-  return TABS.some((t) => t.id === tab) ? (tab as TabId) : 'routen'
+  return TABS.some((entry) => entry.id === tab) ? (tab as TabId) : 'routen'
 }
 
 export function ChallengePage({ slug }: { slug: string }) {
+  const t = useT()
   const userId = useSessionUserId()
   const species = useSpecies()
   const [run, setRun] = useState<number | null>(null)
@@ -71,17 +77,17 @@ export function ChallengePage({ slug }: { slug: string }) {
   if (state.status === 'missing' || state.status === 'error') {
     return (
       <main className="mx-auto flex min-h-svh max-w-xl flex-col items-center justify-center gap-4 px-4 text-center">
-        <p className="label text-primary">{state.status === 'error' ? 'Fehler' : 'Nicht gefunden'}</p>
+        <p className="label text-primary">{state.status === 'error' ? t('Fehler') : t('Nicht gefunden')}</p>
         <h1 className="font-display tracking-tight text-5xl font-extrabold">
-          {state.status === 'error' ? 'Da lief etwas schief' : 'Keine Challenge unter dieser Adresse'}
+          {state.status === 'error' ? t('Da lief etwas schief') : t('Keine Challenge unter dieser Adresse')}
         </h1>
         <p className="text-muted-foreground">
           {state.status === 'error'
             ? state.message
-            : 'Entweder gibt es sie nicht, oder sie ist privat und dieses Gerät ist noch nicht verbunden. Öffne deinen Einladungslink.'}
+            : t('Entweder gibt es sie nicht, oder sie ist privat und dieses Gerät ist noch nicht verbunden. Öffne deinen Einladungslink.')}
         </p>
         <a {...linkProps('/')} className="text-primary underline-offset-4 hover:underline">
-          Zur Startseite
+          {t('Zur Startseite')}
         </a>
       </main>
     )
@@ -91,7 +97,7 @@ export function ChallengePage({ slug }: { slug: string }) {
   const isCurrent = d.shownRun === d.stats.current_run
   const alive = d.encounters.filter((e) => e.state === 'team' || e.state === 'box').length
   const lost = d.encounters.length - alive
-  const tabs = TABS.filter((t) => t.id !== 'einstellungen' || d.me)
+  const tabs = TABS.filter((entry) => entry.id !== 'einstellungen' || d.me)
 
   return (
     <main className="mx-auto max-w-7xl px-4 pt-28 pb-24 md:px-8">
@@ -99,11 +105,11 @@ export function ChallengePage({ slug }: { slug: string }) {
         <div className="flex flex-wrap items-center gap-3">
           <span className="label flex items-center gap-1.5 text-muted-foreground">
             {d.challenge.visibility === 'public' ? <Radio className="size-3.5" /> : <Lock className="size-3.5" />}
-            {d.challenge.visibility === 'public' ? 'Öffentlich' : 'Privat'}
+            {d.challenge.visibility === 'public' ? t('Öffentlich') : t('Privat')}
           </span>
           {!d.canWrite && (
             <span className="label flex items-center gap-1.5 rounded border border-box/40 px-2 py-0.5 text-box">
-              <Eye className="size-3.5" /> Zuschauermodus
+              <Eye className="size-3.5" /> {t('Zuschauermodus')}
             </span>
           )}
         </div>
@@ -114,9 +120,9 @@ export function ChallengePage({ slug }: { slug: string }) {
         <div className="flex flex-wrap items-end justify-between gap-6">
           <div className="flex flex-wrap items-end gap-x-8 gap-y-4">
             <div>
-              <p className="label text-muted-foreground">Run</p>
+              <p className="label text-muted-foreground">{t('Run')}</p>
               <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon" disabled={d.shownRun <= 1} onClick={() => setRun(d.shownRun - 1)} aria-label="Vorheriger Run">
+                <Button variant="ghost" size="icon" disabled={d.shownRun <= 1} onClick={() => setRun(d.shownRun - 1)} aria-label={t('Vorheriger Run')}>
                   <ChevronLeft />
                 </Button>
                 <AnimatePresence mode="popLayout" initial={false}>
@@ -135,21 +141,21 @@ export function ChallengePage({ slug }: { slug: string }) {
                   size="icon"
                   disabled={isCurrent}
                   onClick={() => setRun(d.shownRun + 1 >= d.stats.current_run ? null : d.shownRun + 1)}
-                  aria-label="Nächster Run"
+                  aria-label={t('Nächster Run')}
                 >
                   <ChevronRight />
                 </Button>
               </div>
               <p className={cn('label text-[0.6rem]', isCurrent ? 'text-ok' : 'text-muted-foreground')}>
-                {isCurrent ? 'läuft' : 'beendet'}
+                {isCurrent ? t('läuft') : t('beendet')}
               </p>
             </div>
             <div>
-              <p className="label text-muted-foreground">Leben</p>
+              <p className="label text-muted-foreground">{t('Leben')}</p>
               <Counter to={alive} className="font-display tracking-tight text-6xl font-extrabold text-ok" />
             </div>
             <div>
-              <p className="label text-muted-foreground">Verloren</p>
+              <p className="label text-muted-foreground">{t('Verloren')}</p>
               <Counter to={lost} className="font-display tracking-tight text-6xl font-extrabold text-destructive" />
             </div>
             {isCurrent && <LevelCapControl data={d} />}
@@ -158,11 +164,11 @@ export function ChallengePage({ slug }: { slug: string }) {
           {d.canWrite && isCurrent && (
             <div className="flex flex-wrap gap-3">
               <Button variant="outline" size="lg" onClick={() => setEndOpen(true)}>
-                <Flag /> Run beenden
+                <Flag /> {t('Run beenden')}
               </Button>
               <Magnetic>
                 <Button size="lg" onClick={() => setLogOpen(true)}>
-                  <Plus /> Begegnung eintragen
+                  <Plus /> {t('Begegnung eintragen')}
                 </Button>
               </Magnetic>
             </div>
@@ -170,20 +176,20 @@ export function ChallengePage({ slug }: { slug: string }) {
         </div>
       </header>
 
-      <nav className="sticky top-0 z-30 -mx-4 mb-8 overflow-x-auto border-b bg-background/85 px-4 backdrop-blur-md md:-mx-8 md:px-8" aria-label="Bereiche">
+      <nav className="sticky top-0 z-30 -mx-4 mb-8 overflow-x-auto border-b bg-background/85 px-4 backdrop-blur-md md:-mx-8 md:px-8" aria-label={t('Bereiche')}>
         <ul className="flex gap-1">
-          {tabs.map((t) => (
-            <li key={t.id}>
+          {tabs.map((entry) => (
+            <li key={entry.id}>
               <button
-                onClick={() => setTab(t.id)}
+                onClick={() => setTab(entry.id)}
                 className={cn(
                   'relative px-4 py-4 text-sm font-medium whitespace-nowrap transition-colors',
-                  tab === t.id ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+                  tab === entry.id ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
                 )}
-                aria-current={tab === t.id ? 'page' : undefined}
+                aria-current={tab === entry.id ? 'page' : undefined}
               >
-                {t.label}
-                {tab === t.id && <motion.span layoutId="tab-underline" className="absolute inset-x-2 -bottom-px h-0.5 bg-primary" />}
+                {t(entry.label)}
+                {tab === entry.id && <motion.span layoutId="tab-underline" className="absolute inset-x-2 -bottom-px h-0.5 bg-primary" />}
               </button>
             </li>
           ))}
@@ -201,6 +207,11 @@ export function ChallengePage({ slug }: { slug: string }) {
           {tab === 'routen' && <Board data={d} species={species} lookups={lookups} onLog={() => setLogOpen(true)} />}
           {tab === 'teams' && <TeamsPanel data={d} species={species} lookups={lookups} onChanged={state.refresh} />}
           {tab === 'pokedex' && <DexPanel data={d} species={species} />}
+          {tab === 'calc' && (
+            <Suspense fallback={<Pokeball className="py-16" />}>
+              <CalcPanel data={d} species={species} />
+            </Suspense>
+          )}
           {tab === 'friedhof' && <Graveyard data={d} species={species} lookups={lookups} />}
           {tab === 'timeline' && <Timeline data={d} species={species} lookups={lookups} />}
           {tab === 'zaehler' && <StatsPanel data={d} />}

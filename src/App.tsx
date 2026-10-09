@@ -3,6 +3,7 @@ import { MotionConfig, motion, useReducedMotion, useScroll, useSpring } from 'mo
 import { ReactLenis } from 'lenis/react'
 import { Nav } from '@/components/Nav'
 import { Toaster } from '@/components/Toaster'
+import { useT } from '@/lib/i18n'
 import { supabase } from '@/lib/supabase'
 import { linkProps, usePage } from '@/lib/router'
 import { Home } from '@/pages/Home'
@@ -20,12 +21,13 @@ function ScrollProgress() {
 }
 
 function NotFound() {
+  const t = useT()
   return (
     <main className="mx-auto flex min-h-[70vh] max-w-xl flex-col items-center justify-center gap-4 px-4 text-center">
       <p className="label text-primary">404</p>
-      <h1 className="font-display tracking-tight text-5xl font-extrabold">Hier ist nur hohes Gras</h1>
+      <h1 className="font-display tracking-tight text-5xl font-extrabold">{t('Hier ist nur hohes Gras')}</h1>
       <a {...linkProps('/')} className="text-primary underline-offset-4 hover:underline">
-        Zur Startseite
+        {t('Zur Startseite')}
       </a>
     </main>
   )

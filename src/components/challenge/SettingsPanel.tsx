@@ -7,6 +7,7 @@ import { Field, Input, Select } from '@/components/ui/input'
 import type { ChallengeData } from '@/hooks/useChallenge'
 import { inviteUrl } from '@/lib/actions'
 import { formatTime } from '@/lib/describe'
+import { useT } from '@/lib/i18n'
 import { navigate } from '@/lib/router'
 import { db, rpc } from '@/lib/supabase'
 import { toast, toastError } from '@/lib/toast'
@@ -42,6 +43,7 @@ function MemberForm({ member, onDone }: { member: Member; onDone?: () => void })
   const [color, setColor] = useState(member.color ?? '#ffb547')
   const [discord, setDiscord] = useState(member.discord_id ?? '')
   const [busy, setBusy] = useState(false)
+  const t = useT()
   return (
     <form
       className="grid gap-3 sm:grid-cols-[1fr_auto_1fr_auto] sm:items-end"
@@ -50,23 +52,23 @@ function MemberForm({ member, onDone }: { member: Member; onDone?: () => void })
         setBusy(true)
         const saved = await attempt(
           () => rpc('update_member', { p_member_id: member.id, p_display_name: name, p_color: color, p_discord_id: discord }),
-          'Gespeichert',
+          t('Gespeichert'),
         )
         setBusy(false)
         if (saved) onDone?.()
       }}
     >
-      <Field label="Name">
+      <Field label={t('Name')}>
         <Input value={name} onChange={(e) => setName(e.target.value)} required maxLength={40} />
       </Field>
-      <Field label="Farbe">
+      <Field label={t('Farbe')}>
         <Input type="color" value={color} onChange={(e) => setColor(e.target.value)} className="w-16 p-1" />
       </Field>
-      <Field label="Discord-ID" hint="Für den Bot: Rechtsklick auf dich → „Nutzer-ID kopieren“">
+      <Field label={t('Discord-ID')} hint={t('Für den Bot: Rechtsklick auf dich → „Nutzer-ID kopieren“')}>
         <Input value={discord} onChange={(e) => setDiscord(e.target.value.replace(/\D/g, ''))} inputMode="numeric" maxLength={25} />
       </Field>
       <Button type="submit" disabled={busy}>
-        Speichern
+        {t('Speichern')}
       </Button>
     </form>
   )
@@ -75,11 +77,12 @@ function MemberForm({ member, onDone }: { member: Member; onDone?: () => void })
 export function SettingsPanel({ data, onChanged }: { data: ChallengeData; onChanged: () => Promise<void> }) {
   const { challenge, me, isOwner } = data
   const [ownLink, setOwnLink] = useState<string | null>(null)
+  const t = useT()
 
   return (
     <div className="grid gap-6">
       {me ? (
-        <Section title="Mein Platz" description={`Du bist hier ${roleLabel[me.role]}.`}>
+        <Section title={t('Mein Platz')} description={t('Du bist hier {role}.', { role: t(roleLabel[me.role]) })}>
           <MemberForm member={me} onDone={() => void onChanged()} />
           <div className="grid gap-2">
             <Button
@@ -92,13 +95,16 @@ export function SettingsPanel({ data, onChanged }: { data: ChallengeData; onChan
                 if (token) setOwnLink(inviteUrl(token))
               }}
             >
-              <Smartphone /> Weiteres Gerät verbinden
+              <Smartphone /> {t('Weiteres Gerät verbinden')}
             </Button>
-            {ownLink && <CopyLink url={ownLink} hint="Auf dem anderen Gerät öffnen. 24 Stunden gültig, einmal nutzbar." />}
+            {ownLink && <CopyLink url={ownLink} hint={t('Auf dem anderen Gerät öffnen. 24 Stunden gültig, einmal nutzbar.')} />}
           </div>
         </Section>
       ) : (
-        <Section title="Zuschauen" description="Du siehst diese Challenge nur. Mitspielen geht über einen Einladungslink der Leitung." />
+        <Section
+          title={t('Zuschauen')}
+          description={t('Du siehst diese Challenge nur. Mitspielen geht über einen Einladungslink der Leitung.')}
+        />
       )}
       {isOwner && <OwnerSettings data={data} onChanged={onChanged} />}
     </div>
@@ -123,10 +129,11 @@ function OwnerSettings({ data, onChanged }: { data: ChallengeData; onChanged: ()
   const [botLabel, setBotLabel] = useState('Discord-Bot')
   const [newToken, setNewToken] = useState<string | null>(null)
   const [confirmSlug, setConfirmSlug] = useState('')
+  const t = useT()
 
   const reload = useCallback(async () => {
     const client = db()
-    const [d, i, t] = await Promise.all([
+    const [d, i, b] = await Promise.all([
       client.from('member_devices').select('*').eq('challenge_id', challenge.id),
       client
         .from('challenge_invites')
@@ -141,7 +148,7 @@ function OwnerSettings({ data, onChanged }: { data: ChallengeData; onChanged: ()
     ])
     setDevices((d.data ?? []) as Device[])
     setInvites((i.data ?? []) as Invite[])
-    setTokens((t.data ?? []) as BotToken[])
+    setTokens((b.data ?? []) as BotToken[])
     setLoadedAt(Date.now())
   }, [challenge.id])
 
@@ -169,7 +176,7 @@ function OwnerSettings({ data, onChanged }: { data: ChallengeData; onChanged: ()
 
   return (
     <>
-      <Section title="Challenge">
+      <Section title={t('Challenge')}>
         <form
           className="grid gap-4 md:grid-cols-[1fr_auto_auto] md:items-end"
           onSubmit={async (e) => {
@@ -182,24 +189,24 @@ function OwnerSettings({ data, onChanged }: { data: ChallengeData; onChanged: ()
                   p_visibility: visibility,
                   p_bot_allow_unlinked: allowUnlinked,
                 }),
-              'Gespeichert',
+              t('Gespeichert'),
             )
             await onChanged()
           }}
         >
-          <Field label="Name">
+          <Field label={t('Name')}>
             <Input value={name} onChange={(e) => setName(e.target.value)} required maxLength={80} />
           </Field>
-          <Field label="Sichtbarkeit">
+          <Field label={t('Sichtbarkeit')}>
             <Select value={visibility} onChange={(e) => setVisibility(e.target.value as Visibility)}>
-              <option value="private">Privat</option>
-              <option value="public">Öffentlich (Zuschauen ohne Link)</option>
+              <option value="private">{t('Privat')}</option>
+              <option value="public">{t('Öffentlich (Zuschauen ohne Link)')}</option>
             </Select>
           </Field>
-          <Button type="submit">Speichern</Button>
+          <Button type="submit">{t('Speichern')}</Button>
           <label className="flex items-center gap-2 text-sm md:col-span-3">
             <input type="checkbox" checked={allowUnlinked} onChange={(e) => setAllowUnlinked(e.target.checked)} className="size-4 accent-[var(--primary)]" />
-            Bot: Auch Discord-Nutzer ohne hinterlegte Discord-ID dürfen eintragen
+            {t('Bot: Auch Discord-Nutzer ohne hinterlegte Discord-ID dürfen eintragen')}
           </label>
         </form>
       </Section>
@@ -209,8 +216,10 @@ function OwnerSettings({ data, onChanged }: { data: ChallengeData; onChanged: ()
       <TeamSyncSection data={data} onChanged={onChanged} />
 
       <Section
-        title="Mitglieder & Geräte"
-        description="Jeder Platz wird über einen persönlichen Link mit einem oder mehreren Geräten verbunden. Verlorenes Handy? Geräte abmelden und neuen Link schicken."
+        title={t('Mitglieder & Geräte')}
+        description={t(
+          'Jeder Platz wird über einen persönlichen Link mit einem oder mehreren Geräten verbunden. Verlorenes Handy? Geräte abmelden und neuen Link schicken.',
+        )}
       >
         <ul className="grid gap-3">
           {data.members.map((member) => {
@@ -221,20 +230,20 @@ function OwnerSettings({ data, onChanged }: { data: ChallengeData; onChanged: ()
                 <div className="flex flex-wrap items-center gap-3">
                   <span className="size-3 rounded-full" style={{ background: member.color ?? 'var(--primary)' }} />
                   <span className="font-medium">{member.display_name}</span>
-                  <span className="label text-[0.6rem] text-muted-foreground">{roleLabel[member.role]}</span>
+                  <span className="label text-[0.6rem] text-muted-foreground">{t(roleLabel[member.role])}</span>
                   <span className={count ? 'label text-[0.6rem] text-ok' : 'label text-[0.6rem] text-primary'}>
-                    {count ? `${count} ${count === 1 ? 'Gerät' : 'Geräte'}` : 'Platz frei'}
+                    {count ? (count === 1 ? t('1 Gerät') : t('{count} Geräte', { count })) : t('Platz frei')}
                   </span>
-                  {member.discord_id && <span className="label text-[0.6rem] text-muted-foreground">Discord {member.discord_id}</span>}
+                  {member.discord_id && <span className="label text-[0.6rem] text-muted-foreground">{t('Discord {id}', { id: member.discord_id })}</span>}
                   {member.link_group !== null && (
-                    <span className="label text-[0.6rem] text-muted-foreground">Paar {member.link_group + 1}</span>
+                    <span className="label text-[0.6rem] text-muted-foreground">{t('Paar {number}', { number: member.link_group + 1 })}</span>
                   )}
                   <div className="ml-auto flex flex-wrap gap-1">
                     <Button size="sm" variant="ghost" onClick={() => setEditing(editing === member.id ? null : member.id)}>
-                      <Pencil /> Bearbeiten
+                      <Pencil /> {t('Bearbeiten')}
                     </Button>
                     <Button size="sm" variant="ghost" onClick={() => void memberLink(member)}>
-                      <Link2 /> Gerätelink
+                      <Link2 /> {t('Gerätelink')}
                     </Button>
                     {!isMe && count > 0 && (
                       <Button
@@ -242,12 +251,12 @@ function OwnerSettings({ data, onChanged }: { data: ChallengeData; onChanged: ()
                         variant="ghost"
                         className="text-destructive"
                         onClick={async () => {
-                          if (!window.confirm(`Alle Geräte von ${member.display_name} abmelden?`)) return
-                          await attempt(() => rpc('remove_member_devices', { p_member_id: member.id }), 'Geräte abgemeldet')
+                          if (!window.confirm(t('Alle Geräte von {name} abmelden?', { name: member.display_name }))) return
+                          await attempt(() => rpc('remove_member_devices', { p_member_id: member.id }), t('Geräte abgemeldet'))
                           void reload()
                         }}
                       >
-                        <LogOut /> Abmelden
+                        <LogOut /> {t('Abmelden')}
                       </Button>
                     )}
                   </div>
@@ -262,7 +271,7 @@ function OwnerSettings({ data, onChanged }: { data: ChallengeData; onChanged: ()
                   />
                 )}
                 {links[member.id] && (
-                  <CopyLink url={links[member.id]} hint={`Für ${member.display_name}: 72 Stunden gültig, einmal nutzbar.`} />
+                  <CopyLink url={links[member.id]} hint={t('Für {name}: 72 Stunden gültig, einmal nutzbar.', { name: member.display_name })} />
                 )}
               </li>
             )
@@ -280,16 +289,19 @@ function OwnerSettings({ data, onChanged }: { data: ChallengeData; onChanged: ()
             }
           }}
         >
-          <Field label="Spieler hinzufügen">
+          <Field label={t('Spieler hinzufügen')}>
             <Input value={newPlayer} onChange={(e) => setNewPlayer(e.target.value)} placeholder="Linus" required maxLength={40} />
           </Field>
           <Button type="submit" variant="outline">
-            <UserPlus /> Hinzufügen & Link erstellen
+            <UserPlus /> {t('Hinzufügen & Link erstellen')}
           </Button>
         </form>
       </Section>
 
-      <Section title="Offene Einladung" description="Ein Link für Leute ohne festen Platz: Wer ihn öffnet, gibt seinen Namen ein und wird Spieler oder Zuschauer.">
+      <Section
+        title={t('Offene Einladung')}
+        description={t('Ein Link für Leute ohne festen Platz: Wer ihn öffnet, gibt seinen Namen ein und wird Spieler oder Zuschauer.')}
+      >
         <form
           className="flex flex-wrap items-end gap-3"
           onSubmit={async (e) => {
@@ -308,42 +320,46 @@ function OwnerSettings({ data, onChanged }: { data: ChallengeData; onChanged: ()
             }
           }}
         >
-          <Field label="Rolle">
+          <Field label={t('Rolle')}>
             <Select value={inviteRole} onChange={(e) => setInviteRole(e.target.value as 'player' | 'viewer')}>
-              <option value="player">Spieler</option>
-              <option value="viewer">Zuschauer</option>
+              <option value="player">{t('Spieler')}</option>
+              <option value="viewer">{t('Zuschauer')}</option>
             </Select>
           </Field>
-          <Field label="Nutzbar">
+          <Field label={t('Nutzbar')}>
             <Input type="number" min={1} max={100} value={inviteUses} onChange={(e) => setInviteUses(Number(e.target.value))} className="w-24" />
           </Field>
           <Button type="submit" variant="outline">
-            <Link2 /> Link erstellen
+            <Link2 /> {t('Link erstellen')}
           </Button>
         </form>
-        {links.open && <CopyLink url={links.open} hint="72 Stunden gültig." />}
+        {links.open && <CopyLink url={links.open} hint={t('72 Stunden gültig.')} />}
         {openInvites.length > 0 && (
           <ul className="grid gap-2 text-sm">
             {openInvites.map((invite) => (
               <li key={invite.id} className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2">
                 <span>
                   {invite.member_id
-                    ? `Gerätelink für ${data.members.find((m) => m.id === invite.member_id)?.display_name ?? '?'}`
-                    : `${roleLabel[invite.role]}-Einladung`}
+                    ? t('Gerätelink für {name}', { name: data.members.find((m) => m.id === invite.member_id)?.display_name ?? '?' })
+                    : invite.role === 'owner'
+                      ? t('Leitungs-Einladung')
+                      : invite.role === 'player'
+                        ? t('Spieler-Einladung')
+                        : t('Zuschauer-Einladung')}
                 </span>
                 <span className="text-muted-foreground">
-                  {invite.uses}/{invite.max_uses} genutzt · bis {formatTime(invite.expires_at)}
+                  {t('{uses}/{max} genutzt · bis {time}', { uses: invite.uses, max: invite.max_uses, time: formatTime(invite.expires_at) })}
                 </span>
                 <Button
                   size="sm"
                   variant="ghost"
                   className="ml-auto text-destructive"
                   onClick={async () => {
-                    await attempt(() => rpc('revoke_invite', { p_invite_id: invite.id }), 'Einladung widerrufen')
+                    await attempt(() => rpc('revoke_invite', { p_invite_id: invite.id }), t('Einladung widerrufen'))
                     void reload()
                   }}
                 >
-                  Widerrufen
+                  {t('Widerrufen')}
                 </Button>
               </li>
             ))}
@@ -352,8 +368,10 @@ function OwnerSettings({ data, onChanged }: { data: ChallengeData; onChanged: ()
       </Section>
 
       <Section
-        title="Discord-Bot"
-        description="Der Bot bekommt nur dieses Token (plus den öffentlichen Key), nie einen geheimen Schlüssel. Er sieht und schreibt nur diese Challenge."
+        title={t('Discord-Bot')}
+        description={t(
+          'Der Bot bekommt nur dieses Token (plus den öffentlichen Key), nie einen geheimen Schlüssel. Er sieht und schreibt nur diese Challenge.',
+        )}
       >
         <form
           className="flex flex-wrap items-end gap-3"
@@ -366,37 +384,37 @@ function OwnerSettings({ data, onChanged }: { data: ChallengeData; onChanged: ()
             }
           }}
         >
-          <Field label="Bezeichnung">
+          <Field label={t('Bezeichnung')}>
             <Input value={botLabel} onChange={(e) => setBotLabel(e.target.value)} required maxLength={60} />
           </Field>
           <Button type="submit" variant="outline">
-            <Bot /> Token erstellen
+            <Bot /> {t('Token erstellen')}
           </Button>
         </form>
-        {newToken && <CopyLink url={newToken} hint="Wird nur jetzt angezeigt. In der .env des Bots als SOULLINK_BOT_TOKEN eintragen." />}
+        {newToken && <CopyLink url={newToken} hint={t('Wird nur jetzt angezeigt. In der .env des Bots als SOULLINK_BOT_TOKEN eintragen.')} />}
         {tokens.length > 0 && (
           <ul className="grid gap-2 text-sm">
-            {tokens.map((t) => (
-              <li key={t.id} className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2">
-                <span className={t.revoked_at ? 'text-muted-foreground line-through' : ''}>{t.label}</span>
+            {tokens.map((token) => (
+              <li key={token.id} className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2">
+                <span className={token.revoked_at ? 'text-muted-foreground line-through' : ''}>{token.label}</span>
                 <span className="text-muted-foreground">
-                  {t.revoked_at
-                    ? `widerrufen ${formatTime(t.revoked_at)}`
-                    : t.last_used_at
-                      ? `zuletzt aktiv ${formatTime(t.last_used_at)}`
-                      : 'noch nie benutzt'}
+                  {token.revoked_at
+                    ? t('widerrufen {time}', { time: formatTime(token.revoked_at) })
+                    : token.last_used_at
+                      ? t('zuletzt aktiv {time}', { time: formatTime(token.last_used_at) })
+                      : t('noch nie benutzt')}
                 </span>
-                {!t.revoked_at && (
+                {!token.revoked_at && (
                   <Button
                     size="sm"
                     variant="ghost"
                     className="ml-auto text-destructive"
                     onClick={async () => {
-                      await attempt(() => rpc('revoke_bot_token', { p_token_id: t.id }), 'Token widerrufen')
+                      await attempt(() => rpc('revoke_bot_token', { p_token_id: token.id }), t('Token widerrufen'))
                       void reload()
                     }}
                   >
-                    Widerrufen
+                    {t('Widerrufen')}
                   </Button>
                 )}
               </li>
@@ -405,23 +423,23 @@ function OwnerSettings({ data, onChanged }: { data: ChallengeData; onChanged: ()
         )}
       </Section>
 
-      <Section title="Challenge löschen" description="Löscht alle Runs, Begegnungen und Ereignisse endgültig.">
+      <Section title={t('Challenge löschen')} description={t('Löscht alle Runs, Begegnungen und Ereignisse endgültig.')}>
         <form
           className="flex flex-wrap items-end gap-3"
           onSubmit={async (e) => {
             e.preventDefault()
             const done = await attempt(
               () => rpc('delete_challenge', { p_challenge_id: challenge.id, p_confirm_slug: confirmSlug }).then(() => true),
-              'Challenge gelöscht',
+              t('Challenge gelöscht'),
             )
             if (done) navigate('/', { replace: true })
           }}
         >
-          <Field label={`Zur Bestätigung „${challenge.slug}“ eingeben`}>
+          <Field label={t('Zur Bestätigung „{slug}“ eingeben', { slug: challenge.slug })}>
             <Input value={confirmSlug} onChange={(e) => setConfirmSlug(e.target.value)} />
           </Field>
           <Button type="submit" variant="destructive" disabled={confirmSlug !== challenge.slug}>
-            <Trash2 /> Endgültig löschen
+            <Trash2 /> {t('Endgültig löschen')}
           </Button>
         </form>
       </Section>
@@ -432,6 +450,7 @@ function OwnerSettings({ data, onChanged }: { data: ChallengeData; onChanged: ()
 /** Spielregeln: Level-Cap-Vorlage und Dupes-Clause */
 function RulesSection({ data, onChanged }: { data: ChallengeData; onChanged: () => Promise<void> }) {
   const [busy, setBusy] = useState(false)
+  const t = useT()
   const detected = detectPreset(data.challenge.game)
   const save = async (preset: string | null, dupes: boolean) => {
     setBusy(true)
@@ -440,24 +459,29 @@ function RulesSection({ data, onChanged }: { data: ChallengeData; onChanged: () 
     )
     await onChanged()
     setBusy(false)
-    if (ok) toast('Spielregeln gespeichert')
+    if (ok) toast(t('Spielregeln gespeichert'))
   }
   return (
-    <Section title="Spielregeln" description="Level-Caps und Pokédex-Daten richten sich nach dem Spiel. Dupes gelten immer für alle Spieler zusammen.">
+    <Section
+      title={t('Spielregeln')}
+      description={t('Level-Caps und Pokédex-Daten richten sich nach dem Spiel. Dupes gelten immer für alle Spieler zusammen.')}
+    >
       <div className="grid gap-4">
-        <Field label="Level-Caps und Pokédex nach Spiel">
+        <Field label={t('Level-Caps und Pokédex nach Spiel')}>
           <Select
             value={data.challenge.level_cap_preset ?? ''}
             disabled={busy}
             onChange={(e) => void save(e.target.value || null, data.challenge.dupes_clause)}
           >
-            <option value="">Automatisch{detected ? ` (erkannt: ${detected.name})` : ' (nicht erkannt)'}</option>
+            <option value="">
+              {detected ? t('Automatisch (erkannt: {name})', { name: t(detected.name) }) : t('Automatisch (nicht erkannt)')}
+            </option>
             {LEVEL_CAP_PRESETS.map((p) => (
               <option key={p.key} value={p.key}>
-                {p.name}
+                {t(p.name)}
               </option>
             ))}
-            <option value="none">Ohne Level-Cap</option>
+            <option value="none">{t('Ohne Level-Cap')}</option>
           </Select>
         </Field>
         <label className="flex items-start gap-3 text-sm">
@@ -469,9 +493,9 @@ function RulesSection({ data, onChanged }: { data: ChallengeData; onChanged: () 
             onChange={(e) => void save(data.challenge.level_cap_preset, e.target.checked)}
           />
           <span>
-            <span className="font-medium">Dupes-Clause</span>
+            <span className="font-medium">{t('Dupes-Clause')}</span>
             <span className="block text-muted-foreground">
-              Warnt beim Eintragen, wenn die Entwicklungsreihe in diesem Run schon von irgendwem gefangen wurde.
+              {t('Warnt beim Eintragen, wenn die Entwicklungsreihe in diesem Run schon von irgendwem gefangen wurde.')}
             </span>
           </span>
         </label>
@@ -483,29 +507,32 @@ function RulesSection({ data, onChanged }: { data: ChallengeData; onChanged: () 
 /** Teams angleichen: zieht ein Teamwechsel die Soul-Link-Partner der anderen mit? */
 function TeamSyncSection({ data, onChanged }: { data: ChallengeData; onChanged: () => Promise<void> }) {
   const [busy, setBusy] = useState(false)
+  const t = useT()
   const set = async (enabled: boolean) => {
     setBusy(true)
     const ok = await attempt(() => rpc('set_team_sync', { p_challenge_id: data.challenge.id, p_enabled: enabled }).then(() => true))
     await onChanged()
     setBusy(false)
-    if (ok) toast(enabled ? 'Teams werden automatisch angeglichen' : 'Teams werden nicht mehr angeglichen')
+    if (ok) toast(enabled ? t('Teams werden automatisch angeglichen') : t('Teams werden nicht mehr angeglichen'))
   }
   return (
     <Section
-      title="Teams angleichen"
-      description="Kommt ein Pokémon ins Team oder in die Box, wechseln seine Soul-Link-Partner bei den anderen mit (wild und Static getrennt). Einzelne Wechsel lassen sich trotzdem nur für ein Team machen: Schalter „Teams angleichen“ im Tab Teams oder Shift beim Ablegen."
+      title={t('Teams angleichen')}
+      description={t(
+        'Kommt ein Pokémon ins Team oder in die Box, wechseln seine Soul-Link-Partner bei den anderen mit (wild und Static getrennt). Einzelne Wechsel lassen sich trotzdem nur für ein Team machen: Schalter „Teams angleichen“ im Tab Teams oder Shift beim Ablegen.',
+      )}
     >
       <div className="grid gap-3 sm:grid-cols-2">
         {(
           [
-            { enabled: true, title: 'Automatisch', text: 'Teamwechsel gelten für alle verbundenen Teams. Die anderen bekommen einen Hinweis.' },
-            { enabled: false, title: 'Aus', text: 'Jeder ändert nur sein eigenes Team.' },
+            { enabled: true, title: t('Automatisch'), text: t('Teamwechsel gelten für alle verbundenen Teams. Die anderen bekommen einen Hinweis.') },
+            { enabled: false, title: t('Aus'), text: t('Jeder ändert nur sein eigenes Team.') },
           ] as const
         ).map((option) => {
           const active = data.challenge.team_sync === option.enabled
           return (
             <button
-              key={option.title}
+              key={String(option.enabled)}
               type="button"
               disabled={busy || active}
               onClick={() => void set(option.enabled)}
@@ -528,6 +555,7 @@ function TeamSyncSection({ data, onChanged }: { data: ChallengeData; onChanged: 
 /** Soul-Link-Modus: alle Spieler gemeinsam oder Paare in Sitzreihenfolge (wie im Discord-Bot) */
 function LinkGroupsSection({ data, onChanged }: { data: ChallengeData; onChanged: () => Promise<void> }) {
   const [busy, setBusy] = useState(false)
+  const t = useT()
   const pairs = data.players.length > 0 && data.players.every((p, i) => p.link_group === Math.floor(i / 2))
   const all = data.players.every((p) => p.link_group === null)
 
@@ -545,7 +573,7 @@ function LinkGroupsSection({ data, onChanged }: { data: ChallengeData; onChanged
     }
     await onChanged()
     setBusy(false)
-    if (ok) toast(mode === 'pairs' ? 'Soul-Links jetzt paarweise' : 'Soul-Links jetzt für alle gemeinsam')
+    if (ok) toast(mode === 'pairs' ? t('Soul-Links jetzt paarweise') : t('Soul-Links jetzt für alle gemeinsam'))
   }
 
   const pairLabel = (index: number) =>
@@ -556,17 +584,22 @@ function LinkGroupsSection({ data, onChanged }: { data: ChallengeData; onChanged
 
   return (
     <Section
-      title="Soul-Links"
-      description="Wer ist mit wem verbunden? Gilt für neue Begegnungen; bestehende Soul-Links bleiben, wie sie sind."
+      title={t('Soul-Links')}
+      description={t('Wer ist mit wem verbunden? Gilt für neue Begegnungen; bestehende Soul-Links bleiben, wie sie sind.')}
     >
       <div className="grid gap-3 sm:grid-cols-2">
         {(
           [
-            { mode: 'all', title: 'Alle verbunden', text: 'Stirbt ein Pokémon, sterben die Pokémon aller Spieler auf dieser Route.', active: all },
+            {
+              mode: 'all',
+              title: t('Alle verbunden'),
+              text: t('Stirbt ein Pokémon, sterben die Pokémon aller Spieler auf dieser Route.'),
+              active: all,
+            },
             {
               mode: 'pairs',
-              title: 'Paare',
-              text: Array.from({ length: Math.ceil(data.players.length / 2) }, (_, i) => pairLabel(i)).join(' · ') || 'Spieler 1↔2, 3↔4 …',
+              title: t('Paare'),
+              text: Array.from({ length: Math.ceil(data.players.length / 2) }, (_, i) => pairLabel(i)).join(' · ') || t('Spieler 1↔2, 3↔4 …'),
               active: pairs,
             },
           ] as const

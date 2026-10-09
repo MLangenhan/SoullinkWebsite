@@ -6,10 +6,12 @@ import { Sprite } from '@/components/Sprite'
 import { Button } from '@/components/ui/button'
 import type { ChallengeData } from '@/hooks/useChallenge'
 import { appendEvent } from '@/lib/actions'
+import { useT } from '@/lib/i18n'
 import { toast, toastError } from '@/lib/toast'
 
 /** Alle Zähler des Bots: Tode und verpasste Begegnungen (Run/gesamt), Wipes, Siege. */
 export function StatsPanel({ data }: { data: ChallengeData }) {
+  const t = useT()
   const [busy, setBusy] = useState(false)
   const isCurrent = data.shownRun === data.stats.current_run
   const max = Math.max(1, ...data.memberStats.map((m) => m.deaths_total))
@@ -18,7 +20,7 @@ export function StatsPanel({ data }: { data: ChallengeData }) {
     setBusy(true)
     try {
       await appendEvent(data.challenge.id, 'encounter_missed', { member_id: memberId })
-      toast(`Verpasste Begegnung für ${name} gezählt (rückgängig über die Timeline)`)
+      toast(t('Verpasste Begegnung für {name} gezählt (rückgängig über die Timeline)', { name }))
     } catch (error) {
       toastError(error)
     } finally {
@@ -27,10 +29,10 @@ export function StatsPanel({ data }: { data: ChallengeData }) {
   }
 
   const overview = [
-    { label: 'Laufender Run', value: data.stats.current_run },
-    { label: 'Runs beendet', value: data.stats.runs_finished },
-    { label: 'Wipes', value: data.stats.wipes_total },
-    { label: 'Siege', value: data.stats.wins_total },
+    { label: t('Laufender Run'), value: data.stats.current_run },
+    { label: t('Runs beendet'), value: data.stats.runs_finished },
+    { label: t('Wipes'), value: data.stats.wipes_total },
+    { label: t('Siege'), value: data.stats.wins_total },
   ]
 
   return (
@@ -69,11 +71,11 @@ export function StatsPanel({ data }: { data: ChallengeData }) {
                 </div>
               </header>
               <dl className="mt-5 grid grid-cols-3 gap-4">
-                <Stat label="Tode im Run" value={m.deaths_run} sub={`${m.deaths_total} gesamt`} />
-                <Stat label="Verpasst im Run" value={m.missed_run} sub={`${m.missed_total} gesamt`} />
-                <Stat label="Wipes verursacht" value={m.wipes_caused} />
+                <Stat label={t('Tode im Run')} value={m.deaths_run} sub={t('{count} gesamt', { count: m.deaths_total })} />
+                <Stat label={t('Verpasst im Run')} value={m.missed_run} sub={t('{count} gesamt', { count: m.missed_total })} />
+                <Stat label={t('Wipes verursacht')} value={m.wipes_caused} />
               </dl>
-              <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-secondary" title="Tode gesamt im Vergleich">
+              <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-secondary" title={t('Tode gesamt im Vergleich')}>
                 <motion.div
                   className="h-full rounded-full bg-destructive"
                   initial={{ width: 0 }}
@@ -84,7 +86,7 @@ export function StatsPanel({ data }: { data: ChallengeData }) {
               </div>
               {data.canWrite && isCurrent && (
                 <Button variant="ghost" size="sm" className="mt-4" disabled={busy} onClick={() => void missed(m.member_id, m.display_name)}>
-                  <Plus /> Verpasste Begegnung
+                  <Plus /> {t('Verpasste Begegnung')}
                 </Button>
               )}
             </motion.section>

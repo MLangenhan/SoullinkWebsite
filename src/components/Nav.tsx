@@ -1,11 +1,14 @@
 import { useState } from 'react'
 import { motion, useMotionValueEvent, useScroll } from 'motion/react'
+import { setLang, useLang, useT } from '@/lib/i18n'
 import { linkProps, withBase } from '@/lib/router'
 
 /** Kopfzeile, die beim Runterscrollen verschwindet und beim Hochscrollen zurückkommt. */
 export function Nav() {
   const { scrollY } = useScroll()
   const [hidden, setHidden] = useState(false)
+  const lang = useLang()
+  const t = useT()
 
   useMotionValueEvent(scrollY, 'change', (v) => {
     const previous = scrollY.getPrevious() ?? 0
@@ -29,10 +32,29 @@ export function Nav() {
           />
           Soul Link
         </a>
-        <span className="label hidden items-center gap-2 text-muted-foreground sm:flex">
-          <span className="size-2 animate-pulse rounded-full bg-ok" />
-          Live
-        </span>
+        <div className="flex items-center gap-4">
+          <span className="label hidden items-center gap-2 text-muted-foreground sm:flex">
+            <span className="size-2 animate-pulse rounded-full bg-ok" />
+            Live
+          </span>
+          <div role="group" aria-label={t('Sprache')} className="relative flex rounded-full border bg-card/70 p-0.5 text-xs font-medium">
+            {(['de', 'en'] as const).map((code) => (
+              <button
+                key={code}
+                type="button"
+                onClick={() => setLang(code)}
+                aria-pressed={lang === code}
+                title={code === 'de' ? t('Deutsch') : t('Englisch')}
+                className={lang === code ? 'relative rounded-full px-2.5 py-1 text-primary-foreground' : 'relative rounded-full px-2.5 py-1 text-muted-foreground hover:text-foreground'}
+              >
+                {lang === code && (
+                  <motion.span layoutId="lang-pill" className="absolute inset-0 rounded-full bg-primary" transition={{ type: 'spring', stiffness: 420, damping: 32 }} />
+                )}
+                <span className="relative">{code.toUpperCase()}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </motion.header>
   )

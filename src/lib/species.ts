@@ -1,3 +1,4 @@
+import { getLang } from '@/lib/i18n'
 import { db } from '@/lib/supabase'
 import type { Species } from '@/lib/types'
 
@@ -79,4 +80,9 @@ function buildIndex(list: Species[]): SpeciesIndex {
 /** Animiertes Sprite (Showdown-GIF); für ein paar neue Arten gibt es nur das statische Bild. */
 export function animatedSpriteUrl(id: number) {
   return `${SHOWDOWN}/${id}.gif`
+}
+
+/** Name in der eingestellten Sprache */
+export function speciesLabel(species: Pick<Species, 'name_de' | 'name_en'>) {
+  return getLang() === 'en' ? species.name_en : species.name_de
 }

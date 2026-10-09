@@ -8,6 +8,7 @@ import { Pokeball } from '@/components/Pokeball'
 import { SpriteParade } from '@/components/SpriteParade'
 import { useSessionUserId } from '@/hooks/useSession'
 import { linkProps } from '@/lib/router'
+import { useT } from '@/lib/i18n'
 import { db } from '@/lib/supabase'
 import type { Challenge, ChallengeStats, Member } from '@/lib/types'
 
@@ -85,6 +86,7 @@ function Blobs() {
 }
 
 export function Home() {
+  const t = useT()
   const userId = useSessionUserId()
   const mine = useMyChallenges(userId)
 
@@ -124,17 +126,17 @@ export function Home() {
       <section className="mx-auto max-w-7xl px-4 py-20 md:px-8">
         <div className="mb-8 flex items-end justify-between gap-4">
           <h2 className="font-display tracking-tight text-5xl font-extrabold md:text-6xl">
-            <SplitReveal text="Meine Challenges" />
+            <SplitReveal text={t('Meine Challenges')} />
           </h2>
-          <span className="label hidden text-muted-foreground md:block">auf diesem Gerät</span>
+          <span className="label hidden text-muted-foreground md:block">{t('auf diesem Gerät')}</span>
         </div>
 
         {mine === null ? (
           <Pokeball className="py-16" />
         ) : mine.length === 0 ? (
           <div className="rounded-2xl border-2 border-dashed p-10 text-center text-muted-foreground">
-            <p className="text-lg text-foreground">Noch keine Challenge auf diesem Gerät.</p>
-            <p className="mt-2">Starte eine neue oder öffne den Einladungslink, den du bekommen hast.</p>
+            <p className="text-lg text-foreground">{t('Noch keine Challenge auf diesem Gerät.')}</p>
+            <p className="mt-2">{t('Starte eine neue oder öffne den Einladungslink, den du bekommen hast.')}</p>
           </div>
         ) : (
           <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
@@ -152,7 +154,11 @@ export function Home() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="label text-muted-foreground">
-                      Run {stats?.current_run ?? 1} · {stats?.wipes_total ?? 0} Wipes · {stats?.wins_total ?? 0} Siege
+                      {t('Run {run} · {wipes} Wipes · {wins} Siege', {
+                        run: stats?.current_run ?? 1,
+                        wipes: stats?.wipes_total ?? 0,
+                        wins: stats?.wins_total ?? 0,
+                      })}
                     </p>
                     <h3 className="mt-2 font-display tracking-tight text-3xl font-extrabold">{challenge.name}</h3>
                   </div>
@@ -162,7 +168,7 @@ export function Home() {
                   <span className="truncate">{players.map((p) => p.display_name).join(' · ')}</span>
                   <span className="label flex shrink-0 items-center gap-1.5">
                     {challenge.visibility === 'public' ? <Radio className="size-3.5" /> : <Lock className="size-3.5" />}
-                    {me?.role === 'owner' ? 'Leitung' : me?.role === 'viewer' ? 'Zuschauer' : 'Spieler'}
+                    {me?.role === 'owner' ? t('Leitung') : me?.role === 'viewer' ? t('Zuschauer') : t('Spieler')}
                   </span>
                 </div>
               </motion.a>

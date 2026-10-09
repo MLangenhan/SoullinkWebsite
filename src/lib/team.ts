@@ -1,3 +1,4 @@
+import { t } from '@/lib/i18n'
 import type { ChallengeEvent, Encounter } from '@/lib/types'
 
 export const TEAM_SIZE = 6
@@ -141,12 +142,12 @@ export function mirror(
     for (const move of changes.filter((m) => m.status === 'team')) {
       const partner = partnerOf(move)
       if (!partner) {
-        if (!linked(move)) effect.notes.push(`kein Pokémon von ${routeName(move.encounter)}`)
+        if (!linked(move)) effect.notes.push(t('kein Pokémon von {route}', { route: routeName(move.encounter) }))
         continue
       }
       if (partner.state === 'team') continue
       if (teamSize >= TEAM_SIZE) {
-        effect.notes.push('Team voll')
+        effect.notes.push(t('Team voll'))
         continue
       }
       // Platz des ausgetauschten Partners, sonst der erste freie
@@ -155,7 +156,7 @@ export function mirror(
         slot = Array.from({ length: TEAM_SIZE }, (_, i) => i).find((i) => !taken.has(i) && !freed.includes(i))
       }
       if (slot === undefined) {
-        effect.notes.push('Team voll')
+        effect.notes.push(t('Team voll'))
         continue
       }
       taken.add(slot)
