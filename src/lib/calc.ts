@@ -137,14 +137,28 @@ function pokemon(gen: CalcGen, name: string, side: SideConfig) {
     if (side.ability) options.ability = side.ability
   }
   if (gen.num >= 2 && side.item) options.item = side.item
+  const types = side.override.enabled ? side.override.types.filter(Boolean) : []
   if (side.override.enabled) {
     options.overrides = {
-      types: (side.override.types.filter(Boolean).length ? side.override.types.filter(Boolean) : undefined) as never,
+      types: (types.length ? types : undefined) as never,
       baseStats: side.override.stats,
     }
   }
   const mon = new Pokemon(gen.num, name, options)
   mon.originalCurHP = Math.max(1, Math.round((mon.maxHP() * side.hpPercent) / 100))
+  return types.length ? withTypes(mon, types) : mon
+}
+
+/**
+ * Randomizer-Typen fest setzen: @smogon/calc verschmilzt Typlisten Eintrag für Eintrag mit den Originaldaten
+ * (auch beim Klonen in calculate), aus „nur Wasser“ für Knakrack würde sonst „Wasser/Boden“.
+ */
+function withTypes(mon: Pokemon, types: string[]): Pokemon {
+  const fixed = mon as unknown as { types: string[]; species: { types: string[] }; clone: () => Pokemon }
+  fixed.types = [...types]
+  fixed.species.types = [...types]
+  const clone = mon.clone.bind(mon)
+  fixed.clone = () => withTypes(clone(), types)
   return mon
 }
 

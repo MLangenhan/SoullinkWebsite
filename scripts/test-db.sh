@@ -34,6 +34,7 @@ run_test() {
 }
 
 run_test "$ROOT/supabase/tests/schema.test.sql"
+run_test "$ROOT/supabase/tests/security.test.sql"
 
 # Import eines Bot-Runs (Testdaten im Bot-Format): SQL erzeugen, einspielen, Zähler und Einladungslinks prüfen
 WORK="$(mktemp -d)"

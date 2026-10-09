@@ -106,3 +106,15 @@ export function autoStatus(
   }
   return { status, promote }
 }
+
+/**
+ * Soul-Links statt einzelner Pokémon: Ein Link lebt, solange eins seiner Pokémon lebt (stirbt eins, sterben
+ * alle mit). Bei „alle verbunden“ ist das die Zahl der Pokémon geteilt durch die Spieler, bei Paaren zählt
+ * jedes Paar für sich.
+ */
+export function countLinks(encounters: Encounter[]) {
+  const alive = new Map<string, boolean>()
+  for (const e of encounters) alive.set(e.link_id, (alive.get(e.link_id) ?? false) || e.state === 'team' || e.state === 'box')
+  const living = [...alive.values()].filter(Boolean).length
+  return { alive: living, lost: alive.size - living }
+}

@@ -3,8 +3,8 @@
 Umgesetzt: Datenbankschema ([`supabase/migrations/`](../supabase/migrations/)), Pokémon-Stammdaten
 ([`tools/generate_species.py`](../tools/generate_species.py)), Import der Bot-Zähler
 ([`tools/migration/`](../tools/migration/)), Frontend ([`src/`](../src/)) und Tests.
-Benutzung und Einrichtung: [`README.md`](../README.md). Offen: Bot auf die neue Datenbank umbauen,
-danach die Sicherheitsphase (Threat Model, Header/CSP, CI-Scans, Pentest-Bericht).
+Benutzung und Einrichtung: [`README.md`](../README.md). Sicherheitskonzept mit Bedrohungsmodell,
+CSP und CI-Scans: [`sicherheit.md`](sicherheit.md). Offen: Bot auf die neue Datenbank umbauen.
 
 ## 1. Ausgangslage: was der Bot heute speichert
 
@@ -265,8 +265,16 @@ alle Migrationen und die Tests in eine Wegwerf-Datenbank:
   `stats.json`). Das erzeugte SQL wird eingespielt, Begegnungen, Tode, Paare und Zähler werden geprüft,
   und zwei Geräte treten mit den erzeugten Links bei.
 
-In GitHub Actions laufen diese Tests bei jedem Pull Request (Postgres-Service-Container), dazu Lint,
-Typprüfung und Build der Website.
+- `supabase/tests/security.test.sql`: Invarianten, die keine Migration aufweichen darf (RLS auf allen
+  Tabellen, `security_invoker`-Views, `search_path` in allen `SECURITY DEFINER`-Funktionen, keine
+  Schreibrechte für Clients, Erlaubnislisten der aufrufbaren Funktionen, Tokens nur als SHA-256), dazu
+  Angriffe von außen (falsche Bot-Tokens, Fremde, SQL in Eingaben, übergroße Eingaben).
+
+Dazu Unit-Tests der Spiellogik (Vitest, `src/**/*.test.ts`) und End-to-End-Tests (Playwright, `e2e/`),
+die den Produktions-Build mit Content Security Policy gegen eine echte lokale Supabase prüfen.
+In GitHub Actions läuft alles bei jedem Pull Request: Datenbank-Tests auf PostgreSQL 16 und 17
+(Service-Container), Lint, Typprüfung, Unit-Tests mit Mindestabdeckung, Build, E2E, CodeQL,
+Dependency Review und zizmor; Übersicht in [`sicherheit.md`](sicherheit.md#tests).
 
 ```bash
 DATABASE_URL=postgres://postgres@localhost:5432/postgres scripts/test-db.sh

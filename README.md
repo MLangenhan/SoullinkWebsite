@@ -1,5 +1,9 @@
 # Soul Link
 
+[![CI](https://github.com/MLangenhan/SoullinkWebsite/actions/workflows/ci.yml/badge.svg)](https://github.com/MLangenhan/SoullinkWebsite/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/MLangenhan/SoullinkWebsite/actions/workflows/codeql.yml/badge.svg)](https://github.com/MLangenhan/SoullinkWebsite/actions/workflows/codeql.yml)
+[![Website](https://github.com/MLangenhan/SoullinkWebsite/actions/workflows/deploy.yml/badge.svg)](https://github.com/MLangenhan/SoullinkWebsite/actions/workflows/deploy.yml)
+
 Web-App für Soul-Link-Nuzlockes mit Freunden: Begegnungen pro Route, Soul-Link-Paare, Team und Box,
 Friedhof, Timeline mit Undo und alle Zähler des alten Discord-Bots, live für alle Mitspieler
 gleichzeitig. Ersetzt den [Soullinkbot](https://github.com/MLangenhan/Soullinkbot), der Bot kann
@@ -8,7 +12,14 @@ weiter als zweiter Weg zum Eintragen dienen.
 **Stack:** Vite · React 19 · TypeScript · Tailwind CSS v4 · shadcn/ui · Motion · Lenis ·
 Supabase (Postgres, Row Level Security, Realtime, anonyme Sitzungen) · GitHub Pages
 
-Wie es gebaut ist und warum: [`docs/architektur.md`](docs/architektur.md)
+Wie es gebaut ist und warum: [`docs/architektur.md`](docs/architektur.md) ·
+Sicherheitskonzept und Bedrohungsmodell: [`docs/sicherheit.md`](docs/sicherheit.md) ·
+Lücke melden: [`SECURITY.md`](SECURITY.md)
+
+**Qualität:** Datenbank-Tests (Schema, RLS, Sicherheits-Invarianten) auf PostgreSQL 16 und 17,
+Unit-Tests der Spiellogik mit Mindestabdeckung, End-to-End-Tests des Produktions-Builds gegen eine
+echte lokale Supabase, CodeQL, Dependency Review, `npm audit`, zizmor für die Workflows, Content
+Security Policy mit Trusted Types, keine Anfragen an Dritte.
 
 ---
 
@@ -293,7 +304,7 @@ returning (select token from t);
 
 ## Lokal entwickeln und testen
 
-Voraussetzungen: Node.js 20+, Docker (für den lokalen Supabase-Stack), Python 3.10+.
+Voraussetzungen: Node.js 22, Docker (für den lokalen Supabase-Stack), Python 3.10+.
 
 ```bash
 npm install
@@ -304,15 +315,20 @@ npm run dev                 # http://localhost:5173
 
 | Befehl | Zweck |
 |---|---|
-| `npm run build` | Typprüfung und Produktions-Build |
+| `npm run build` | Typprüfung und Produktions-Build (mit Content Security Policy) |
 | `npm run lint` | oxlint |
+| `npm test` | Unit-Tests der Spiellogik (Vitest), `npm run test:coverage` mit Abdeckungsbericht |
+| `npm run test:e2e` | End-to-End-Tests (Playwright) gegen den lokalen Supabase-Stack; braucht `DATABASE_URL` der lokalen Datenbank (Standard `postgres://postgres:postgres@127.0.0.1:54322/postgres`) |
 | `npm run test:db` | Datenbank-Tests (braucht `DATABASE_URL` eines PostgreSQL ≥ 15, z. B. `postgres://postgres:postgres@localhost:5432/postgres`) |
 | `npx supabase db reset` | lokale Datenbank neu aufsetzen (nach Änderungen an den Migrationen) |
 
-Die Datenbank-Tests spielen eine Supabase-Attrappe, alle Migrationen und rund 100 Prüfungen in eine
-Wegwerf-Datenbank: Row Level Security, Einladungen und Geräte, Unveränderlichkeit der Ereignisse,
-Soul-Links (alle und paarweise), Undo-Regeln, Zähler über Runs hinweg, Bot-Zugang und den Import
-eines Bot-Runs.
+Was die Tests abdecken:
+
+| Ebene | Umfang |
+|---|---|
+| Datenbank (`supabase/tests/`) | rund 160 Prüfungen: Row Level Security, Einladungen und Geräte, Unveränderlichkeit der Ereignisse, Soul-Links (alle und paarweise), Undo-Regeln, Zähler über Runs, Bot-Zugang, Import eines Bot-Runs, die Demos; dazu Sicherheits-Invarianten (RLS überall, `search_path` in allen `SECURITY DEFINER`-Funktionen, keine Schreibrechte, Erlaubnislisten für `anon`/`authenticated`, Tokens nur gehasht) und Angriffe von außen |
+| Logik (`src/**/*.test.ts`) | Team-Plätze und Teams angleichen, Soul-Link-Vollständigkeit, offene Gebiete, Routennamen DE/EN, Level-Cap-Vorlagen (Werte aus den Spieldaten), Typen-Tabelle, Schadensrechner mit Randomizer-Typen, Vollständigkeit der Übersetzungen |
+| End-to-End (`e2e/`) | Beitritt per Link, alle Bereiche ohne Konsolenfehler und CSP-Verstöße, Level-Cap, Eintragen aus „Gebiete“, englische Oberfläche, Einmal-Links, private Challenges, keine Anfragen an Dritte |
 
 Stammdaten neu erzeugen (z. B. bei einer neuen Pokémon-Generation): `python3 tools/generate_species.py`.
 
@@ -325,10 +341,11 @@ src/
   pages/                 Start, Einladung, Challenge
   components/challenge/  Routen-Board, Teams, Friedhof, Timeline, Zähler, Einstellungen, Dialoge
   components/            Sprite (animiert), Pokémon-Suche, Effekte (fx/), UI-Bausteine (ui/)
-  hooks/, lib/           Datenzugriff, Live-Updates, Stammdaten, Router
+  hooks/, lib/           Datenzugriff, Live-Updates, Stammdaten, Router; Unit-Tests daneben (*.test.ts)
+  test/                  Testdaten-Fabriken für die Unit-Tests
 supabase/
   migrations/            Schema, Views, Funktionen, RLS; Pokémon-Stammdaten
-  tests/                 Supabase-Attrappe und Szenario-Tests
+  tests/                 Supabase-Attrappe, Szenario-Tests, Sicherheitstests
   demo/                  Demo-Challenges für den SQL Editor (Platin in Paaren, SoulSilver alle verbunden)
   config.toml            lokaler Supabase-Stack
 tools/
@@ -340,9 +357,13 @@ data/species.json        Stammdaten als JSON
 public/dex/              Attacken, Werte, Typen, Entwicklungen pro Edition (generiert)
 public/areas/            Orte mit Begegnungen pro Edition (generiert)
 src/data/levelCaps.ts    Level-Caps pro Spiel (Gen 1–4 geprüft gegen die pret-Disassemblies)
+e2e/                     End-to-End-Tests (Playwright) gegen die lokale Supabase
 scripts/test-db.sh       Datenbank-Tests
-.github/workflows/       CI und Veröffentlichung auf GitHub Pages
+.github/workflows/       CI (Datenbank, Web, E2E, Workflow-Lint), CodeQL, Dependency Review, Veröffentlichung
+.github/dependabot.yml   wöchentliche Updates für npm und Actions
 docs/architektur.md      Architektur und Entscheidungen
+docs/sicherheit.md       Sicherheitskonzept, Bedrohungsmodell, Restrisiken
+SECURITY.md              Sicherheitslücken melden
 ```
 
 Pokémon-Sprites und -Daten stammen von [PokeAPI](https://pokeapi.co). Pokémon ist eine Marke von
