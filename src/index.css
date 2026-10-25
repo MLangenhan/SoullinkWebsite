@@ -109,18 +109,6 @@
   }
 }
 
-/* Lenis Smooth-Scroll */
-html.lenis,
-html.lenis body {
-  height: auto;
-}
-.lenis.lenis-smooth {
-  scroll-behavior: auto !important;
-}
-.lenis.lenis-stopped {
-  overflow: hidden;
-}
-
 @utility label {
   font-family: var(--font-mono);
   font-size: 0.7rem;

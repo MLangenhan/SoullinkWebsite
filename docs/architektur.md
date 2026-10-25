@@ -283,28 +283,30 @@ DATABASE_URL=postgres://postgres@localhost:5432/postgres scripts/test-db.sh
 
 ## 8. Frontend
 
-Stack und Animationsansatz wie im Portfolio (Vite, React 19, TypeScript, Tailwind CSS v4, shadcn/ui,
-Motion, Lenis, oxlint), aber mit eigenem, hellem Erscheinungsbild: warmes Off-White, weiße Karten mit
+Stack wie im Portfolio (Vite, React 19, TypeScript, Tailwind CSS v4, shadcn/ui, Motion, oxlint), aber
+mit eigenem, hellem Erscheinungsbild: warmes Off-White, weiße Karten mit
 weichen Schatten, Pokémon-Blau als Akzent, Gelb für Highlights, Rot nur für Tode; Schriften Bricolage
-Grotesque, DM Sans und JetBrains Mono. Dazu `@supabase/supabase-js`. Gehostet auf GitHub Pages: Der
+Grotesque, DM Sans und JetBrains Mono. Animationen sind bewusst zurückhaltend: Bedienbarkeit geht vor,
+Bewegung gibt es nur als kurzes Feedback (Dialoge, Toasts, Drag & Drop, Fortschrittsbalken), kein
+Smooth-Scroll und keine Endlos-Animationen. Dazu `@supabase/supabase-js`. Gehostet auf GitHub Pages: Der
 Basis-Pfad (`/SoullinkWebsite/`) kommt aus `VITE_BASE`, Unterseiten lädt die App über eine Kopie der
 `index.html` als `404.html`. Kein Router-Paket: drei Seiten
 (`/`, `/join`, `/c/<adresse>`) erledigt ein kleiner Router über die History-API (`src/lib/router.ts`).
 
 | Seite / Bereich | Inhalt |
 |---|---|
-| Start | Hero mit Split-Reveal, Sprite-Laufband (Tempo folgt der Scroll-Geschwindigkeit), „Meine Challenges“ dieses Geräts, neue Challenge |
+| Start | Hero mit Sprite-Reihe, „Meine Challenges“ dieses Geräts, neue Challenge |
 | Einladung | Vorschau (welche Challenge, welcher Platz), Beitritt ohne Konto |
-| Routen | pro Route eine Zeile, Spieler als Spalten; Static-Begegnungen als eigene Zeile; je Soul-Link (alle oder Paar) ein Band, das schimmert, solange alle leben, und bei einem Tod reißt |
+| Routen | pro Route eine Zeile, Spieler als Spalten; Static-Begegnungen als eigene Zeile; je Soul-Link (alle oder Paar) ein Band, das blau ist, solange alle leben, und bei einem Tod rot reißt |
 | Gebiete | alle Orte des Spiels (wild bzw. Static/Geschenk) mit Stand je Spieler im gezeigten Run, Eintragen direkt aus der Liste |
 | Teams | Team und Box je Spieler; Wechsel fliegen animiert an den neuen Platz (Shared Layout) |
 | Friedhof | Grabsteine mit Ursache, Gegner, Level, Ort und den mitgerissenen Partnern |
 | Timeline | alle Ereignisse des Runs, Undo direkt am Eintrag, Undos durchgestrichen |
-| Zähler | alle Bot-Zähler (Run/gesamt) mit hochzählenden Zahlen, verpasste Begegnung per Klick |
+| Zähler | alle Bot-Zähler (Run/gesamt), verpasste Begegnung per Klick |
 | Einstellungen | eigener Name, Farbe, Discord-ID, zweites Gerät; für die Leitung Mitglieder, Gerätelinks, Einladungen, Bot-Token, Löschen |
 
 - **Sprites überall**: animierte Showdown-GIFs aus dem PokeAPI-Sprite-Repo (für 1011 der 1025 Arten),
-  sonst das statische Sprite. Lebende Pokémon wippen versetzt, hüpfen beim Überfahren; tote sind grau.
+  sonst das statische Sprite; tote sind grau.
 - **Run-Archiv**: Über den Run-Umschalter lassen sich frühere Runs mit Board, Friedhof und Timeline ansehen.
 - **Live**: Der Client abonniert `events`, `challenge_members`, `routes` und `challenges` gefiltert auf
   die Challenge (Realtime prüft RLS pro Abonnent) und lädt gebündelt neu. Nur die jüngste Anfrage darf

@@ -1,6 +1,5 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import 'lenis/dist/lenis.css'
 // Schriften vom eigenen Server: keine Anfragen an Google (Datenschutz, CSP ohne fremde Quellen)
 import '@fontsource-variable/bricolage-grotesque/opsz.css'
 import '@fontsource-variable/dm-sans/opsz.css'

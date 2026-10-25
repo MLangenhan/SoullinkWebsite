@@ -200,7 +200,7 @@ function LogForm({
                 <span className="size-2 rounded-full" style={{ background: player.color ?? 'var(--primary)' }} />
                 <span className="font-medium text-foreground">{player.display_name}</span>
                 <span className="ml-auto flex items-center gap-2">
-                  <Sprite id={already.species_id} name={name} size="sm" state={already.state} idle={false} />
+                  <Sprite id={already.species_id} name={name} size="sm" state={already.state} />
                   {name} · {t('schon eingetragen')}
                 </span>
               </div>

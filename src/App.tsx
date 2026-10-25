@@ -1,6 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { MotionConfig, motion, useReducedMotion, useScroll, useSpring } from 'motion/react'
-import { ReactLenis } from 'lenis/react'
+import { MotionConfig } from 'motion/react'
 import { Nav } from '@/components/Nav'
 import { Toaster } from '@/components/Toaster'
 import { useT } from '@/lib/i18n'
@@ -13,12 +12,6 @@ import { Setup } from '@/pages/Setup'
 
 // Die Challenge-Seite (Board, Dialoge, Einstellungen) erst laden, wenn sie gebraucht wird
 const ChallengePage = lazy(() => import('@/pages/ChallengePage').then((m) => ({ default: m.ChallengePage })))
-
-function ScrollProgress() {
-  const { scrollYProgress } = useScroll()
-  const scaleX = useSpring(scrollYProgress, { stiffness: 120, damping: 30 })
-  return <motion.div style={{ scaleX }} className="fixed inset-x-0 top-0 z-[60] h-0.5 origin-left bg-primary" aria-hidden />
-}
 
 /** Für Tastatur: direkt zum Inhalt springen, ohne den Hash der Adresse anzufassen (Einladungslinks tragen dort ihr Geheimnis) */
 function SkipLink() {
@@ -54,30 +47,26 @@ function NotFound() {
 }
 
 export default function App() {
-  const reduce = useReducedMotion()
   const page = usePage()
 
   return (
-    <ReactLenis root options={{ lerp: 0.1, smoothWheel: !reduce }}>
-      <MotionConfig reducedMotion="user">
-        <SkipLink />
-        <ScrollProgress />
-        <Nav />
-        {!supabase ? (
-          <Setup />
-        ) : page.name === 'home' ? (
-          <Home />
-        ) : page.name === 'join' ? (
-          <Join />
-        ) : page.name === 'challenge' ? (
-          <Suspense fallback={<Pokeball className="min-h-svh justify-center" />}>
-            <ChallengePage key={page.slug} slug={page.slug} />
-          </Suspense>
-        ) : (
-          <NotFound />
-        )}
-        <Toaster />
-      </MotionConfig>
-    </ReactLenis>
+    <MotionConfig reducedMotion="user">
+      <SkipLink />
+      <Nav />
+      {!supabase ? (
+        <Setup />
+      ) : page.name === 'home' ? (
+        <Home />
+      ) : page.name === 'join' ? (
+        <Join />
+      ) : page.name === 'challenge' ? (
+        <Suspense fallback={<Pokeball className="min-h-svh justify-center" />}>
+          <ChallengePage key={page.slug} slug={page.slug} />
+        </Suspense>
+      ) : (
+        <NotFound />
+      )}
+      <Toaster />
+    </MotionConfig>
   )
 }

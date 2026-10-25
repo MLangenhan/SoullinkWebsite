@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { motion } from 'motion/react'
 import { Bot, Undo2 } from 'lucide-react'
 import { Sprite } from '@/components/Sprite'
 import { Button } from '@/components/ui/button'
@@ -52,23 +51,16 @@ export function Timeline({ data, species, lookups }: { data: ChallengeData; spec
 
   return (
     <ol className="relative ml-3 border-l">
-      {data.events.map((event, i) => {
+      {data.events.map((event) => {
         const d = describeEvent(event, lookups, species, data.events)
         const isReverted = reverted.has(event.id)
         const actor = event.actor_member_id ? lookups.members.get(event.actor_member_id)?.display_name : null
         return (
-          <motion.li
-            key={event.id}
-            initial={{ opacity: 0, x: -12 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.4, delay: Math.min(i, 8) * 0.03 }}
-            className="relative py-3 pl-6"
-          >
+          <li key={event.id} className="relative py-3 pl-6">
             <span className={cn('absolute top-5 -left-[5px] size-2.5 rounded-full ring-4 ring-background', dot[d.tone])} />
             <div className="flex items-center gap-3">
               {d.speciesId !== null && (
-                <Sprite id={d.speciesId} name="" size="sm" state={d.tone === 'death' ? 'dead' : undefined} idle={false} />
+                <Sprite id={d.speciesId} name="" size="sm" state={d.tone === 'death' ? 'dead' : undefined} />
               )}
               <div className="min-w-0 flex-1">
                 <p className={cn(isReverted && 'text-muted-foreground line-through')}>{d.text}</p>
@@ -90,7 +82,7 @@ export function Timeline({ data, species, lookups }: { data: ChallengeData; spec
                 </Button>
               )}
             </div>
-          </motion.li>
+          </li>
         )
       })}
     </ol>

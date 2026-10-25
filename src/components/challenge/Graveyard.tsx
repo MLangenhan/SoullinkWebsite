@@ -1,4 +1,3 @@
-import { motion } from 'motion/react'
 import { Sprite } from '@/components/Sprite'
 import type { ChallengeData } from '@/hooks/useChallenge'
 import { formatTime, speciesName, type Lookups } from '@/lib/describe'
@@ -23,16 +22,12 @@ export function Graveyard({ data, species, lookups }: { data: ChallengeData; spe
 
   return (
     <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-      {graves.map((grave, i) => {
+      {graves.map((grave) => {
         const name = grave.nickname ?? speciesName(species, grave.species_id)
         const partners = data.encounters.filter((e) => e.link_id === grave.link_id && e.encounter_id !== grave.encounter_id)
         return (
-          <motion.article
+          <article
             key={grave.encounter_id}
-            initial={{ opacity: 0, y: 40, rotate: -2 }}
-            whileInView={{ opacity: 1, y: 0, rotate: 0 }}
-            viewport={{ once: true, margin: '-5% 0px' }}
-            transition={{ duration: 0.7, delay: (i % 4) * 0.08, ease: [0.16, 1, 0.3, 1] }}
             className="relative flex flex-col items-center rounded-t-[999px] rounded-b-2xl border border-border bg-gradient-to-b from-card to-grave px-5 pt-10 pb-5 text-center shadow-[0_12px_30px_-18px_rgba(27,34,48,0.35)]"
           >
             <span className="label absolute top-4 text-[0.6rem] text-muted-foreground">R.I.P.</span>
@@ -61,7 +56,7 @@ export function Graveyard({ data, species, lookups }: { data: ChallengeData; spe
                 </div>
               </div>
             )}
-          </motion.article>
+          </article>
         )
       })}
     </div>

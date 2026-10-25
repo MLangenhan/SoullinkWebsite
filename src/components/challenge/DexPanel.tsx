@@ -72,7 +72,7 @@ export function DexPanel({ data, species }: { data: ChallengeData; species: Spec
                 className={cn('rounded-lg p-1 transition-colors hover:bg-secondary', speciesId === e.species_id && 'bg-secondary')}
                 title={speciesName(species, e.species_id)}
               >
-                <Sprite id={e.species_id} name="" size="sm" idle={false} />
+                <Sprite id={e.species_id} name="" size="sm" />
               </button>
             ))}
           </div>
@@ -129,9 +129,9 @@ function DexEntry({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.15 }}
       className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]"
     >
       <div className="grid content-start gap-6">
@@ -241,9 +241,9 @@ function Stats({ stats }: { stats: number[] }) {
             <motion.span
               className="block h-full rounded-full"
               style={{ background: value >= 100 ? 'var(--ok)' : value >= 60 ? 'var(--primary)' : 'var(--destructive)' }}
-              initial={{ width: 0 }}
+              initial={false}
               animate={{ width: `${Math.min(100, (value / 180) * 100)}%` }}
-              transition={{ duration: 0.6, delay: i * 0.05, ease: [0.16, 1, 0.3, 1] }}
+              transition={{ duration: 0.25 }}
             />
           </span>
         </div>
@@ -325,7 +325,7 @@ function TeamVersus({
               onClick={() => onPick(e.species_id)}
               className="grid w-full grid-cols-[2rem_minmax(0,1fr)_auto_auto] items-center gap-2 rounded-lg px-1.5 py-1 text-left text-sm hover:bg-secondary/60"
             >
-              <Sprite id={e.species_id} name="" size="xs" idle={false} />
+              <Sprite id={e.species_id} name="" size="xs" />
               <span className="flex min-w-0 items-center gap-2">
                 <span className="truncate font-medium">{e.nickname ?? speciesName(species, e.species_id)}</span>
                 <span className="hidden gap-1 sm:flex">
@@ -388,7 +388,7 @@ export function EvolutionChain({
           disabled={!onPick}
           className={cn('flex flex-col items-center rounded-lg px-2 py-1', id === speciesId ? 'bg-secondary' : onPick && 'hover:bg-secondary/60')}
         >
-          <Sprite id={id} name={name} size="sm" idle={false} />
+          <Sprite id={id} name={name} size="sm" />
           <span className="text-xs font-medium">{name}</span>
         </button>
         {children.length > 0 && (

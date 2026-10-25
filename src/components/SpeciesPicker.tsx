@@ -125,7 +125,7 @@ export function SpeciesPicker({
                   i === active && 'bg-secondary',
                 )}
               >
-                <Sprite id={s.id} name={speciesLabel(s)} size="sm" idle={false} />
+                <Sprite id={s.id} name={speciesLabel(s)} size="sm" />
                 <span className="flex-1 truncate">{speciesLabel(s)}</span>
                 <span className="label text-[0.65rem] text-muted-foreground">#{s.id}</span>
               </li>

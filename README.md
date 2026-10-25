@@ -9,7 +9,7 @@ Friedhof, Timeline mit Undo und alle Zähler des alten Discord-Bots, live für a
 gleichzeitig. Ersetzt den [Soullinkbot](https://github.com/MLangenhan/Soullinkbot), der Bot kann
 weiter als zweiter Weg zum Eintragen dienen.
 
-**Stack:** Vite · React 19 · TypeScript · Tailwind CSS v4 · shadcn/ui · Motion · Lenis ·
+**Stack:** Vite · React 19 · TypeScript · Tailwind CSS v4 · shadcn/ui · Motion ·
 Supabase (Postgres, Row Level Security, Realtime, anonyme Sitzungen) · GitHub Pages
 
 Wie es gebaut ist und warum: [`docs/architektur.md`](docs/architektur.md) ·

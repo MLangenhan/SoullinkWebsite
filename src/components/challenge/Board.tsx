@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { AnimatePresence, motion } from 'motion/react'
 import { Sprite } from '@/components/Sprite'
 import { AddEncounterDialog, type AddTarget } from '@/components/challenge/AddEncounterDialog'
 import { EncounterDialog } from '@/components/challenge/EncounterDialog'
@@ -26,11 +26,10 @@ interface RouteRow {
 }
 
 /**
- * Soul-Link-Band zwischen den Pokémon einer Zeile. Lebt der Link, läuft ein Schimmer durch;
+ * Soul-Link-Band zwischen den Pokémon einer Zeile. Lebt der Link, ist es blau;
  * stirbt ein Partner, reißt das Band in der Mitte und färbt sich rot.
  */
 function LinkBand({ dead, filled, columns, lane }: { dead: boolean; filled: number[]; columns: number; lane: number }) {
-  const reduce = useReducedMotion()
   // Nur zwischen dem ersten und letzten belegten Platz; ein einzelnes Pokémon hat kein Band
   if (filled.length < 2) return null
   const first = Math.min(...filled)
@@ -41,26 +40,11 @@ function LinkBand({ dead, filled, columns, lane }: { dead: boolean; filled: numb
     <div className="pointer-events-none absolute h-0.5" style={{ left, right, top: `calc(38% + ${lane * 7}px)` }} aria-hidden>
       {dead ? (
         <div className="relative size-full">
-          <motion.div
-            className="absolute inset-y-0 left-0 w-1/2 origin-left bg-destructive/70"
-            initial={reduce ? false : { rotate: 0, x: 0 }}
-            animate={{ rotate: 2, x: -8 }}
-            transition={{ type: 'spring', stiffness: 260, damping: 12 }}
-          />
-          <motion.div
-            className="absolute inset-y-0 right-0 w-1/2 origin-right bg-destructive/70"
-            initial={reduce ? false : { rotate: 0, x: 0 }}
-            animate={{ rotate: -2, x: 8 }}
-            transition={{ type: 'spring', stiffness: 260, damping: 12 }}
-          />
+          <div className="absolute inset-y-0 left-0 w-1/2 origin-left -translate-x-2 rotate-2 bg-destructive/70" />
+          <div className="absolute inset-y-0 right-0 w-1/2 origin-right translate-x-2 -rotate-2 bg-destructive/70" />
         </div>
       ) : (
-        <motion.div
-          className="size-full bg-[linear-gradient(90deg,transparent,var(--primary),transparent)] bg-[length:40%_100%] bg-no-repeat"
-          style={{ backgroundColor: 'color-mix(in oklab, var(--primary) 25%, transparent)' }}
-          animate={reduce ? undefined : { backgroundPositionX: ['-40%', '140%'] }}
-          transition={{ duration: 2.8, repeat: Infinity, ease: 'linear' }}
-        />
+        <div className="size-full" style={{ backgroundColor: 'color-mix(in oklab, var(--primary) 45%, transparent)' }} />
       )}
     </div>
   )
@@ -383,14 +367,13 @@ export function Board({
           ))}
         </div>
         <AnimatePresence initial={false}>
-          {shown.map((row, i) => (
+          {shown.map((row) => (
             <motion.div
               key={row.key}
-              layout
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
               exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.45, delay: Math.min(i, 10) * 0.03, ease: [0.16, 1, 0.3, 1] }}
+              transition={{ duration: 0.15 }}
               className={cn('grid items-center gap-2 border-b', (row.dead || rowFailed(row)) && 'bg-destructive/[0.04]')}
               style={{ gridTemplateColumns: columns }}
             >

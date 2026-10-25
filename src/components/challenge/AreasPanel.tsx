@@ -69,9 +69,9 @@ export function AreasPanel({ data, onLog }: { data: ChallengeData; onLog: (prese
           <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
             <motion.div
               className="h-full origin-left rounded-full bg-ok"
-              initial={{ scaleX: 0 }}
+              initial={false}
               animate={{ scaleX: ofKind.length ? done / ofKind.length : 0 }}
-              transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
+              transition={{ duration: 0.25 }}
             />
           </div>
           <div className="flex flex-wrap items-center gap-3">

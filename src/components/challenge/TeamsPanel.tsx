@@ -40,7 +40,7 @@ import type { Encounter, Member } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 const BOX_CELLS = 30
-const spring = { type: 'spring', stiffness: 380, damping: 30 } as const
+const spring = { type: 'spring', stiffness: 500, damping: 40 } as const
 
 type DragData = { encounter: Encounter; from: 'team' | 'box'; slot: number }
 type DropData = { kind: 'slot'; index: number } | { kind: 'box' } | { kind: 'box-pokemon'; encounter: Encounter }
@@ -445,7 +445,7 @@ function PlayerTabs({
               </span>
               <span className="relative flex -space-x-2">
                 {team.map((e) => (
-                  <Sprite key={e.encounter_id} id={e.species_id} name="" size="xs" idle={false} />
+                  <Sprite key={e.encounter_id} id={e.species_id} name="" size="xs" />
                 ))}
               </span>
             </button>
@@ -490,8 +490,6 @@ function TeamSlot({
   return (
     <motion.div
       ref={dropRef}
-      animate={{ scale: isOver ? 1.04 : 1 }}
-      transition={spring}
       className={cn(
         'relative aspect-[4/5] rounded-2xl border bg-[radial-gradient(circle_at_50%_38%,color-mix(in_oklab,var(--primary)_10%,transparent),transparent_62%)] transition-colors',
         encounter ? 'border-border bg-card' : 'border-dashed border-border/80 bg-background/40',
@@ -505,9 +503,9 @@ function TeamSlot({
         <motion.button
           key={encounter.encounter_id}
           ref={dragRef}
-          initial={{ opacity: 0, scale: 0.6, y: 10 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ type: 'spring', stiffness: 420, damping: 22 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.15 }}
           {...listeners}
           {...attributes}
           type="button"
@@ -584,7 +582,7 @@ function Origins({
                 )}
               >
                 <span className="label text-[0.6rem] text-muted-foreground">{index + 1}</span>
-                <Sprite id={e.species_id} name="" size="xs" idle={false} />
+                <Sprite id={e.species_id} name="" size="xs" />
                 <span className="truncate">
                   <span className="font-medium">{name(e)}</span>
                   {e.caught_species_id !== e.species_id && (
@@ -706,9 +704,9 @@ function BoxCell({
         dropRef(node)
       }}
       layout="position"
-      initial={{ opacity: 0, scale: 0.6 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ type: 'spring', stiffness: 420, damping: 24 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.15, layout: spring }}
       {...listeners}
       {...attributes}
       type="button"
@@ -723,7 +721,7 @@ function BoxCell({
         source && 'opacity-30',
       )}
     >
-      <Sprite id={encounter.species_id} name={name} state={encounter.state} size="sm" idle={false} />
+      <Sprite id={encounter.species_id} name={name} state={encounter.state} size="sm" />
       {warn && !isOver && <SyncWarning className="absolute -top-1.5 -right-1.5" />}
       {isOver && (
         <span className="absolute -top-1.5 -right-1.5 rounded-full bg-primary p-1 text-primary-foreground">
@@ -734,17 +732,17 @@ function BoxCell({
   )
 }
 
-/** Das gezogene Pokémon: angehoben, leicht gekippt */
+/** Das gezogene Pokémon: leicht angehoben */
 function Lifted({ encounter, name }: { encounter: Encounter; name: string }) {
   const reduce = useReducedMotion()
   return (
     <motion.div
-      initial={{ scale: 1, rotate: 0 }}
-      animate={reduce ? { scale: 1.05 } : { scale: 1.15, rotate: -5 }}
+      initial={{ scale: 1 }}
+      animate={reduce ? { scale: 1 } : { scale: 1.05 }}
       transition={spring}
       className="flex cursor-grabbing flex-col items-center rounded-2xl bg-card/95 px-3 py-2 shadow-2xl ring-1 ring-border"
     >
-      <Sprite id={encounter.species_id} name={name} state={encounter.state} size="lg" idle={false} />
+      <Sprite id={encounter.species_id} name={name} state={encounter.state} size="lg" />
       <span className="text-sm font-medium">{name}</span>
     </motion.div>
   )
@@ -778,7 +776,7 @@ function ImpactBar({
   const chip = (move: Move) => (
     <span key={move.encounter.encounter_id} className="flex items-center gap-1">
       {move.status === 'team' ? <ArrowUp className="size-3.5 text-ok" /> : <ArrowDown className="size-3.5 text-box" />}
-      <Sprite id={move.encounter.species_id} name="" size="xs" idle={false} />
+      <Sprite id={move.encounter.species_id} name="" size="xs" />
       <span className="hidden sm:inline">{name(move.encounter)}</span>
       {move.slot && <span className="label text-[0.55rem] text-muted-foreground">{t('Platz {slot}', { slot: move.slot })}</span>}
     </span>
@@ -918,7 +916,7 @@ function Details({
                 const owner = lookups.members.get(p.member_id)
                 return (
                   <li key={p.encounter_id} className="flex items-center gap-2 text-sm">
-                    <Sprite id={p.species_id} name="" size="xs" state={p.state} idle={false} />
+                    <Sprite id={p.species_id} name="" size="xs" state={p.state} />
                     <span className="size-2 rounded-full" style={{ background: owner?.color ?? 'var(--primary)' }} />
                     <span className="text-muted-foreground">{owner?.display_name}</span>
                     <span className="truncate font-medium">{name(p)}</span>

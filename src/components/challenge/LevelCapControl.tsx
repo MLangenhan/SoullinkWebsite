@@ -76,7 +76,7 @@ function StepButton({ label, disabled, onClick, children }: { label: string; dis
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      whileTap={{ scale: 0.85 }}
+      whileTap={{ scale: 0.95 }}
       className={cn(
         'flex size-8 items-center justify-center rounded-full border bg-card text-foreground shadow-sm transition-colors hover:border-primary hover:text-primary',
         'disabled:pointer-events-none disabled:opacity-30',

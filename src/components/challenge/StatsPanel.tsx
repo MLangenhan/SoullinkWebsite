@@ -50,18 +50,11 @@ export function StatsPanel({ data }: { data: ChallengeData }) {
       </dl>
 
       <div className="grid gap-5 md:grid-cols-2">
-        {data.memberStats.map((m, i) => {
+        {data.memberStats.map((m) => {
           const member = data.members.find((x) => x.id === m.member_id)
           const alive = data.encounters.filter((e) => e.member_id === m.member_id && (e.state === 'team' || e.state === 'box'))
           return (
-            <motion.section
-              key={m.member_id}
-              initial={{ opacity: 0, y: 24 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6, delay: i * 0.06, ease: [0.16, 1, 0.3, 1] }}
-              className="soft-card rounded-2xl p-6"
-            >
+            <section key={m.member_id} className="soft-card rounded-2xl p-6">
               <header className="flex items-center justify-between gap-3">
                 <h3 className="flex items-center gap-2 font-display tracking-tight text-3xl font-extrabold">
                   <span className="size-3 rounded-full" style={{ background: member?.color ?? 'var(--primary)' }} />
@@ -69,7 +62,7 @@ export function StatsPanel({ data }: { data: ChallengeData }) {
                 </h3>
                 <div className="flex -space-x-3">
                   {alive.slice(0, 6).map((e) => (
-                    <Sprite key={e.encounter_id} id={e.species_id} name="" size="sm" idle={false} />
+                    <Sprite key={e.encounter_id} id={e.species_id} name="" size="sm" />
                   ))}
                 </div>
               </header>
@@ -81,10 +74,9 @@ export function StatsPanel({ data }: { data: ChallengeData }) {
               <div className="mt-5 h-1.5 overflow-hidden rounded-full bg-secondary" title={t('Tode gesamt im Vergleich')}>
                 <motion.div
                   className="h-full origin-left rounded-full bg-destructive"
-                  initial={{ scaleX: 0 }}
-                  whileInView={{ scaleX: m.deaths_total / max }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
+                  initial={false}
+                  animate={{ scaleX: m.deaths_total / max }}
+                  transition={{ duration: 0.25 }}
                 />
               </div>
               {data.canWrite && isCurrent && (
@@ -92,7 +84,7 @@ export function StatsPanel({ data }: { data: ChallengeData }) {
                   <Plus /> {t('Verpasste Begegnung')}
                 </Button>
               )}
-            </motion.section>
+            </section>
           )
         })}
       </div>

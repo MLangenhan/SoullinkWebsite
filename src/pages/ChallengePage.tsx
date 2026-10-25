@@ -14,8 +14,6 @@ import { StatsPanel } from '@/components/challenge/StatsPanel'
 import { TeamsPanel } from '@/components/challenge/TeamsPanel'
 import { Timeline } from '@/components/challenge/Timeline'
 import { Counter } from '@/components/fx/Counter'
-import { Magnetic } from '@/components/fx/Magnetic'
-import { SplitReveal } from '@/components/fx/SplitReveal'
 import { Pokeball } from '@/components/Pokeball'
 import { Button } from '@/components/ui/button'
 import { useChallenge, useLookups } from '@/hooks/useChallenge'
@@ -125,7 +123,7 @@ export function ChallengePage({ slug }: { slug: string }) {
           )}
         </div>
         <h1 className="font-display tracking-tight text-6xl leading-[0.85] font-extrabold md:text-8xl">
-          <SplitReveal text={d.challenge.name} />
+          {d.challenge.name}
         </h1>
 
         <div className="flex flex-wrap items-end justify-between gap-8">
@@ -174,11 +172,9 @@ export function ChallengePage({ slug }: { slug: string }) {
               <Button variant="outline" size="lg" onClick={() => setEndOpen(true)}>
                 <Flag /> {t('Run beenden')}
               </Button>
-              <Magnetic className="block sm:inline-block">
-                <Button size="lg" className="w-full" onClick={() => openLog()}>
-                  <Plus /> {t('Begegnung eintragen')}
-                </Button>
-              </Magnetic>
+              <Button size="lg" className="w-full sm:w-auto" onClick={() => openLog()}>
+                <Plus /> {t('Begegnung eintragen')}
+              </Button>
             </div>
           )}
         </div>

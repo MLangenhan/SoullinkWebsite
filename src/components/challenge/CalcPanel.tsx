@@ -141,7 +141,7 @@ export function CalcPanel({ data, species }: { data: ChallengeData; species: Spe
                   title={speciesLabel(species.byId.get(e.species_id) ?? { name_de: '?', name_en: '?' })}
                   aria-pressed={ownId === e.encounter_id}
                 >
-                  <Sprite id={e.species_id} name="" size="sm" idle={false} state={e.state} />
+                  <Sprite id={e.species_id} name="" size="sm" state={e.state} />
                 </button>
               ))}
             </div>
