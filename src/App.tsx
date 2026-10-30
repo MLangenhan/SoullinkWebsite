@@ -13,6 +13,8 @@ import { Setup } from '@/pages/Setup'
 
 // Die Challenge-Seite (Board, Dialoge, Einstellungen) erst laden, wenn sie gebraucht wird
 const ChallengePage = lazy(() => import('@/pages/ChallengePage').then((m) => ({ default: m.ChallengePage })))
+// OBS-Overlay: eigene, schlanke Seite ohne Navigation und Hintergrund
+const Overlay = lazy(() => import('@/pages/Overlay').then((m) => ({ default: m.Overlay })))
 
 function ScrollProgress() {
   const { scrollYProgress } = useScroll()
@@ -56,6 +58,14 @@ function NotFound() {
 export default function App() {
   const reduce = useReducedMotion()
   const page = usePage()
+
+  if (page.name === 'overlay' && supabase) {
+    return (
+      <Suspense fallback={null}>
+        <Overlay />
+      </Suspense>
+    )
+  }
 
   return (
     <ReactLenis root options={{ lerp: 0.1, smoothWheel: !reduce }}>

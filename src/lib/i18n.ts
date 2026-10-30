@@ -30,11 +30,12 @@ export function getLang(): Lang {
   return current
 }
 
-export function setLang(lang: Lang) {
+/** persist: false für Ansichten, die die Wahl des Geräts nicht ändern sollen (z. B. OBS-Overlay in der Vorschau) */
+export function setLang(lang: Lang, { persist = true }: { persist?: boolean } = {}) {
   if (lang === current) return
   current = lang
   try {
-    localStorage.setItem(STORAGE_KEY, lang)
+    if (persist) localStorage.setItem(STORAGE_KEY, lang)
   } catch {
     // nur für diese Sitzung
   }

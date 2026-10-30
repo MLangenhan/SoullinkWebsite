@@ -145,6 +145,9 @@ export interface BotToken {
   created_at: string
 }
 
+/** Lese-Link für OBS-Overlays (gleiche Spalten wie Bot-Tokens, ohne Hash) */
+export type OverlayToken = BotToken
+
 export interface Device {
   user_id: string
   challenge_id: string

@@ -77,9 +77,9 @@ where n.nspname in ('public', 'private')
 select sec.ok(
   array_agg(p.oid::regprocedure::text order by p.oid::regprocedure::text) = array[
     'bot_append_event(text,text,event_type,jsonb,uuid)', 'bot_create_route(text,text)', 'bot_state(text)', 'invite_preview(text)',
-    'private.can_read_challenge(uuid)', 'private.is_challenge_owner(uuid)', 'private.member_role(uuid)'
+    'overlay_state(text,text)', 'private.can_read_challenge(uuid)', 'private.is_challenge_owner(uuid)', 'private.member_role(uuid)'
   ],
-  'anon darf nur Einladungsvorschau, Bot-RPCs (mit Token) und RLS-Hilfen aufrufen',
+  'anon darf nur Einladungsvorschau, Bot- und Overlay-RPCs (mit Token) und RLS-Hilfen aufrufen',
   array_to_string(array_agg(p.oid::regprocedure::text order by p.oid::regprocedure::text), ', '))
 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
 where n.nspname in ('public', 'private') and has_function_privilege('anon', p.oid, 'execute');
@@ -88,9 +88,11 @@ select sec.ok(
   array_agg(p.oid::regprocedure::text order by p.oid::regprocedure::text) = array[
     'add_player(uuid,text)', 'append_event(uuid,event_type,jsonb,uuid)', 'change_team(uuid,uuid,jsonb)', 'create_bot_token(uuid,text)',
     'create_challenge(text,text,text,challenge_visibility,text)', 'create_invite(uuid,member_role,uuid,integer,integer)',
-    'create_route(uuid,text)', 'delete_challenge(uuid,text)', 'invite_preview(text)', 'join_challenge(text,text)',
+    'create_overlay_token(uuid,text)', 'create_route(uuid,text)', 'delete_challenge(uuid,text)', 'invite_preview(text)',
+    'join_challenge(text,text)', 'overlay_state(text,text)',
     'private.can_read_challenge(uuid)', 'private.is_challenge_owner(uuid)', 'private.member_role(uuid)',
-    'remove_member_devices(uuid)', 'revoke_bot_token(uuid)', 'revoke_invite(uuid)', 'set_challenge_rules(uuid,text,boolean)',
+    'remove_member_devices(uuid)', 'revoke_bot_token(uuid)', 'revoke_invite(uuid)', 'revoke_overlay_token(uuid)',
+    'set_challenge_rules(uuid,text,boolean)',
     'set_level_cap(uuid,integer)', 'set_member_link_group(uuid,smallint)', 'set_team_sync(uuid,boolean)',
     'undo_team_change(uuid,uuid)', 'update_challenge(uuid,text,challenge_visibility,boolean)', 'update_member(uuid,text,text,text)',
     'update_route(uuid,text,integer)'
@@ -125,12 +127,18 @@ insert into sec.ids
 select 'invite', public.create_invite((select v::uuid from sec.ids where k = 'ch'), 'viewer', null, 24, 1);
 insert into sec.ids
 select 'bot', public.create_bot_token((select v::uuid from sec.ids where k = 'ch'), 'Bot');
+insert into sec.ids
+select 'overlay', public.create_overlay_token((select v::uuid from sec.ids where k = 'ch'), 'OBS');
 reset role;
 reset request.jwt.claim.sub;
 
 -- Tokens: 32 Zufallsbytes, gespeichert wird nur SHA-256
 select sec.ok(length(v) >= 47 and v like 'inv\_%', 'Einladungstoken hat 256 Bit Zufall') from sec.ids where k = 'invite';
 select sec.ok(length(v) >= 47 and v like 'slb\_%', 'Bot-Token hat 256 Bit Zufall') from sec.ids where k = 'bot';
+select sec.ok(length(v) >= 47 and v like 'slo\_%', 'Overlay-Token hat 256 Bit Zufall') from sec.ids where k = 'overlay';
+select sec.ok(
+  exists (select 1 from public.overlay_tokens o where o.token_hash = private.token_hash((select v from sec.ids where k = 'overlay'))),
+  'Overlay-Token ist nur als SHA-256 gespeichert');
 select sec.ok(
   exists (select 1 from public.challenge_invites i where i.token_hash = private.token_hash((select v from sec.ids where k = 'invite'))),
   'Einladung ist nur als SHA-256 gespeichert');
@@ -144,6 +152,11 @@ select sec.ok(
 set role anon;
 select sec.fails($$ select public.bot_state('slb_falsch') $$, 'PT401', 'Bot mit falschem Token wird abgewiesen');
 select sec.fails($$ select public.bot_state('') $$, 'PT401', 'Bot ohne Token wird abgewiesen');
+select sec.fails($$ select public.overlay_state('slo_falsch') $$, 'PT401', 'Overlay mit falschem Token wird abgewiesen');
+select sec.fails($$ select public.overlay_state(null) $$, 'PT401', 'Overlay ohne Token wird abgewiesen');
+select sec.fails($$ select count(*) from public.overlay_tokens $$, '42501', 'Anonym liest keine Overlay-Links');
+select sec.ok((select public.overlay_state((select v from sec.ids where k = 'overlay')) -> 'challenge' ->> 'slug' = 'sicherheit'),
+              'Overlay-Link zeigt genau seine Challenge, auch wenn sie privat ist');
 select sec.fails($$ select public.invite_preview(null) $$, 'PT404', 'Leere Einladung verrät nichts');
 select sec.fails($$ select public.append_event(gen_random_uuid(), 'run_ended', '{}', gen_random_uuid()) $$, '42501',
                  'Anonym darf keine Website-Ereignisse schreiben');
@@ -157,6 +170,11 @@ set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000c002';
 select sec.ok((select count(*) = 0 from public.challenges where slug = 'sicherheit'), 'Fremder sieht die private Challenge nicht');
 select sec.ok((select count(*) = 0 from public.challenge_invites), 'Fremder sieht keine Einladungen');
 select sec.ok((select count(*) = 0 from public.bot_tokens), 'Fremder sieht keine Bot-Tokens');
+select sec.ok((select count(*) = 0 from public.overlay_tokens), 'Fremder sieht keine Overlay-Links');
+select sec.fails(format($$ select public.create_overlay_token(%L, 'Fremd') $$, (select v from sec.ids where k = 'ch')), 'PT403',
+                 'Fremder kann sich keinen Overlay-Link ausstellen');
+select sec.fails(format($$ select public.revoke_overlay_token(%L) $$, (select id from public.overlay_tokens limit 1)), 'PT404',
+                 'Fremder kann Overlay-Links weder sehen noch widerrufen');
 select sec.fails(format($$ select public.create_invite(%L, 'owner') $$, (select v from sec.ids where k = 'ch')), 'PT403',
                  'Fremder kann sich keine Einladung ausstellen');
 select sec.fails(format($$ select public.delete_challenge(%L, 'sicherheit') $$, (select v from sec.ids where k = 'ch')), 'PT403',

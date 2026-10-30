@@ -10,6 +10,7 @@ Details zu Rollen, RLS und RPCs stehen in [`architektur.md`](architektur.md#3-si
 | Spielstände privater Challenges | Nur Mitspieler sollen sie sehen |
 | Integrität des Ereignis-Logs | Ein manipulierter Tod oder Wipe verfälscht den ganzen Run |
 | Einladungs-, Geräte- und Bot-Tokens | Wer sie hat, handelt im Namen eines Spielers |
+| Overlay-Tokens (OBS) | Wer sie hat, kann eine (auch private) Challenge mitlesen |
 | Sitzungen im Browser | Eine gestohlene Sitzung ist ein gestohlener Platz |
 | Datenschutz der Besucher | Keine Tracker, keine Anfragen an Dritte ohne Grund |
 
@@ -26,10 +27,12 @@ Details zu Rollen, RLS und RPCs stehen in [`architektur.md`](architektur.md#3-si
 |---|---|---|---|
 | **S**poofing | Sich als anderer Spieler ausgeben | Rechte hängen nur an der Gerätebindung (`member_devices`), nie an Angaben des Clients; Tokens mit 256 Bit Zufall | `schema.test.sql`, `security.test.sql` |
 | | Fremden Bot-Token raten | 256 Bit Zufall, nur SHA-256 gespeichert, jederzeit widerrufbar, pro Challenge | `security.test.sql` |
+| | Overlay-Link als Schreibzugang missbrauchen | Overlay-Tokens (`slo_…`) gelten nur für `overlay_state` (lesen), nicht für Bot- oder Spieler-Funktionen | `schema.test.sql` |
 | **T**ampering | Ereignisse direkt in die Tabelle schreiben oder ändern | Keine Schreibrechte auf Tabellen; ein Schreibweg (`private.append_event`) mit Validierung; Ereignisse unveränderlich, Undo nur als neues Ereignis | `security.test.sql` (Rechte), `schema.test.sql` (Unveränderlichkeit) |
 | | SQL-Injection | Nur parametrisierte RPCs, kein dynamisches SQL mit Eingaben; `search_path = ''` in allen `SECURITY DEFINER`-Funktionen | `security.test.sql` |
 | **R**epudiation | „Das war ich nicht“ | Jedes Ereignis trägt Gerät/Platz, Quelle (Website, Bot, Import) und ggf. Discord-ID | `schema.test.sql` (Bot-Zuordnung) |
 | **I**nformation disclosure | Private Challenge lesen | Row Level Security auf allen Tabellen, Views mit `security_invoker` | `security.test.sql`, E2E „private Challenge unsichtbar“ |
+| | Overlay-Link gerät in den Stream oder Chat | Nur die Leitung erstellt ihn; er liefert keine Discord-IDs, Nutzer-IDs oder Bot-Einstellungen; jederzeit widerrufbar; Token im `#`-Teil | `schema.test.sql`, `security.test.sql`, E2E „Overlay widerrufen“ |
 | | Token-Hashes auslesen | Spaltenrechte: `token_hash` für Clients nicht lesbar | `security.test.sql` |
 | | Links über Referrer oder Server-Logs | Token im `#`-Teil der Adresse (geht nie an Server), `referrer: no-referrer` | – |
 | **D**enial of service | Riesige Eingaben | Längengrenzen per Check-Constraint und in der Validierung | `security.test.sql` |

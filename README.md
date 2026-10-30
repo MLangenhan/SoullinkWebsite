@@ -30,10 +30,11 @@ Security Policy mit Trusted Types, keine Anfragen an Dritte.
 3. [Veröffentlichen auf GitHub Pages](#veröffentlichen-auf-github-pages)
 4. [Daten aus dem Discord-Bot übernehmen](#daten-aus-dem-discord-bot-übernehmen)
 5. [Discord-Bot verbinden](#discord-bot-verbinden)
-6. [Demo-Challenge zum Ausprobieren](#demo-challenge-zum-ausprobieren)
-7. [Notfall: Zugang der Leitung](#notfall-zugang-der-leitung)
-8. [Lokal entwickeln und testen](#lokal-entwickeln-und-testen)
-9. [Aufbau des Repositorys](#aufbau-des-repositorys)
+6. [OBS-Overlay für Streams](#obs-overlay-für-streams)
+7. [Demo-Challenge zum Ausprobieren](#demo-challenge-zum-ausprobieren)
+8. [Notfall: Zugang der Leitung](#notfall-zugang-der-leitung)
+9. [Lokal entwickeln und testen](#lokal-entwickeln-und-testen)
+10. [Aufbau des Repositorys](#aufbau-des-repositorys)
 
 ---
 
@@ -259,6 +260,37 @@ Challenge gilt und jederzeit widerrufen werden kann:
 
 Die Datenbank-Schnittstelle für den Bot (`bot_state`, `bot_create_route`, `bot_append_event`) ist
 fertig und getestet; der Umbau des Bots selbst folgt.
+
+---
+
+## OBS-Overlay für Streams
+
+Die Leitung kann unter **Einstellungen → OBS-Overlay** Overlays für OBS (oder Streamlabs) bauen.
+Ein Overlay besteht aus frei kombinierbaren Bausteinen in beliebiger Reihenfolge:
+
+| Baustein | Zeigt |
+|---|---|
+| Letzter Soul-Link | Den zuletzt eingetragenen Fang aller Spieler samt Route, mit Animation bei neuem Fang |
+| Team | Das aktuelle Team jedes Spielers (wie im Tab „Teams“) |
+| Level-Cap | Das aktuelle Level-Cap mit dem Kampf, für den es gilt (z. B. „Orden 3 – Orania City (Major Bob)“) |
+| Zähler | Run-Nummer, lebende und verlorene Links |
+
+Einstellbar sind außerdem: welche Spieler gezeigt werden, Hintergrund (dunkel, hell, ohne Fläche),
+Anordnung (untereinander / nebeneinander), Ausrichtung, Größe (50–250 %), Akzentfarbe, Sprache und
+ob Überschriften, Spielernamen, Pokémon-Namen, Spitznamen und leere Team-Plätze erscheinen. Die
+Vorschau zeigt genau das, was später im Stream erscheint.
+
+1. Overlay zusammenstellen, **Overlay-Link erstellen**.
+2. In OBS: **Quelle hinzufügen → Browser**, Link einfügen, Breite 1920, Höhe 1080. Der Hintergrund
+   ist transparent; die Quelle danach zuschneiden oder verschieben.
+3. Für ein weiteres Overlay (z. B. nur Level-Cap in einer anderen Ecke) einfach die Bausteine ändern
+   und den neuen Link kopieren: Alle Einstellungen stehen in der Adresse, das Token bleibt dasselbe.
+
+Der Link enthält ein eigenes Token (`slo_…`), das **nur lesen** darf und nur für diese Challenge
+gilt. Damit funktioniert das Overlay auch bei privaten Challenges, ohne dass auf dem Streaming-PC
+eine Spieler-Sitzung steckt. Overlay-Links lassen sich in derselben Einstellung jederzeit widerrufen.
+Das Overlay fragt alle 4 Sekunden nach Änderungen; ist nichts passiert, kommt nur eine kurze
+Versionsnummer zurück.
 
 ---
 

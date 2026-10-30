@@ -15,7 +15,12 @@ function stripBase(pathname: string) {
   return BASE && pathname.startsWith(BASE) ? pathname.slice(BASE.length) || '/' : pathname
 }
 
-export type Page = { name: 'home' } | { name: 'join' } | { name: 'challenge'; slug: string } | { name: 'notFound' }
+export type Page =
+  | { name: 'home' }
+  | { name: 'join' }
+  | { name: 'overlay' }
+  | { name: 'challenge'; slug: string }
+  | { name: 'notFound' }
 
 function subscribe(onChange: () => void) {
   window.addEventListener('popstate', onChange)
@@ -26,6 +31,8 @@ function parse(fullPath: string): Page {
   const pathname = stripBase(fullPath)
   if (pathname === '/' || pathname === '') return { name: 'home' }
   if (pathname === '/join') return { name: 'join' }
+  // OBS-Browserquelle: Einstellungen in der Abfrage, Token im #-Teil
+  if (pathname === '/obs' || pathname === '/obs/') return { name: 'overlay' }
   const match = /^\/c\/([a-z0-9-]{3,40})\/?$/.exec(pathname)
   if (match) return { name: 'challenge', slug: match[1] }
   return { name: 'notFound' }
