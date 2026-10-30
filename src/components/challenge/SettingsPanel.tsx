@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Bot, Link2, LogOut, Pencil, Smartphone, Trash2, UserPlus } from 'lucide-react'
 import { CopyLink } from '@/components/CopyLink'
+import { OverlayBuilder } from '@/components/challenge/OverlayBuilder'
 import { detectPreset, LEVEL_CAP_PRESETS } from '@/data/levelCaps'
 import { Button } from '@/components/ui/button'
 import { Field, Input, Select } from '@/components/ui/input'
@@ -378,6 +379,15 @@ function OwnerSettings({ data, onChanged }: { data: ChallengeData; onChanged: ()
             ))}
           </ul>
         )}
+      </Section>
+
+      <Section
+        title={t('OBS-Overlay')}
+        description={t(
+          'Zeigt Teams, den letzten Fang und den Level-Cap im Stream. Der Link darf nur lesen und funktioniert auch für private Challenges; widerrufen geht jederzeit.',
+        )}
+      >
+        <OverlayBuilder data={data} />
       </Section>
 
       <Section

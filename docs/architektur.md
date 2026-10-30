@@ -198,6 +198,18 @@ Alternative, die ich bewusst nicht gewählt habe: eine eigene Postgres-Login-Rol
 direkter DB-Verbindung. Das ist noch feinkörniger auf DB-Ebene, braucht aber ein DB-Passwort auf
 dem Bot-Rechner, funktioniert nur über den Connection Pooler und ist nicht pro Challenge widerrufbar.
 
+### OBS-Overlay
+
+Für Streams erzeugt die Leitung Overlay-Links (`create_overlay_token`, `revoke_overlay_token`). Das
+Token (`slo_…`, wie Bot-Tokens nur als SHA-256 gespeichert) steht im `#`-Teil der Adresse `/obs`,
+die Darstellung in den Abfrage-Parametern (`src/lib/overlay.ts`). OBS hat keine Sitzung und damit
+unter RLS kein Realtime; die Seite ruft deshalb alle 4 s `overlay_state(token, version)` auf
+(für `anon` freigegeben). Die Funktion liefert denselben Datenzuschnitt wie die Website für den
+laufenden Run, ohne Discord-IDs, Nutzer-IDs und Bot-Einstellungen. Die Version ist ein MD5 über
+Challenge, Mitglieder und Routen (`last_seq` ändert sich mit jedem Ereignis); stimmt sie, kommt nur
+`{version}` zurück. Team und Level-Cap rechnet das Overlay mit demselben Code wie die Website
+(`arrange`, `capIndex`).
+
 ## 4. Bot-Befehle im neuen Modell
 
 | Bot heute | neu |

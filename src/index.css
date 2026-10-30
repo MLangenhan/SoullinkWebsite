@@ -109,6 +109,16 @@
   }
 }
 
+/* OBS-Overlay: durchsichtig, ohne Korn und ohne Scrollbalken */
+html[data-overlay],
+html[data-overlay] body {
+  background: transparent;
+  overflow: hidden;
+}
+html[data-overlay] body::after {
+  display: none;
+}
+
 /* Lenis Smooth-Scroll */
 html.lenis,
 html.lenis body {

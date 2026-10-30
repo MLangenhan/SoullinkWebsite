@@ -353,6 +353,60 @@ reset role;
 set role anon;
 select test.fails(format($$ select public.bot_state(%L) $$, test.get('bot')), 'PT401', 'Widerrufenes Bot-Token ist ungültig');
 
+-- ---------------------------------------------------------------- Overlay-Links (OBS)
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000002';
+select test.fails(format($$ select public.create_overlay_token(%L, 'OBS') $$, test.get('ch')), 'PT403',
+                  'Nur die Challenge-Leitung erstellt Overlay-Links');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000001';
+select test.put('overlay', public.create_overlay_token(test.get('ch')::uuid, 'Stream'));
+select test.ok(test.get('overlay') like 'slo\_%', 'Overlay-Token hat eigenes Präfix');
+select test.fails($$ select token_hash from public.overlay_tokens $$, '42501', 'Overlay-Token-Hash ist nicht lesbar');
+select test.ok((select count(*) = 1 from public.overlay_tokens), 'Leitung sieht ihre Overlay-Links');
+
+reset role;
+set role anon;
+reset request.jwt.claim.sub;
+select test.put('overlay_state', public.overlay_state(test.get('overlay'))::text);
+select test.ok((select (test.get('overlay_state')::jsonb -> 'stats' ->> 'current_run')::integer = 2),
+               'Overlay liest den laufenden Run');
+select test.ok((select jsonb_array_length(test.get('overlay_state')::jsonb -> 'members') = 3),
+               'Overlay bekommt alle Mitglieder');
+select test.ok((select bool_and((e ->> 'run_number')::integer = 2) and count(*) > 0
+                from jsonb_array_elements(test.get('overlay_state')::jsonb -> 'encounters') e),
+               'Overlay bekommt nur Begegnungen des laufenden Runs');
+select test.ok((select not (test.get('overlay_state')::jsonb -> 'members' -> 0 ? 'discord_id')
+                and not (test.get('overlay_state')::jsonb -> 'events' -> 0 ? 'actor_user_id')
+                and not (test.get('overlay_state')::jsonb -> 'challenge' ? 'created_by')),
+               'Overlay verrät keine Discord-IDs und keine Sitzungen');
+select test.ok((select public.overlay_state(test.get('overlay'), test.get('overlay_state')::jsonb ->> 'version')
+                = jsonb_build_object('version', test.get('overlay_state')::jsonb ->> 'version')),
+               'Unveränderter Stand liefert nur die Version');
+select test.fails($$ select public.overlay_state('slo_falsch') $$, 'PT401', 'Falscher Overlay-Link wird abgelehnt');
+select test.fails(format($$ select public.bot_state(%L) $$, test.get('overlay')), 'PT401',
+                  'Overlay-Token taugt nicht als Bot-Token');
+select test.fails(format($$ select public.bot_append_event(%L, '111111', 'encounter_missed', '{}') $$, test.get('overlay')),
+                  'PT401', 'Overlay-Token kann nichts schreiben');
+
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000001';
+select public.set_level_cap(test.get('ch')::uuid, 1);
+reset role;
+set role anon;
+reset request.jwt.claim.sub;
+select test.ok((select public.overlay_state(test.get('overlay'), test.get('overlay_state')::jsonb ->> 'version') ? 'challenge'),
+               'Geänderter Level-Cap liefert den neuen Stand');
+
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000001';
+select public.revoke_overlay_token((select id from public.overlay_tokens));
+reset role;
+set role anon;
+select test.fails(format($$ select public.overlay_state(%L) $$, test.get('overlay')), 'PT401', 'Widerrufener Overlay-Link ist ungültig');
+
 -- ---------------------------------------------------------------- Sitzung löschen, Geräte abmelden
 reset role;
 delete from auth.users where id = '00000000-0000-0000-0000-000000000002';
