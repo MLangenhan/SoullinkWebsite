@@ -9,8 +9,28 @@ export default {
     'Overlay link invalid or revoked. Create a new one in the challenge settings.',
   // Baukasten in den Einstellungen
   'OBS-Overlay': 'OBS overlay',
-  'Zeigt Teams, den letzten Fang und den Level-Cap im Stream. Der Link darf nur lesen und funktioniert auch für private Challenges; widerrufen geht jederzeit.':
-    'Shows teams, the latest catch and the level cap on stream. The link is read-only and works for private challenges too; revoke it any time.',
+  'Zeigt Teams, den letzten Fang und den Level-Cap im Stream. Jeder Spieler kann eigene Links erstellen; du siehst und widerrufst alle. Die Links dürfen nur lesen und funktionieren auch für private Challenges.':
+    'Shows teams, the latest catch and the level cap on stream. Every player can create their own links; you see and can revoke all of them. The links are read-only and work for private challenges too.',
+  'Zeigt Teams, den letzten Fang und den Level-Cap in deinem Stream. Der Link darf nur lesen und funktioniert auch für private Challenges; widerrufen geht jederzeit.':
+    'Shows teams, the latest catch and the level cap on your stream. The link is read-only and works for private challenges too; revoke it any time.',
+  'Dieser Overlay-Link ist an ein anderes Gerät gebunden. In den Einstellungen der Challenge unter OBS-Overlay „Gerät freigeben“ wählen.':
+    'This overlay link is bound to another device. Choose “Release device” under OBS overlay in the challenge settings.',
+  'Nur auf einem Gerät nutzbar (empfohlen)': 'Usable on one device only (recommended)',
+  'von {name}': 'by {name}',
+  'Dieser Link': 'This link',
+  'Ohne Gerätebindung: Jeder mit dem Link kann mitlesen.': 'Not bound to a device: anyone with the link can watch along.',
+  'An ein Gerät gebunden seit {time}. Andere Geräte werden abgewiesen.': 'Bound to one device since {time}. Other devices are rejected.',
+  'Wird an das erste Gerät gebunden, das ihn öffnet.': 'Will be bound to the first device that opens it.',
+  'Gerät freigeben': 'Release device',
+  'Gerät freigegeben. Das nächste Gerät, das den Link öffnet, wird gemerkt.':
+    'Device released. The next device that opens the link will be remembered.',
+  'Gerätebindung ausschalten': 'Turn off device binding',
+  'Gerätebindung einschalten': 'Turn on device binding',
+  'Gerätebindung ausgeschaltet': 'Device binding turned off',
+  'Gerätebindung eingeschaltet': 'Device binding turned on',
+  Erneuern: 'Renew',
+  'Neuer Link erstellt. Der alte funktioniert nicht mehr, in OBS bitte ersetzen.':
+    'New link created. The old one no longer works, please replace it in OBS.',
   'Der zuletzt eingetragene Fang aller Spieler': "Every player's most recent catch",
   'Aktuelles Team je Spieler': "Each player's current team",
   'Aktueller Cap mit Arena': 'Current cap with gym',
@@ -42,8 +62,8 @@ export default {
   'Wähle mindestens einen Baustein.': 'Pick at least one widget.',
   'Die Vorschau zeigt Texte in der Sprache der Website; im Overlay erscheinen sie auf Englisch.':
     'The preview uses the language of the website; the overlay itself shows them in English.',
-  'In OBS: Quelle hinzufügen → Browser → diese Adresse einfügen, Breite 1920, Höhe 1080. Jede Änderung oben ergibt einen neuen Link mit demselben Token.':
-    'In OBS: add source → Browser → paste this address, width 1920, height 1080. Every change above gives a new link with the same token.',
+  'In OBS: Quelle hinzufügen → Browser → diese Adresse einfügen, Breite 1920, Höhe 1080. Jede Änderung oben ergibt einen neuen Link mit demselben Token. Der Schlüssel ist ausgeblendet, damit er nicht im Stream landet.':
+    'In OBS: add source → Browser → paste this address, width 1920, height 1080. Every change above gives a new link with the same token. The key is hidden so it does not end up on stream.',
   'Overlay-Link erstellen': 'Create overlay link',
   'Overlay-Link erstellt': 'Overlay link created',
   'Overlay-Link widerrufen': 'Overlay link revoked',

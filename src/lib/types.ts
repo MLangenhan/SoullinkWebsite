@@ -145,8 +145,13 @@ export interface BotToken {
   created_at: string
 }
 
-/** Lese-Link für OBS-Overlays (gleiche Spalten wie Bot-Tokens, ohne Hash) */
-export type OverlayToken = BotToken
+/** Lese-Link für OBS-Overlays (ohne Token- und Geräte-Hash) */
+export interface OverlayToken extends BotToken {
+  member_id: string
+  /** Nur das erste Gerät, das den Link öffnet, darf ihn nutzen */
+  device_lock: boolean
+  device_bound_at: string | null
+}
 
 export interface Device {
   user_id: string

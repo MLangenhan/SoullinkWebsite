@@ -32,7 +32,8 @@ Details zu Rollen, RLS und RPCs stehen in [`architektur.md`](architektur.md#3-si
 | | SQL-Injection | Nur parametrisierte RPCs, kein dynamisches SQL mit Eingaben; `search_path = ''` in allen `SECURITY DEFINER`-Funktionen | `security.test.sql` |
 | **R**epudiation | „Das war ich nicht“ | Jedes Ereignis trägt Gerät/Platz, Quelle (Website, Bot, Import) und ggf. Discord-ID | `schema.test.sql` (Bot-Zuordnung) |
 | **I**nformation disclosure | Private Challenge lesen | Row Level Security auf allen Tabellen, Views mit `security_invoker` | `security.test.sql`, E2E „private Challenge unsichtbar“ |
-| | Overlay-Link gerät in den Stream oder Chat | Nur die Leitung erstellt ihn; er liefert keine Discord-IDs, Nutzer-IDs oder Bot-Einstellungen; jederzeit widerrufbar; Token im `#`-Teil | `schema.test.sql`, `security.test.sql`, E2E „Overlay widerrufen“ |
+| | Overlay-Link gerät in den Stream oder Chat | Schlüssel wird auf der Website nie angezeigt, nur kopiert; Gerätebindung (Standard): nur das erste Gerät liest, andere bekommen `PT403`; Erneuern und Widerrufen jederzeit; liefert keine Discord-IDs, Nutzer-IDs oder Bot-Einstellungen | `schema.test.sql`, `security.test.sql`, E2E „Gerätebindung, erneuern, widerrufen“ |
+| | Spieler verwaltet fremde Overlay-Links | Spieler sehen und ändern nur eigene Links (RLS über die eigenen Geräte), die Leitung alle; Zuschauer erstellen keine | `schema.test.sql`, `security.test.sql` |
 | | Token-Hashes auslesen | Spaltenrechte: `token_hash` für Clients nicht lesbar | `security.test.sql` |
 | | Links über Referrer oder Server-Logs | Token im `#`-Teil der Adresse (geht nie an Server), `referrer: no-referrer` | – |
 | **D**enial of service | Riesige Eingaben | Längengrenzen per Check-Constraint und in der Validierung | `security.test.sql` |

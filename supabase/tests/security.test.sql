@@ -77,7 +77,7 @@ where n.nspname in ('public', 'private')
 select sec.ok(
   array_agg(p.oid::regprocedure::text order by p.oid::regprocedure::text) = array[
     'bot_append_event(text,text,event_type,jsonb,uuid)', 'bot_create_route(text,text)', 'bot_state(text)', 'invite_preview(text)',
-    'overlay_state(text,text)', 'private.can_read_challenge(uuid)', 'private.is_challenge_owner(uuid)', 'private.member_role(uuid)'
+    'overlay_state(text,text,text)', 'private.can_read_challenge(uuid)', 'private.is_challenge_owner(uuid)', 'private.member_role(uuid)'
   ],
   'anon darf nur Einladungsvorschau, Bot- und Overlay-RPCs (mit Token) und RLS-Hilfen aufrufen',
   array_to_string(array_agg(p.oid::regprocedure::text order by p.oid::regprocedure::text), ', '))
@@ -88,12 +88,13 @@ select sec.ok(
   array_agg(p.oid::regprocedure::text order by p.oid::regprocedure::text) = array[
     'add_player(uuid,text)', 'append_event(uuid,event_type,jsonb,uuid)', 'change_team(uuid,uuid,jsonb)', 'create_bot_token(uuid,text)',
     'create_challenge(text,text,text,challenge_visibility,text)', 'create_invite(uuid,member_role,uuid,integer,integer)',
-    'create_overlay_token(uuid,text)', 'create_route(uuid,text)', 'delete_challenge(uuid,text)', 'invite_preview(text)',
-    'join_challenge(text,text)', 'overlay_state(text,text)',
+    'create_overlay_token(uuid,text,boolean)', 'create_route(uuid,text)', 'delete_challenge(uuid,text)', 'invite_preview(text)',
+    'join_challenge(text,text)', 'overlay_state(text,text,text)', 'overlay_token_id(text)',
     'private.can_read_challenge(uuid)', 'private.is_challenge_owner(uuid)', 'private.member_role(uuid)',
     'remove_member_devices(uuid)', 'revoke_bot_token(uuid)', 'revoke_invite(uuid)', 'revoke_overlay_token(uuid)',
-    'set_challenge_rules(uuid,text,boolean)',
-    'set_level_cap(uuid,integer)', 'set_member_link_group(uuid,smallint)', 'set_team_sync(uuid,boolean)',
+    'rotate_overlay_token(uuid)', 'set_challenge_rules(uuid,text,boolean)',
+    'set_level_cap(uuid,integer)', 'set_member_link_group(uuid,smallint)', 'set_overlay_device_lock(uuid,boolean)',
+    'set_team_sync(uuid,boolean)',
     'undo_team_change(uuid,uuid)', 'update_challenge(uuid,text,challenge_visibility,boolean)', 'update_member(uuid,text,text,text)',
     'update_route(uuid,text,integer)'
   ],
@@ -106,7 +107,7 @@ where n.nspname in ('public', 'private') and has_function_privilege('authenticat
 select sec.ok(count(*) = 0, 'Token-Hashes sind für Clients nicht lesbar', string_agg(c.relname, ', '))
 from pg_attribute a join pg_class c on c.oid = a.attrelid join pg_namespace n on n.oid = c.relnamespace
 cross join unnest(array['anon', 'authenticated']) r
-where n.nspname = 'public' and a.attname = 'token_hash' and has_column_privilege(r, c.oid, a.attname, 'SELECT');
+where n.nspname = 'public' and a.attname in ('token_hash', 'device_hash') and has_column_privilege(r, c.oid, a.attname, 'SELECT');
 
 select sec.ok(count(*) = 0, 'Keine Spalte speichert Tokens oder Geheimnisse im Klartext', string_agg(table_name || '.' || column_name, ', '))
 from information_schema.columns
@@ -129,6 +130,8 @@ insert into sec.ids
 select 'bot', public.create_bot_token((select v::uuid from sec.ids where k = 'ch'), 'Bot');
 insert into sec.ids
 select 'overlay', public.create_overlay_token((select v::uuid from sec.ids where k = 'ch'), 'OBS');
+insert into sec.ids
+select 'overlay_id', public.overlay_token_id((select v from sec.ids where k = 'overlay'))::text;
 reset role;
 reset request.jwt.claim.sub;
 
@@ -155,8 +158,15 @@ select sec.fails($$ select public.bot_state('') $$, 'PT401', 'Bot ohne Token wir
 select sec.fails($$ select public.overlay_state('slo_falsch') $$, 'PT401', 'Overlay mit falschem Token wird abgewiesen');
 select sec.fails($$ select public.overlay_state(null) $$, 'PT401', 'Overlay ohne Token wird abgewiesen');
 select sec.fails($$ select count(*) from public.overlay_tokens $$, '42501', 'Anonym liest keine Overlay-Links');
-select sec.ok((select public.overlay_state((select v from sec.ids where k = 'overlay')) -> 'challenge' ->> 'slug' = 'sicherheit'),
+select sec.ok((select public.overlay_state((select v from sec.ids where k = 'overlay'), null, 'obs-geraet-0123456789abcdef')
+                       -> 'challenge' ->> 'slug' = 'sicherheit'),
               'Overlay-Link zeigt genau seine Challenge, auch wenn sie privat ist');
+select sec.fails($$ select public.overlay_state((select v from sec.ids where k = 'overlay')) $$, 'PT403',
+                 'Abgeschriebener Overlay-Link ohne Geräte-ID wird abgewiesen');
+select sec.fails($$ select public.overlay_state((select v from sec.ids where k = 'overlay'), null, 'zuschauer-0123456789abcdef') $$,
+                 'PT403', 'Abgeschriebener Overlay-Link auf fremdem Gerät wird abgewiesen');
+select sec.fails($$ select public.overlay_token_id((select v from sec.ids where k = 'overlay')) $$, '42501',
+                 'Anonym fragt keine Overlay-Link-IDs ab');
 select sec.fails($$ select public.invite_preview(null) $$, 'PT404', 'Leere Einladung verrät nichts');
 select sec.fails($$ select public.append_event(gen_random_uuid(), 'run_ended', '{}', gen_random_uuid()) $$, '42501',
                  'Anonym darf keine Website-Ereignisse schreiben');
@@ -173,8 +183,14 @@ select sec.ok((select count(*) = 0 from public.bot_tokens), 'Fremder sieht keine
 select sec.ok((select count(*) = 0 from public.overlay_tokens), 'Fremder sieht keine Overlay-Links');
 select sec.fails(format($$ select public.create_overlay_token(%L, 'Fremd') $$, (select v from sec.ids where k = 'ch')), 'PT403',
                  'Fremder kann sich keinen Overlay-Link ausstellen');
-select sec.fails(format($$ select public.revoke_overlay_token(%L) $$, (select id from public.overlay_tokens limit 1)), 'PT404',
-                 'Fremder kann Overlay-Links weder sehen noch widerrufen');
+select sec.fails(format($$ select public.revoke_overlay_token(%L) $$, (select v from sec.ids where k = 'overlay_id')), 'PT404',
+                 'Fremder kann Overlay-Links nicht widerrufen');
+select sec.fails(format($$ select public.rotate_overlay_token(%L) $$, (select v from sec.ids where k = 'overlay_id')), 'PT404',
+                 'Fremder kann Overlay-Links nicht erneuern');
+select sec.fails(format($$ select public.set_overlay_device_lock(%L, false) $$, (select v from sec.ids where k = 'overlay_id')), 'PT404',
+                 'Fremder kann die Gerätebindung nicht abschalten');
+select sec.fails($$ select public.overlay_token_id((select v from sec.ids where k = 'overlay')) $$, 'PT401',
+                 'Fremder erfährt mit dem Token nicht, welcher Link es ist');
 select sec.fails(format($$ select public.create_invite(%L, 'owner') $$, (select v from sec.ids where k = 'ch')), 'PT403',
                  'Fremder kann sich keine Einladung ausstellen');
 select sec.fails(format($$ select public.delete_challenge(%L, 'sicherheit') $$, (select v from sec.ids where k = 'ch')), 'PT403',

@@ -120,6 +120,37 @@ export function overlayUrl(origin: string, basePath: string, token: string, conf
   return `${origin}${basePath.replace(/\/$/, '')}/obs?${serializeConfig(config)}#${token}`
 }
 
+const DEVICE_KEY = 'soullink.overlay.device'
+let sessionDevice: string | null = null
+
+/**
+ * Zufällige Geräte-ID der Browserquelle (32 Byte, base64url). Links mit Gerätebindung merken sich die
+ * erste ID, die sie sehen; OBS behält sie in seinem Browser-Speicher über Neustarts hinweg.
+ */
+export function overlayDeviceId(): string {
+  try {
+    const stored = localStorage.getItem(DEVICE_KEY)
+    if (stored && /^[A-Za-z0-9_-]{20,100}$/.test(stored)) return stored
+  } catch {
+    // Speicher gesperrt: ID gilt nur bis zum Neuladen
+  }
+  if (!sessionDevice) {
+    const bytes = crypto.getRandomValues(new Uint8Array(32))
+    sessionDevice = btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  }
+  try {
+    localStorage.setItem(DEVICE_KEY, sessionDevice)
+  } catch {
+    // siehe oben
+  }
+  return sessionDevice
+}
+
+/** Overlay-Adresse mit verdecktem Token, für Anzeigen, die im Stream landen könnten */
+export function maskedOverlayUrl(url: string) {
+  return url.replace(/#slo_.*$/, '#slo_••••••••')
+}
+
 /** Antwort von overlay_state: vollständig oder nur die Version, wenn sich nichts geändert hat */
 export interface OverlayPayload {
   version: string

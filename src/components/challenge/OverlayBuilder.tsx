@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowDown, ArrowUp, MonitorPlay } from 'lucide-react'
+import { ArrowDown, ArrowUp, MonitorPlay, RefreshCw } from 'lucide-react'
 import { CopyLink } from '@/components/CopyLink'
 import { OverlayView } from '@/components/overlay/OverlayView'
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,7 @@ import { formatTime } from '@/lib/describe'
 import { useT } from '@/lib/i18n'
 import {
   DEFAULT_CONFIG,
+  maskedOverlayUrl,
   overlayUrl,
   parseConfig,
   shownPlayers,
@@ -67,18 +68,30 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (val
 
 /**
  * Baukasten für OBS-Overlays: Bausteine, Spieler und Darstellung wählen, Vorschau ansehen, Link kopieren.
- * Der Link enthält ein eigenes Lese-Token (nur als Hash gespeichert). Damit sich Varianten jederzeit neu
- * zusammenstellen lassen, merkt sich dieses Gerät das zuletzt erstellte Token.
+ * Jeder Spieler erstellt eigene Links; die Leitung sieht und widerruft alle. Der Link enthält ein eigenes
+ * Lese-Token (nur als Hash gespeichert). Damit sich Varianten jederzeit neu zusammenstellen lassen, merkt
+ * sich dieses Gerät das zuletzt erstellte Token.
  */
 export function OverlayBuilder({ data }: { data: ChallengeData }) {
   const t = useT()
-  const { challenge } = data
+  const { challenge, me } = data
   const species = useSpecies()
   const [config, setConfig] = useState<OverlayConfig>(DEFAULT_CONFIG)
   const [token, setToken] = useState<string | null>(() => readStoredToken(challenge.id))
+  const [tokenId, setTokenId] = useState<string | null>(null)
   const [tokens, setTokens] = useState<OverlayToken[]>([])
   const [label, setLabel] = useState('OBS')
+  const [deviceLock, setDeviceLock] = useState(true)
   const [pasted, setPasted] = useState('')
+
+  const remember = useCallback(
+    (next: string | null) => {
+      setToken(next)
+      setTokenId(null)
+      storeToken(challenge.id, next)
+    },
+    [challenge.id],
+  )
 
   const update = (patch: Partial<OverlayConfig>) => setConfig((c) => ({ ...c, ...patch }))
   const players = shownPlayers(data.members, [])
@@ -86,26 +99,29 @@ export function OverlayBuilder({ data }: { data: ChallengeData }) {
   const reload = useCallback(async () => {
     const { data: rows } = await db()
       .from('overlay_tokens')
-      .select('id, challenge_id, label, last_used_at, revoked_at, created_at')
+      .select('id, challenge_id, member_id, label, device_lock, device_bound_at, last_used_at, revoked_at, created_at')
       .eq('challenge_id', challenge.id)
+      .is('revoked_at', null)
       .order('created_at', { ascending: false })
     setTokens((rows ?? []) as OverlayToken[])
   }, [challenge.id])
 
-  // Gemerktes Token prüfen: widerrufen (auch von einem anderen Gerät) heißt neu erstellen
+  // Gemerktes Token prüfen, ohne ein Gerät zu binden: widerrufen (auch von einem anderen Gerät) heißt neu erstellen
   useEffect(() => {
     if (!token) return
     let active = true
-    rpc('overlay_state', { p_token: token, p_version: 'pruefen' }).catch((error: unknown) => {
-      if (active && error instanceof ApiError && error.code === 'PT401') {
-        setToken(null)
-        storeToken(challenge.id, null)
-      }
-    })
+    rpc<string>('overlay_token_id', { p_token: token }).then(
+      (id) => {
+        if (active) setTokenId(id)
+      },
+      (error: unknown) => {
+        if (active && error instanceof ApiError && error.code === 'PT401') remember(null)
+      },
+    )
     return () => {
       active = false
     }
-  }, [token, challenge.id])
+  }, [token, remember, tokens])
 
   useEffect(() => {
     let active = true
@@ -137,9 +153,12 @@ export function OverlayBuilder({ data }: { data: ChallengeData }) {
 
   const create = async () => {
     try {
-      const created = await rpc<string>('create_overlay_token', { p_challenge_id: challenge.id, p_label: label })
-      setToken(created)
-      storeToken(challenge.id, created)
+      const created = await rpc<string>('create_overlay_token', {
+        p_challenge_id: challenge.id,
+        p_label: label,
+        p_device_lock: deviceLock,
+      })
+      remember(created)
       toast(t('Overlay-Link erstellt'))
       void reload()
     } catch (error) {
@@ -152,8 +171,7 @@ export function OverlayBuilder({ data }: { data: ChallengeData }) {
       const url = new URL(pasted.trim())
       const hash = url.hash.slice(1)
       if (!hash.startsWith('slo_')) throw new Error('kein Overlay-Link')
-      setToken(hash)
-      storeToken(challenge.id, hash)
+      remember(hash)
       setConfig(parseConfig(url.search))
       setPasted('')
       toast(t('Overlay-Link übernommen'))
@@ -313,7 +331,10 @@ export function OverlayBuilder({ data }: { data: ChallengeData }) {
         {url ? (
           <CopyLink
             url={url}
-            hint={t('In OBS: Quelle hinzufügen → Browser → diese Adresse einfügen, Breite 1920, Höhe 1080. Jede Änderung oben ergibt einen neuen Link mit demselben Token.')}
+            display={maskedOverlayUrl(url)}
+            hint={t(
+              'In OBS: Quelle hinzufügen → Browser → diese Adresse einfügen, Breite 1920, Höhe 1080. Jede Änderung oben ergibt einen neuen Link mit demselben Token. Der Schlüssel ist ausgeblendet, damit er nicht im Stream landet.',
+            )}
           />
         ) : (
           <form
@@ -329,6 +350,9 @@ export function OverlayBuilder({ data }: { data: ChallengeData }) {
             <Button type="submit">
               <MonitorPlay /> {t('Overlay-Link erstellen')}
             </Button>
+            <div className="basis-full">
+              <Toggle label={t('Nur auf einem Gerät nutzbar (empfohlen)')} checked={deviceLock} onChange={setDeviceLock} />
+            </div>
           </form>
         )}
 
@@ -336,7 +360,7 @@ export function OverlayBuilder({ data }: { data: ChallengeData }) {
           <summary className="cursor-pointer text-muted-foreground">{t('Vorhandenen Overlay-Link bearbeiten')}</summary>
           <div className="mt-2 flex flex-wrap items-end gap-3">
             <Field label={t('Overlay-Link')}>
-              <Input value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder="https://…/obs?w=…#slo_…" />
+              <Input type="password" value={pasted} onChange={(e) => setPasted(e.target.value)} placeholder="https://…/obs?w=…#slo_…" />
             </Field>
             <Button variant="outline" disabled={!pasted.trim()} onClick={adopt}>
               {t('Übernehmen')}
@@ -347,49 +371,119 @@ export function OverlayBuilder({ data }: { data: ChallengeData }) {
         {tokens.length > 0 && (
           <ul className="grid gap-2 text-sm">
             {tokens.map((tk) => (
-              <li key={tk.id} className="flex flex-wrap items-center gap-3 rounded-md border px-3 py-2">
-                <span className={tk.revoked_at ? 'text-muted-foreground line-through' : ''}>{tk.label}</span>
-                <span className="text-muted-foreground">
-                  {tk.revoked_at
-                    ? t('widerrufen {time}', { time: formatTime(tk.revoked_at) })
-                    : tk.last_used_at
-                      ? t('zuletzt aktiv {time}', { time: formatTime(tk.last_used_at) })
-                      : t('noch nie benutzt')}
-                </span>
-                {!tk.revoked_at && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="ml-auto text-destructive"
-                    onClick={async () => {
-                      try {
-                        await rpc('revoke_overlay_token', { p_token_id: tk.id })
-                        toast(t('Overlay-Link widerrufen'))
-                        // Gehörte das gemerkte Token zu diesem Link, merkt das die Prüfung oben und blendet ihn aus
-                        if (token) {
-                          const still = await rpc('overlay_state', { p_token: token, p_version: 'pruefen' }).then(
-                            () => true,
-                            () => false,
-                          )
-                          if (!still) {
-                            setToken(null)
-                            storeToken(challenge.id, null)
-                          }
-                        }
-                        void reload()
-                      } catch (error) {
-                        toastError(error)
-                      }
-                    }}
-                  >
-                    {t('Widerrufen')}
-                  </Button>
-                )}
-              </li>
+              <OverlayTokenRow
+                key={tk.id}
+                token={tk}
+                current={tk.id === tokenId}
+                owner={tk.member_id === me?.id ? null : (data.members.find((m) => m.id === tk.member_id)?.display_name ?? '?')}
+                canRotate={tk.member_id === me?.id}
+                onChanged={(rotated) => {
+                  if (rotated) remember(rotated)
+                  else if (tk.id === tokenId) {
+                    // Der gemerkte Link wurde widerrufen: die Prüfung oben vergisst ihn
+                    setTokenId(null)
+                  }
+                  void reload()
+                }}
+              />
             ))}
           </ul>
         )}
       </div>
     </div>
+  )
+}
+
+function OverlayTokenRow({
+  token,
+  current,
+  owner,
+  canRotate,
+  onChanged,
+}: {
+  token: OverlayToken
+  /** Der Link, den dieses Gerät gerade bearbeitet */
+  current: boolean
+  /** Name des Spielers, wenn der Link nicht der eigene ist (nur für die Leitung sichtbar) */
+  owner: string | null
+  canRotate: boolean
+  onChanged: (rotated: string | null) => void
+}) {
+  const t = useT()
+  const run = async (action: () => Promise<unknown>, message: string) => {
+    try {
+      const result = await action()
+      toast(t(message))
+      // Nur Erneuern liefert ein Token zurück
+      onChanged(typeof result === 'string' && result.startsWith('slo_') ? result : null)
+    } catch (error) {
+      toastError(error)
+    }
+  }
+  const setLock = (lock: boolean, message: string) =>
+    run(() => rpc('set_overlay_device_lock', { p_token_id: token.id, p_device_lock: lock }), message)
+
+  return (
+    <li className={cn('grid gap-2 rounded-md border px-3 py-2', current && 'border-primary/50')}>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span className="font-medium">{token.label}</span>
+        {owner && <span className="text-muted-foreground">{t('von {name}', { name: owner })}</span>}
+        {current && <span className="label text-[0.6rem] text-primary">{t('Dieser Link')}</span>}
+        <span className="text-muted-foreground">
+          {token.last_used_at
+            ? t('zuletzt aktiv {time}', { time: formatTime(token.last_used_at) })
+            : t('noch nie benutzt')}
+        </span>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {!token.device_lock
+          ? t('Ohne Gerätebindung: Jeder mit dem Link kann mitlesen.')
+          : token.device_bound_at
+            ? t('An ein Gerät gebunden seit {time}. Andere Geräte werden abgewiesen.', { time: formatTime(token.device_bound_at) })
+            : t('Wird an das erste Gerät gebunden, das ihn öffnet.')}
+      </p>
+      <div className="flex flex-wrap gap-1">
+        {token.device_lock && token.device_bound_at && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void setLock(true, 'Gerät freigegeben. Das nächste Gerät, das den Link öffnet, wird gemerkt.')}
+          >
+            {t('Gerät freigeben')}
+          </Button>
+        )}
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() =>
+            void (token.device_lock ? setLock(false, 'Gerätebindung ausgeschaltet') : setLock(true, 'Gerätebindung eingeschaltet'))
+          }
+        >
+          {token.device_lock ? t('Gerätebindung ausschalten') : t('Gerätebindung einschalten')}
+        </Button>
+        {canRotate && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() =>
+              void run(
+                () => rpc<string>('rotate_overlay_token', { p_token_id: token.id }),
+                'Neuer Link erstellt. Der alte funktioniert nicht mehr, in OBS bitte ersetzen.',
+              )
+            }
+          >
+            <RefreshCw /> {t('Erneuern')}
+          </Button>
+        )}
+        <Button
+          size="sm"
+          variant="ghost"
+          className="ml-auto text-destructive"
+          onClick={() => void run(() => rpc('revoke_overlay_token', { p_token_id: token.id }), 'Overlay-Link widerrufen')}
+        >
+          {t('Widerrufen')}
+        </Button>
+      </div>
+    </li>
   )
 }

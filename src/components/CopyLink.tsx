@@ -4,8 +4,8 @@ import { Check, Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useT } from '@/lib/i18n'
 
-/** Zeigt einen geheimen Link einmalig an, mit Kopierknopf. */
-export function CopyLink({ url, hint }: { url: string; hint?: string }) {
+/** Zeigt einen geheimen Link einmalig an, mit Kopierknopf. display: angezeigter Text, wenn das Geheimnis verdeckt bleiben soll */
+export function CopyLink({ url, hint, display }: { url: string; hint?: string; display?: string }) {
   const t = useT()
   const [copied, setCopied] = useState(false)
   return (
@@ -15,7 +15,7 @@ export function CopyLink({ url, hint }: { url: string; hint?: string }) {
       className="grid gap-2 rounded-lg border border-primary/50 bg-primary/5 p-3"
     >
       <div className="flex items-center gap-2">
-        <code className="min-w-0 flex-1 truncate font-mono text-xs">{url}</code>
+        <code className="min-w-0 flex-1 truncate font-mono text-xs">{display ?? url}</code>
         <Button
           size="sm"
           variant="outline"

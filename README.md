@@ -265,8 +265,9 @@ fertig und getestet; der Umbau des Bots selbst folgt.
 
 ## OBS-Overlay für Streams
 
-Die Leitung kann unter **Einstellungen → OBS-Overlay** Overlays für OBS (oder Streamlabs) bauen.
-Ein Overlay besteht aus frei kombinierbaren Bausteinen in beliebiger Reihenfolge:
+Jeder Spieler kann unter **Einstellungen → OBS-Overlay** eigene Overlays für OBS (oder Streamlabs)
+bauen; die Leitung sieht und widerruft alle Overlay-Links der Challenge. Ein Overlay besteht aus frei
+kombinierbaren Bausteinen in beliebiger Reihenfolge:
 
 | Baustein | Zeigt |
 |---|---|
@@ -288,9 +289,23 @@ Vorschau zeigt genau das, was später im Stream erscheint.
 
 Der Link enthält ein eigenes Token (`slo_…`), das **nur lesen** darf und nur für diese Challenge
 gilt. Damit funktioniert das Overlay auch bei privaten Challenges, ohne dass auf dem Streaming-PC
-eine Spieler-Sitzung steckt. Overlay-Links lassen sich in derselben Einstellung jederzeit widerrufen.
-Das Overlay fragt alle 4 Sekunden nach Änderungen; ist nichts passiert, kommt nur eine kurze
-Versionsnummer zurück.
+eine Spieler-Sitzung steckt. Das Overlay fragt alle 4 Sekunden nach Änderungen; ist nichts
+passiert, kommt nur eine kurze Versionsnummer zurück.
+
+**Wenn der Link im Stream zu sehen war:**
+
+- **Gerätebindung** (Standard): Der Link merkt sich das erste Gerät, das ihn öffnet (OBS legt dafür
+  eine zufällige Geräte-ID in seinem Browser-Speicher ab). Jedes andere Gerät bekommt nur den Hinweis
+  „an ein anderes Gerät gebunden“, selbst mit dem vollständigen Link. Wechselt der Streaming-PC oder
+  löscht OBS seinen Browser-Cache: **Gerät freigeben**, dann wird das nächste Gerät gemerkt.
+- **Erneuern**: Erzeugt einen neuen Schlüssel für denselben Link, der alte ist sofort ungültig. Den
+  neuen Link in OBS ersetzen.
+- **Widerrufen**: Link endgültig abschalten.
+- Auf der Website wird der Schlüssel nie angezeigt (`#slo_••••`), nur kopiert. Ein eingeblendetes
+  Einstellungsfenster verrät ihn also nicht.
+
+Overlay-Links, die vor der Gerätebindung erstellt wurden, bleiben ungebunden, damit laufende
+OBS-Quellen weiter funktionieren. Die Bindung lässt sich pro Link einschalten.
 
 ---
 
