@@ -22,7 +22,7 @@ import {
   type DexData,
 } from '@/lib/dex'
 import { useT } from '@/lib/i18n'
-import { speciesLabel, type SpeciesIndex } from '@/lib/species'
+import { dexNumber, speciesLabel, type SpeciesIndex } from '@/lib/species'
 import type { Encounter } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -139,7 +139,7 @@ function DexEntry({
           <div className="flex items-center gap-4">
             <Sprite id={speciesId} name={speciesLabel(entry)} size="xl" />
             <div className="min-w-0">
-              <p className="label text-muted-foreground">#{String(speciesId).padStart(4, '0')}</p>
+              <p className="label text-muted-foreground">#{String(dexNumber(entry)).padStart(4, '0')}</p>
               <h3 className="font-display tracking-tight text-4xl font-extrabold">{speciesLabel(entry)}</h3>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {types.map((type) => (
@@ -147,7 +147,7 @@ function DexEntry({
                 ))}
               </div>
               <a
-                href={pokewikiUrl(entry.name_de)}
+                href={pokewikiUrl((entry.form_of ? species.byId.get(entry.form_of) : undefined)?.name_de ?? entry.name_de)}
                 target="_blank"
                 rel="noreferrer"
                 className="mt-3 inline-flex items-center gap-1 text-sm text-primary hover:underline"

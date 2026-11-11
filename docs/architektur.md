@@ -246,6 +246,16 @@ werden). Deutsche Namen sind die offiziellen aus PokeAPI (z. B. „Nidoran♀“
 Bots („nidoranf“) löst das Migrationsskript über `pokemonMapping.json` auf. Alle 1025 Einträge der
 Mapping-Datei werden eindeutig zugeordnet.
 
+Regionalformen (bisher die 18 Alola-Formen) schreibt dasselbe Skript in
+`20261112120000_regional_forms.sql`: Jede Form ist ein eigener Eintrag mit der PokeAPI-ID der Form
+(z. B. 10091 für Alola-Rattfratz) und `form_of` = nationale Nummer der Art. Die Form liegt in derselben
+Entwicklungsreihe, ihre Vorstufe ist die gleiche Form der Vorstufe oder die Art selbst
+(Pikachu → Alola-Raichu). Dadurch brauchen Ereignisse, Dupes-Regel, Entwicklung und Sprites keinen
+Sonderfall; nur die angezeigte Nummer (`dexNumber`) und der Name im Schadensrechner (Slug
+„rattata-alola“) unterscheiden sich. `tools/generate_dex.py` nimmt die Formen ab ihrer Generation in
+die Pokédex-Daten auf; in Alola-Editionen ergeben Entwicklungen ohne Form (Pikachu, Tragosso,
+Owei) die Alola-Form.
+
 ## 6. Übernahme eines Bot-Runs
 
 `tools/migration/migrate_bot_data.py` (nur Python-Standardbibliothek) liest einen Bot-Run-Ordner und

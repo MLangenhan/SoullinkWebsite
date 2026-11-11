@@ -104,7 +104,8 @@ export function CalcPanel({ data, species }: { data: ChallengeData; species: Spe
 
   const nameOf = (id: number | null) => {
     const entry = id ? species?.byId.get(id) : undefined
-    return entry && gen ? gen.speciesName(entry.name_en) : null
+    // Regionalformen heißen im Rechner wie ihr Slug („Rattata-Alola“), nicht „Alolan Rattata“
+    return entry && gen ? (gen.speciesName(entry.slug) ?? gen.speciesName(entry.name_en)) : null
   }
   const leftName = left ? nameOf(left.speciesId) : null
   const rightName = nameOf(right.speciesId)
