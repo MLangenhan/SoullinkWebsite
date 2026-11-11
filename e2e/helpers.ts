@@ -14,14 +14,23 @@ export function inviteHash(name: 'Moritz' | 'Janne' | 'Elsmann' | 'Linus'): stri
  * Neue, einmal nutzbare Einladung für einen Demo-Spieler direkt in der lokalen Datenbank: Die Links aus
  * global-setup.ts sind nach dem ersten Test verbraucht, weitere Tests brauchen trotzdem z. B. die Leitung.
  */
+const database = () => process.env.DATABASE_URL ?? 'postgres://postgres:postgres@127.0.0.1:54322/postgres'
+
+/** SQL direkt in der lokalen Datenbank, z. B. um die Demo-Challenge für einen Test umzustellen; liefert die Ausgabe */
+export function demoSql(sql: string, vars: Record<string, string> = {}): string {
+  const args = Object.entries(vars).flatMap(([key, value]) => ['-v', `${key}=${value}`])
+  return execFileSync('psql', [database(), '-qtAX', '-v', 'ON_ERROR_STOP=1', ...args], { input: sql }).toString().trim()
+}
+
 export function freshInviteHash(name: Parameters<typeof inviteHash>[0]): string {
   const token = `inv_${randomBytes(32).toString('base64url')}`
-  const database = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@127.0.0.1:54322/postgres'
-  const sql = `insert into public.challenge_invites (challenge_id, token_hash, role, member_id, max_uses, expires_at)
+  demoSql(
+    `insert into public.challenge_invites (challenge_id, token_hash, role, member_id, max_uses, expires_at)
     select m.challenge_id, sha256(convert_to(:'token', 'UTF8')), m.role, m.id, 1, now() + interval '1 hour'
     from public.challenge_members m join public.challenges c on c.id = m.challenge_id
-    where c.slug = 'demo-soulsilver-alle' and m.display_name = :'name'`
-  execFileSync('psql', [database, '-qtAX', '-v', 'ON_ERROR_STOP=1', '-v', `token=${token}`, '-v', `name=${name}`], { input: sql })
+    where c.slug = 'demo-soulsilver-alle' and m.display_name = :'name'`,
+    { token, name },
+  )
   return `#${token}`
 }
 

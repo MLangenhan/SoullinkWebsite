@@ -21,6 +21,7 @@ describe('Level-Cap-Vorlagen', () => {
   it.each([
     ['kanto_rby', 13], ['kanto_yellow', 13], ['kanto_frlg', 13], ['johto_gsc', 23], ['johto_hgss', 23], ['hoenn_rs', 13],
     ['hoenn_rse', 13], ['hoenn_oras', 13], ['sinnoh_dp', 13], ['sinnoh_pt', 13], ['einall_bw', 13], ['einall_bw2', 13], ['kalos', 13],
+    ['alola_usum', 19],
   ])('%s hat %i Einträge', (key, count) => {
     expect(preset(key).caps).toHaveLength(count)
   })
@@ -34,6 +35,12 @@ describe('Level-Cap-Vorlagen', () => {
     expect(levels('sinnoh_pt')).toEqual([14, 22, 26, 32, 37, 41, 44, 50, 53, 55, 57, 59, 62])
     expect(preset('sinnoh_pt').caps[2].label).toBe('Orden 3 – Herzhofen (Lamina)')
     expect(preset('sinnoh_pt').caps[2].labelEn).toBe('Badge 3 – Hearthome City (Fantina)')
+  })
+
+  it('Ultramond: Prüfungen und Großprüfungen in Spielreihenfolge, Ultra-Necrozma vor Minas Prüfung', () => {
+    expect(levels('alola_usum')).toEqual([12, 16, 20, 22, 24, 28, 33, 35, 44, 49, 54, 60, 55, null, 57, 57, 57, 57, 60])
+    expect(preset('alola_usum').caps[1].label).toBe('Großprüfung – Mele-Mele (Hala)')
+    expect(preset('alola_usum').versionGroup).toBe('ultra-sun-ultra-moon')
   })
 
   it('Johto: Hartwig in Anemonia City, Jasmin in Oliviana City', () => {
@@ -52,6 +59,8 @@ describe('Spiel am Namen erkennen', () => {
     ['Pokémon Smaragd', 'hoenn_rse'],
     ['Rubin', 'hoenn_rs'],
     ['Omega Rubin', 'hoenn_oras'],
+    ['Pokémon Ultramond', 'alola_usum'],
+    ['Ultra Sun Nuzlocke', 'alola_usum'],
   ])('%s → %s', (game, key) => {
     expect(detectPreset(game)?.key).toBe(key)
   })

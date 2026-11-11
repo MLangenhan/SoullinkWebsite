@@ -131,6 +131,7 @@ export default {
   'Schwarz, Weiß': 'Black, White',
   'Schwarz 2, Weiß 2': 'Black 2, White 2',
   'X, Y': 'X, Y',
+  'Ultrasonne, Ultramond': 'Ultra Sun, Ultra Moon',
 
   // Editionen der Pokédex-Daten
   'Rot/Blau': 'Red/Blue',
@@ -143,6 +144,7 @@ export default {
   'Schwarz/Weiß': 'Black/White',
   'Schwarz 2/Weiß 2': 'Black 2/White 2',
   'X/Y': 'X/Y',
+  'Ultrasonne/Ultramond': 'Ultra Sun/Ultra Moon',
 
   // Pokédex
   'Pokémon nachschlagen': 'Look up Pokémon',

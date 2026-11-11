@@ -3,7 +3,8 @@ import { getLang } from '@/lib/i18n'
 // Level-Caps pro Spiel. Einträge ohne Level sind Zwischenüberschriften. Cap = höchstes Level im Team des
 // Gegners beim ersten Kampf. Gen 1–4 geprüft gegen die Trainerdaten der pret-Disassemblies (pokered,
 // pokeyellow, pokecrystal, pokeruby, pokeemerald, pokefirered, pokediamond, pokeplatinum, pokeheartgold);
-// Gen 5 und 6 stammen aus dem Discord-Bot und sind noch ungeprüft.
+// Gen 5 und 6 stammen aus dem Discord-Bot und sind noch ungeprüft. Gen 7 (Ultrasonne/Ultramond) ist aus
+// Nuzlocke-Leitfäden zusammengetragen und gegeneinander abgeglichen, aber nicht gegen die Spieldaten geprüft.
 // versionGroup: welche Attacken- und Entwicklungsdaten (public/dex/<versionGroup>.json) dazu passen.
 // Wichtig: Die Zahl und Reihenfolge der Einträge nicht ändern, laufende Challenges speichern den Index.
 
@@ -140,6 +141,18 @@ const unovaLeague = (gyms: LevelCap[], e4: number, champion: LevelCap): LevelCap
   champion,
 ]
 
+// Alola: Prüfungen der Captains und Großprüfungen der Inselkönige statt Arenen; Level = Totem bzw. stärkstes Pokémon
+const trial = (n: number, captain: Name, place: Name | null, level: number): LevelCap => ({
+  label: `Prüfung ${n} – ${captain[0]}${place ? ` (${place[0]})` : ''}`,
+  labelEn: `Trial ${n} – ${captain[1]}${place ? ` (${place[1]})` : ''}`,
+  level,
+})
+const grandTrial = (island: Name, kahuna: Name, level: number): LevelCap => ({
+  label: `Großprüfung – ${island[0]} (${kahuna[0]})`,
+  labelEn: `Grand trial – ${island[1]} (${kahuna[1]})`,
+  level,
+})
+
 export const LEVEL_CAP_PRESETS: LevelCapPreset[] = [
   {
     key: 'kanto_rby',
@@ -269,6 +282,37 @@ export const LEVEL_CAP_PRESETS: LevelCapPreset[] = [
       english(8, 'Snowbelle City', 'Wulfric', 51),
       ...['Malva', 'Siebold', 'Wikstrom', 'Drasna'].map((name, i) => elite(i + 1, [name, name], [55, 56, 57, 59][i])),
       champ(['Diantha', 'Diantha'], 65),
+    ],
+  },
+  {
+    key: 'alola_usum',
+    name: 'Ultrasonne, Ultramond',
+    versionGroup: 'ultra-sun-ultra-moon',
+    gameNames: ['Ultrasonne', 'Ultramond', 'Ultra Sonne', 'Ultra Mond', 'Ultra Sun', 'Ultra Moon', 'USUM', 'Ultrasonne und Ultramond'],
+    caps: [
+      trial(1, ['Tracy', 'Ilima'], ['Vegetationshöhle', 'Verdant Cavern'], 12),
+      grandTrial(['Mele-Mele', 'Melemele'], ['Hala', 'Hala'], 16),
+      trial(2, ['Lana', 'Lana'], ['Plätscherhügel', 'Brooklet Hill'], 20),
+      trial(3, ['Kiawe', 'Kiawe'], ['Wela-Vulkanpark', 'Wela Volcano Park'], 22),
+      trial(4, ['Maho', 'Mallow'], ['Schattendschungel', 'Lush Jungle'], 24),
+      grandTrial(['Akala', 'Akala'], ['Olivia', 'Olivia'], 28),
+      trial(5, ['Chrys', 'Sophocles'], ['Hokulani-Berg', 'Mount Hokulani'], 33),
+      trial(6, ['Lola', 'Acerola'], null, 35),
+      grandTrial(['Ula-Ula', "Ula'ula"], ['Yasu', 'Nanu'], 44),
+      trial(7, ['ohne Captain', 'no captain'], ['Canyon von Poni', 'Vast Poni Canyon'], 49),
+      grandTrial(['Poni', 'Poni'], ['Hapu', 'Hapu'], 54),
+      { label: 'Ultra-Necrozma (Megalo-Turm)', labelEn: 'Ultra Necrozma (Megalo Tower)', level: 60 },
+      trial(8, ['Mina', 'Mina'], ['Dorf des Seevolkes', 'Seafolk Village'], 55),
+      heading('Top Vier (beliebige Reihenfolge)', 'Elite Four (any order)'),
+      ...(
+        [
+          ['Molayne', 'Molayne'],
+          ['Olivia', 'Olivia'],
+          ['Lola', 'Acerola'],
+          ['Kahili', 'Kahili'],
+        ] as Name[]
+      ).map((member, i) => elite(i + 1, member, 57)),
+      champ(['Hau', 'Hau'], 60),
     ],
   },
 ]
