@@ -39,6 +39,7 @@ MAX_SPECIES = 1025
 VERSION_GROUPS = [
     "red-blue", "firered-leafgreen", "crystal", "heartgold-soulsilver", "emerald",
     "omega-ruby-alpha-sapphire", "diamond-pearl", "platinum", "black-white", "black-2-white-2", "x-y",
+    "ultra-sun-ultra-moon",
 ]
 
 TYPE_EN = {

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { inviteHash, join, tab, watchErrors } from './helpers'
+import { demoSql, freshInviteHash, inviteHash, join, tab, watchErrors } from './helpers'
 
 // Die Tests bauen aufeinander auf: Ein Einladungslink gilt nur einmal, der erste Test verbraucht Moritz' Link
 test.describe.configure({ mode: 'serial' })
@@ -52,6 +52,31 @@ test('Offene Gebiete: Eintragen aus der Liste hakt das Gebiet ab', async ({ page
 
   await expect(page.getByRole('listitem').filter({ hasText: 'Eispfad' })).toHaveCount(0)
   await expect(progress).toContainText(`${before + 1} /`)
+  expect(errors).toEqual([])
+})
+
+test('Ultramond: Level-Caps, Pokédex und Gebiete von Alola', async ({ page }) => {
+  const errors = watchErrors(page)
+  const game = demoSql(`select game from public.challenges where slug = 'demo-soulsilver-alle'`)
+  demoSql(`update public.challenges set game = 'Pokémon Ultramond' where slug = 'demo-soulsilver-alle'`)
+  try {
+    await join(page, 'Janne', freshInviteHash('Janne'))
+    const header = page.locator('main header').first()
+    await expect(header).toContainText('Prüfung 1 – Tracy (Vegetationshöhle)')
+    await page.getByRole('button', { name: 'Nächster Level-Cap' }).click()
+    await expect(header).toContainText('Großprüfung – Mele-Mele (Hala)')
+    await expect(header).toContainText('16')
+    await page.getByRole('button', { name: 'Vorheriger Level-Cap' }).click()
+
+    await tab(page, 'Gebiete').click()
+    await page.getByPlaceholder('Gebiet suchen …').fill('Vegetationshöhle')
+    await expect(page.getByRole('button', { name: 'Vegetationshöhle eintragen' })).toBeVisible()
+
+    await tab(page, 'Pokédex').click()
+    await expect(page.getByText(/Daten: Ultrasonne\/Ultramond/)).toBeVisible()
+  } finally {
+    demoSql(`update public.challenges set game = :'game' where slug = 'demo-soulsilver-alle'`, { game })
+  }
   expect(errors).toEqual([])
 })
 

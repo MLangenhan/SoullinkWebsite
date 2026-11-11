@@ -27,6 +27,7 @@ export const VERSION_GROUP_NAMES: Record<string, string> = {
   'black-white': 'Schwarz/Weiß',
   'black-2-white-2': 'Schwarz 2/Weiß 2',
   'x-y': 'X/Y',
+  'ultra-sun-ultra-moon': 'Ultrasonne/Ultramond',
 }
 
 const cache = new Map<string, Promise<DexData>>()
