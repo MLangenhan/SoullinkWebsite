@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { mergePayload, type OverlayData, type OverlayPayload } from '@/lib/overlay'
+import { mergePayload, overlayDeviceId, type OverlayData, type OverlayPayload } from '@/lib/overlay'
 import { ApiError, rpc } from '@/lib/supabase'
 
 /** Abfrage-Takt: OBS-Browserquellen haben keine Sitzung und damit kein Realtime, also wird nachgefragt */
@@ -9,6 +9,8 @@ const RETRY_INVALID_MS = 30000
 export type OverlayState =
   | { status: 'loading' }
   | { status: 'invalid' }
+  /** Link ist an ein anderes Gerät gebunden */
+  | { status: 'locked' }
   | { status: 'ready'; data: OverlayData; stale: boolean }
 
 /**
@@ -23,11 +25,16 @@ export function useOverlayData(token: string | null): OverlayState {
     if (!token) return
     let active = true
     let timer: ReturnType<typeof setTimeout> | undefined
+    const device = overlayDeviceId()
 
     const tick = async () => {
       let delay = POLL_MS
       try {
-        const payload = await rpc<OverlayPayload>('overlay_state', { p_token: token, p_version: data.current?.version ?? null })
+        const payload = await rpc<OverlayPayload>('overlay_state', {
+          p_token: token,
+          p_version: data.current?.version ?? null,
+          p_device: device,
+        })
         const next = mergePayload(data.current, payload)
         if (active && next && next !== data.current) {
           data.current = next
@@ -37,10 +44,10 @@ export function useOverlayData(token: string | null): OverlayState {
         }
       } catch (error) {
         if (!active) return
-        if (error instanceof ApiError && error.code === 'PT401') {
-          // Widerrufen oder falsch: selten weiter versuchen, falls der Link nur kurz falsch war
+        if (error instanceof ApiError && (error.code === 'PT401' || error.code === 'PT403')) {
+          // Widerrufen, falsch oder an ein anderes Gerät gebunden: selten weiter versuchen, bis es freigegeben ist
           data.current = null
-          setState({ status: 'invalid' })
+          setState({ status: error.code === 'PT401' ? 'invalid' : 'locked' })
           delay = RETRY_INVALID_MS
         } else {
           setState((s) => (s.status === 'ready' ? { ...s, stale: true } : s))

@@ -120,6 +120,22 @@ export function SettingsPanel({ data, onChanged }: { data: ChallengeData; onChan
           description={t('Du siehst diese Challenge nur. Mitspielen geht über einen Einladungslink der Leitung.')}
         />
       )}
+      {me && me.role !== 'viewer' && (
+        <Section
+          title={t('OBS-Overlay')}
+          description={
+            isOwner
+              ? t(
+                  'Zeigt Teams, den letzten Fang und den Level-Cap im Stream. Jeder Spieler kann eigene Links erstellen; du siehst und widerrufst alle. Die Links dürfen nur lesen und funktionieren auch für private Challenges.',
+                )
+              : t(
+                  'Zeigt Teams, den letzten Fang und den Level-Cap in deinem Stream. Der Link darf nur lesen und funktioniert auch für private Challenges; widerrufen geht jederzeit.',
+                )
+          }
+        >
+          <OverlayBuilder data={data} />
+        </Section>
+      )}
       {isOwner && <OwnerSettings data={data} onChanged={onChanged} />}
     </div>
   )
@@ -379,15 +395,6 @@ function OwnerSettings({ data, onChanged }: { data: ChallengeData; onChanged: ()
             ))}
           </ul>
         )}
-      </Section>
-
-      <Section
-        title={t('OBS-Overlay')}
-        description={t(
-          'Zeigt Teams, den letzten Fang und den Level-Cap im Stream. Der Link darf nur lesen und funktioniert auch für private Challenges; widerrufen geht jederzeit.',
-        )}
-      >
-        <OverlayBuilder data={data} />
       </Section>
 
       <Section

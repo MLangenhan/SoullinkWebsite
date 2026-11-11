@@ -38,6 +38,10 @@ export function Overlay() {
         <p className="rounded-lg bg-black/80 px-3 py-2 text-sm text-white">
           {t('Overlay-Link ungültig oder widerrufen. Erstelle in den Einstellungen der Challenge einen neuen.')}
         </p>
+      ) : state.status === 'locked' ? (
+        <p className="max-w-md rounded-lg bg-black/80 px-3 py-2 text-sm text-white">
+          {t('Dieser Overlay-Link ist an ein anderes Gerät gebunden. In den Einstellungen der Challenge unter OBS-Overlay „Gerät freigeben“ wählen.')}
+        </p>
       ) : state.status === 'ready' ? (
         <OverlayView data={state.data} config={config} species={species} />
       ) : null}

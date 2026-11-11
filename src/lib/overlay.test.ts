@@ -4,6 +4,8 @@ import {
   DEFAULT_CONFIG,
   latestLink,
   mergePayload,
+  maskedOverlayUrl,
+  overlayDeviceId,
   overlayUrl,
   parseConfig,
   serializeConfig,
@@ -57,6 +59,18 @@ describe('Overlay-Einstellungen in der Adresse', () => {
   it('Token steht im #-Teil, nie in der Abfrage', () => {
     const url = overlayUrl('https://x.github.io', '/SoullinkWebsite/', 'slo_abc', { ...DEFAULT_CONFIG, widgets: ['team'] })
     expect(url).toBe('https://x.github.io/SoullinkWebsite/obs?w=team#slo_abc')
+  })
+
+  it('verdeckte Adresse zeigt Einstellungen, aber nie den Schlüssel', () => {
+    const masked = maskedOverlayUrl('https://x.github.io/obs?w=team,cap#slo_geheim123')
+    expect(masked).toBe('https://x.github.io/obs?w=team,cap#slo_••••••••')
+    expect(masked).not.toContain('geheim')
+  })
+
+  it('Geräte-ID ist zufällig, lang genug und bleibt gleich', () => {
+    const id = overlayDeviceId()
+    expect(id).toMatch(/^[A-Za-z0-9_-]{43}$/)
+    expect(overlayDeviceId()).toBe(id)
   })
 })
 

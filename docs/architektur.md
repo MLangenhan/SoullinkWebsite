@@ -200,15 +200,22 @@ dem Bot-Rechner, funktioniert nur über den Connection Pooler und ist nicht pro 
 
 ### OBS-Overlay
 
-Für Streams erzeugt die Leitung Overlay-Links (`create_overlay_token`, `revoke_overlay_token`). Das
-Token (`slo_…`, wie Bot-Tokens nur als SHA-256 gespeichert) steht im `#`-Teil der Adresse `/obs`,
-die Darstellung in den Abfrage-Parametern (`src/lib/overlay.ts`). OBS hat keine Sitzung und damit
-unter RLS kein Realtime; die Seite ruft deshalb alle 4 s `overlay_state(token, version)` auf
-(für `anon` freigegeben). Die Funktion liefert denselben Datenzuschnitt wie die Website für den
-laufenden Run, ohne Discord-IDs, Nutzer-IDs und Bot-Einstellungen. Die Version ist ein MD5 über
-Challenge, Mitglieder und Routen (`last_seq` ändert sich mit jedem Ereignis); stimmt sie, kommt nur
-`{version}` zurück. Team und Level-Cap rechnet das Overlay mit demselben Code wie die Website
-(`arrange`, `capIndex`).
+Für Streams erzeugt jeder Spieler eigene Overlay-Links (`create_overlay_token`); verwalten
+(`revoke_overlay_token`, `rotate_overlay_token`, `set_overlay_device_lock`) darf der Ersteller und
+die Leitung. Das Token (`slo_…`, wie Bot-Tokens nur als SHA-256 gespeichert) steht im `#`-Teil der
+Adresse `/obs`, die Darstellung in den Abfrage-Parametern (`src/lib/overlay.ts`). OBS hat keine
+Sitzung und damit unter RLS kein Realtime; die Seite ruft deshalb alle 4 s
+`overlay_state(token, version, device)` auf (für `anon` freigegeben). Die Funktion liefert denselben
+Datenzuschnitt wie die Website für den laufenden Run, ohne Discord-IDs, Nutzer-IDs und
+Bot-Einstellungen. Die Version ist ein MD5 über Challenge, Mitglieder und Routen (`last_seq` ändert
+sich mit jedem Ereignis); stimmt sie, kommt nur `{version}` zurück. Team und Level-Cap rechnet das
+Overlay mit demselben Code wie die Website (`arrange`, `capIndex`).
+
+Gerätebindung: Die Browserquelle erzeugt einmal 32 Zufallsbytes als Geräte-ID (`localStorage`).
+Bei Links mit `device_lock` merkt sich der erste Aufruf deren Hash (`device_hash`, für Clients nicht
+lesbar), alle anderen IDs bekommen `PT403`. Gleichzeitige Erstaufrufe entscheidet ein
+`update … where device_hash is null`. Der Baukasten prüft gemerkte Tokens mit `overlay_token_id`,
+das kein Gerät bindet.
 
 ## 4. Bot-Befehle im neuen Modell
 

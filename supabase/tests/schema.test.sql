@@ -354,24 +354,52 @@ set role anon;
 select test.fails(format($$ select public.bot_state(%L) $$, test.get('bot')), 'PT401', 'Widerrufenes Bot-Token ist ungültig');
 
 -- ---------------------------------------------------------------- Overlay-Links (OBS)
+-- Ein Zuschauer-Gerät für die Rechteprüfung
 reset role;
+insert into auth.users (id) values ('00000000-0000-0000-0000-000000000005');
+insert into public.challenge_members (id, challenge_id, role, display_name)
+values ('00000000-0000-0000-0000-0000000000f5', test.get('ch')::uuid, 'viewer', 'Zuschauerin');
+insert into public.member_devices (user_id, challenge_id, member_id)
+values ('00000000-0000-0000-0000-000000000005', test.get('ch')::uuid, '00000000-0000-0000-0000-0000000000f5');
+
 set role authenticated;
-set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000002';
+set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000005';
 select test.fails(format($$ select public.create_overlay_token(%L, 'OBS') $$, test.get('ch')), 'PT403',
-                  'Nur die Challenge-Leitung erstellt Overlay-Links');
+                  'Zuschauer erstellen keine Overlay-Links');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000003';
+select test.fails(format($$ select public.create_overlay_token(%L, 'OBS') $$, test.get('ch')), 'PT403',
+                  'Fremde erstellen keine Overlay-Links');
+
+-- Janne (Spieler) erstellt sich einen eigenen Link, Moritz (Leitung) auch
+set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000002';
+select test.put('overlay_janne', public.create_overlay_token(test.get('ch')::uuid, 'Jannes Stream'));
+select test.ok(test.get('overlay_janne') like 'slo\_%', 'Overlay-Token hat eigenes Präfix');
+select test.ok((select member_id = test.get('janne')::uuid and device_lock from public.overlay_tokens),
+               'Spieler-Link gehört dem Spieler, Gerätebindung ist Standard');
 set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000001';
 select test.put('overlay', public.create_overlay_token(test.get('ch')::uuid, 'Stream'));
-select test.ok(test.get('overlay') like 'slo\_%', 'Overlay-Token hat eigenes Präfix');
+select test.put('overlay_id', public.overlay_token_id(test.get('overlay'))::text);
+select test.put('overlay_janne_id', public.overlay_token_id(test.get('overlay_janne'))::text);
 select test.fails($$ select token_hash from public.overlay_tokens $$, '42501', 'Overlay-Token-Hash ist nicht lesbar');
-select test.ok((select count(*) = 1 from public.overlay_tokens), 'Leitung sieht ihre Overlay-Links');
+select test.fails($$ select device_hash from public.overlay_tokens $$, '42501', 'Geräte-Hash ist nicht lesbar');
+select test.ok((select count(*) = 2 from public.overlay_tokens), 'Leitung sieht alle Overlay-Links');
 
+set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000004';
+select test.ok((select count(*) = 1 from public.overlay_tokens), 'Spieler sieht nur seine eigenen Overlay-Links (auch vom zweiten Gerät)');
+select test.fails($$ select public.overlay_token_id(test.get('overlay')) $$, 'PT401', 'Spieler erkennt fremde Overlay-Links nicht');
+select test.fails($$ select public.revoke_overlay_token(test.get('overlay_id')::uuid) $$, 'PT404',
+                  'Spieler widerruft keine fremden Overlay-Links');
+set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000005';
+select test.ok((select count(*) = 0 from public.overlay_tokens), 'Zuschauer sehen keine Overlay-Links');
+
+-- OBS liest ohne Sitzung; das erste Gerät wird gemerkt
 reset role;
 set role anon;
 reset request.jwt.claim.sub;
-select test.put('overlay_state', public.overlay_state(test.get('overlay'))::text);
+select test.put('overlay_state', public.overlay_state(test.get('overlay'), null, 'obs-moritz-0123456789abcdef')::text);
 select test.ok((select (test.get('overlay_state')::jsonb -> 'stats' ->> 'current_run')::integer = 2),
                'Overlay liest den laufenden Run');
-select test.ok((select jsonb_array_length(test.get('overlay_state')::jsonb -> 'members') = 3),
+select test.ok((select jsonb_array_length(test.get('overlay_state')::jsonb -> 'members') = 4),
                'Overlay bekommt alle Mitglieder');
 select test.ok((select bool_and((e ->> 'run_number')::integer = 2) and count(*) > 0
                 from jsonb_array_elements(test.get('overlay_state')::jsonb -> 'encounters') e),
@@ -380,32 +408,84 @@ select test.ok((select not (test.get('overlay_state')::jsonb -> 'members' -> 0 ?
                 and not (test.get('overlay_state')::jsonb -> 'events' -> 0 ? 'actor_user_id')
                 and not (test.get('overlay_state')::jsonb -> 'challenge' ? 'created_by')),
                'Overlay verrät keine Discord-IDs und keine Sitzungen');
-select test.ok((select public.overlay_state(test.get('overlay'), test.get('overlay_state')::jsonb ->> 'version')
+select test.ok((select public.overlay_state(test.get('overlay'), test.get('overlay_state')::jsonb ->> 'version', 'obs-moritz-0123456789abcdef')
                 = jsonb_build_object('version', test.get('overlay_state')::jsonb ->> 'version')),
                'Unveränderter Stand liefert nur die Version');
-select test.fails($$ select public.overlay_state('slo_falsch') $$, 'PT401', 'Falscher Overlay-Link wird abgelehnt');
+select test.fails($$ select public.overlay_state(test.get('overlay')) $$, 'PT403',
+                  'Gebundener Link ohne Geräte-ID wird abgewiesen');
+select test.fails($$ select public.overlay_state(test.get('overlay'), null, 'zuschauer-0123456789abcdef') $$, 'PT403',
+                  'Gebundener Link auf einem zweiten Gerät wird abgewiesen');
+select test.fails($$ select public.overlay_state(test.get('overlay'), null, 'kurz') $$, 'PT403', 'Zu kurze Geräte-ID wird abgewiesen');
+select test.fails($$ select public.overlay_state('slo_falsch', null, 'obs-moritz-0123456789abcdef') $$, 'PT401',
+                  'Falscher Overlay-Link wird abgelehnt');
 select test.fails(format($$ select public.bot_state(%L) $$, test.get('overlay')), 'PT401',
                   'Overlay-Token taugt nicht als Bot-Token');
 select test.fails(format($$ select public.bot_append_event(%L, '111111', 'encounter_missed', '{}') $$, test.get('overlay')),
                   'PT401', 'Overlay-Token kann nichts schreiben');
+select test.fails($$ select public.overlay_token_id(test.get('overlay')) $$, '42501', 'Anonym fragt keine Overlay-Link-IDs ab');
 
 reset role;
 set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000001';
+select test.ok((select device_bound_at is not null from public.overlay_tokens where id = test.get('overlay_id')::uuid),
+               'Leitung sieht, dass der Link an ein Gerät gebunden ist');
 select public.set_level_cap(test.get('ch')::uuid, 1);
 reset role;
 set role anon;
-reset request.jwt.claim.sub;
-select test.ok((select public.overlay_state(test.get('overlay'), test.get('overlay_state')::jsonb ->> 'version') ? 'challenge'),
+select test.ok((select public.overlay_state(test.get('overlay'), test.get('overlay_state')::jsonb ->> 'version', 'obs-moritz-0123456789abcdef') ? 'challenge'),
                'Geänderter Level-Cap liefert den neuen Stand');
 
+-- Gerät wechseln: Bindung lösen, das nächste Gerät wird gemerkt
 reset role;
 set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000001';
-select public.revoke_overlay_token((select id from public.overlay_tokens));
+select public.set_overlay_device_lock(test.get('overlay_id')::uuid, true);
 reset role;
 set role anon;
-select test.fails(format($$ select public.overlay_state(%L) $$, test.get('overlay')), 'PT401', 'Widerrufener Overlay-Link ist ungültig');
+select test.ok(public.overlay_state(test.get('overlay'), null, 'obs-neu-0123456789abcdef') ? 'challenge', 'Nach dem Freigeben bindet sich das neue Gerät');
+select test.fails($$ select public.overlay_state(test.get('overlay'), null, 'obs-moritz-0123456789abcdef') $$, 'PT403',
+                  'Das alte Gerät ist danach abgewiesen');
+
+-- Ohne Gerätebindung liest jedes Gerät
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000002';
+select public.set_overlay_device_lock(test.get('overlay_janne_id')::uuid, false);
+reset role;
+set role anon;
+select test.ok(public.overlay_state(test.get('overlay_janne')) ? 'challenge'
+               and public.overlay_state(test.get('overlay_janne'), null, 'irgendein-0123456789abcdef') ? 'challenge',
+               'Ohne Gerätebindung liest jedes Gerät');
+
+-- Erneuern: altes Token sofort ungültig, Bezeichnung und Bindung bleiben
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000004';
+select test.put('overlay_janne2', public.rotate_overlay_token(test.get('overlay_janne_id')::uuid));
+select test.ok((select count(*) = 1 from public.overlay_tokens
+                where revoked_at is null and label = 'Jannes Stream' and not device_lock),
+               'Erneuerter Link behält Bezeichnung und Einstellung');
+select test.fails($$ select public.rotate_overlay_token(test.get('overlay_janne_id')::uuid) $$, 'PT409',
+                  'Widerrufene Links lassen sich nicht erneuern');
+reset role;
+set role anon;
+select test.fails(format($$ select public.overlay_state(%L) $$, test.get('overlay_janne')), 'PT401', 'Altes Token nach dem Erneuern ungültig');
+select test.ok(public.overlay_state(test.get('overlay_janne2')) ? 'challenge', 'Neues Token funktioniert');
+
+-- Leitung widerruft auch fremde Links
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-000000000001';
+select public.revoke_overlay_token(public.overlay_token_id(test.get('overlay_janne2')));
+select public.revoke_overlay_token(test.get('overlay_id')::uuid);
+reset role;
+set role anon;
+select test.fails(format($$ select public.overlay_state(%L) $$, test.get('overlay_janne2')), 'PT401', 'Leitung widerruft Spieler-Links');
+select test.fails(format($$ select public.overlay_state(%L, null, 'obs-neu-0123456789abcdef') $$, test.get('overlay')), 'PT401',
+                  'Widerrufener Overlay-Link ist ungültig');
+reset role;
+delete from public.member_devices where member_id = '00000000-0000-0000-0000-0000000000f5';
+delete from public.challenge_members where id = '00000000-0000-0000-0000-0000000000f5';
 
 -- ---------------------------------------------------------------- Sitzung löschen, Geräte abmelden
 reset role;
