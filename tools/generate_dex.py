@@ -35,6 +35,9 @@ DE = "6"
 EN = "9"
 MAX_SPECIES = 1025
 
+# Regionalformen wie in generate_species.py; Schlüssel ist die PokeAPI-ID der Form (z. B. 10091)
+REGIONAL_FORMS = {"alola": "alola"}  # Form → Region, in der Entwicklungen diese Form ergeben
+
 # Editionen, für die es Level-Caps gibt (src/data/levelCaps.ts)
 VERSION_GROUPS = [
     "red-blue", "firered-leafgreen", "crystal", "heartgold-soulsilver", "emerald",
@@ -120,14 +123,27 @@ def main() -> None:
     for r in load("version_group_regions"):
         vg_regions[r["version_group_id"]].add(r["region_id"])
 
+    # Regionalformen: PokeAPI-ID → (Art, Form, Generation der Einführung)
+    pokemon_species = {int(r["id"]): int(r["species_id"]) for r in load("pokemon")}
+    regions = {r["identifier"]: r["id"] for r in load("regions")}
+    forms: dict[int, tuple[int, str, int]] = {}
+    for r in load("pokemon_forms"):
+        if r["form_identifier"] in REGIONAL_FORMS and r["is_battle_only"] == "0":
+            vg_gen = next(int(v["generation_id"]) for v in version_groups.values() if v["id"] == r["introduced_in_version_group_id"])
+            forms[int(r["pokemon_id"])] = (pokemon_species[int(r["pokemon_id"])], r["form_identifier"], vg_gen)
+    form_by_species = {(base, form): pid for pid, (base, form, _) in forms.items()}
+
+    def wanted_pokemon(pid: int) -> bool:
+        return pid <= MAX_SPECIES or pid in forms
+
     stats: dict[int, list[int]] = defaultdict(lambda: [0] * 6)
     for r in load("pokemon_stats"):
         pid = int(r["pokemon_id"])
-        if pid <= MAX_SPECIES and int(r["stat_id"]) <= 6:
+        if wanted_pokemon(pid) and int(r["stat_id"]) <= 6:
             stats[pid][int(r["stat_id"]) - 1] = int(r["base_stat"])
     types: dict[int, list[int]] = defaultdict(list)
     for r in sorted(load("pokemon_types"), key=lambda r: int(r["slot"])):
-        if int(r["pokemon_id"]) <= MAX_SPECIES:
+        if wanted_pokemon(int(r["pokemon_id"])):
             types[int(r["pokemon_id"])].append(int(r["type_id"]))
     # generation_id = letzte Generation, in der das Pokémon diese Typen hatte
     past_types: dict[int, dict[int, list[int]]] = defaultdict(lambda: defaultdict(list))
@@ -139,7 +155,7 @@ def main() -> None:
     for r in load("pokemon_moves"):
         vg = wanted.get(r["version_group_id"])
         pid = int(r["pokemon_id"])
-        if vg and pid <= MAX_SPECIES and r["pokemon_move_method_id"] == "1":
+        if vg and wanted_pokemon(pid) and r["pokemon_move_method_id"] == "1":
             learnsets[vg][pid].append((int(r["level"] or 0), int(r["move_id"])))
 
     evolutions = load("pokemon_evolution")
@@ -150,6 +166,7 @@ def main() -> None:
         gen = int(info["generation_id"])
         order = int(info["order"])
         in_game = [sid for sid, s in species.items() if int(s["generation_id"]) <= gen]
+        in_game += [pid for pid, (_, _, form_gen) in forms.items() if form_gen <= gen]
 
         def types_in(pid: int) -> list[int]:
             older = sorted(g for g in past_types.get(pid, {}) if g >= gen)
@@ -263,6 +280,23 @@ def main() -> None:
                 continue
             texts = [LABELS[lang]["or"].join(dict.fromkeys(describe(r, lang) for r in chosen)) for lang in ("de", "en")]
             evos[int(s["evolves_from_species_id"])].append([target, *texts])
+
+        # Regionalformen: Alola-Rattfratz → Alola-Rattikarl mit derselben Bedingung. Entwickelt sich eine Art
+        # ohne Form in eine Form (Pikachu → Raichu), ergibt sie in der Region der Form nur diese, sonst beide.
+        here = {regions.get(REGIONAL_FORMS[f]) for f in REGIONAL_FORMS} & vg_regions[info["id"]]
+        for source, entries in list(evos.items()):
+            for target, de, en in list(entries):
+                for form in REGIONAL_FORMS:
+                    target_form = form_by_species.get((target, form))
+                    if target_form is None or forms[target_form][2] > gen:
+                        continue
+                    source_form = form_by_species.get((source, form))
+                    if source_form is not None:
+                        evos[source_form].append([target_form, de, en])
+                    elif regions.get(REGIONAL_FORMS[form]) in here:
+                        entries[entries.index([target, de, en])] = [target_form, de, en]
+                    else:
+                        entries.append([target_form, de, en])
 
         data = {
             "versionGroup": vg,

@@ -26,6 +26,8 @@ export interface Species {
   evolves_from_id: number | null
   evolution_stage: number
   sprite_url: string
+  /** Regionalformen (id = PokeAPI-ID der Form, z. B. 10091): nationale Nummer der Art */
+  form_of?: number | null
 }
 
 export interface Challenge {

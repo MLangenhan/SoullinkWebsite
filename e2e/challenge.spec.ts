@@ -74,6 +74,13 @@ test('Ultramond: Level-Caps, Pokédex und Gebiete von Alola', async ({ page }) =
 
     await tab(page, 'Pokédex').click()
     await expect(page.getByText(/Daten: Ultrasonne\/Ultramond/)).toBeVisible()
+
+    // Alola-Form: eigener Eintrag mit der Nummer der Art und den Typen der Form
+    await page.getByRole('combobox').first().fill('Alola Rattfratz')
+    await page.getByRole('option', { name: /Alola Rattfratz/ }).click()
+    await expect(page.getByRole('heading', { name: 'Alola Rattfratz' })).toBeVisible()
+    await expect(page.getByText('#0019', { exact: true })).toBeVisible()
+    await expect(page.getByText('Unlicht', { exact: true }).first()).toBeVisible()
   } finally {
     demoSql(`update public.challenges set game = :'game' where slug = 'demo-soulsilver-alle'`, { game })
   }

@@ -4,7 +4,7 @@ import { X } from 'lucide-react'
 import { Sprite } from '@/components/Sprite'
 import { Input } from '@/components/ui/input'
 import { useT } from '@/lib/i18n'
-import { speciesLabel, type SpeciesIndex } from '@/lib/species'
+import { dexNumber, speciesLabel, type SpeciesIndex } from '@/lib/species'
 import { cn } from '@/lib/utils'
 
 /** Suchfeld für Pokémon (deutscher oder englischer Name, Dex-Nummer) mit Sprite-Vorschau. */
@@ -53,7 +53,7 @@ export function SpeciesPicker({
         <div className="min-w-0 flex-1">
           <div className="truncate font-medium">{speciesLabel(selected)}</div>
           <div className="label text-[0.65rem] text-muted-foreground">
-            #{String(selected.id).padStart(4, '0')} · {speciesLabel(selected) === selected.name_de ? selected.name_en : selected.name_de}
+            #{String(dexNumber(selected)).padStart(4, '0')} · {speciesLabel(selected) === selected.name_de ? selected.name_en : selected.name_de}
           </div>
         </div>
         <button
@@ -127,7 +127,7 @@ export function SpeciesPicker({
               >
                 <Sprite id={s.id} name={speciesLabel(s)} size="sm" idle={false} />
                 <span className="flex-1 truncate">{speciesLabel(s)}</span>
-                <span className="label text-[0.65rem] text-muted-foreground">#{s.id}</span>
+                <span className="label text-[0.65rem] text-muted-foreground">#{dexNumber(s)}</span>
               </li>
             ))}
           </motion.ul>

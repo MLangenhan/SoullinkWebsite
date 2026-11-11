@@ -43,7 +43,7 @@ export function loadSpecies(): Promise<SpeciesIndex> {
   return cache
 }
 
-function buildIndex(list: Species[]): SpeciesIndex {
+export function buildIndex(list: Species[]): SpeciesIndex {
   const byId = new Map(list.map((s) => [s.id, s]))
   const chains = new Map<number, Species[]>()
   for (const s of list) {
@@ -65,7 +65,7 @@ function buildIndex(list: Species[]): SpeciesIndex {
       const scored: { s: Species; score: number }[] = []
       for (const { s, de, en } of keys) {
         let score = -1
-        if (number !== null && s.id === number) score = 0
+        if (number !== null && dexNumber(s) === number) score = 0
         else if (de.startsWith(q)) score = 1
         else if (en.startsWith(q)) score = 2
         else if (de.includes(q)) score = 3
@@ -80,6 +80,11 @@ function buildIndex(list: Species[]): SpeciesIndex {
 /** Animiertes Sprite (Showdown-GIF); für ein paar neue Arten gibt es nur das statische Bild. */
 export function animatedSpriteUrl(id: number) {
   return `${SHOWDOWN}/${id}.gif`
+}
+
+/** Nationale Pokédex-Nummer; Regionalformen haben eine eigene ID, aber die Nummer der Art */
+export function dexNumber(species: Pick<Species, 'id' | 'form_of'>) {
+  return species.form_of ?? species.id
 }
 
 /** Name in der eingestellten Sprache */

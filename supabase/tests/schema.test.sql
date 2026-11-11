@@ -542,6 +542,21 @@ select test.fails($$ select test.status(test.get('t1'), 'team', 7) $$, 'PT400', 
 select test.ok((select count(*) = 6 from public.encounters
                 where challenge_id = '00000000-0000-0000-0000-0000000000a1' and state = 'team'), 'Team hat weiter sechs Pokémon');
 
+-- ---------------------------------------------------------------- Regionalformen
+select test.ok((select form_of = 19 and evolution_chain_id = 7 from public.species where id = 10091),
+               'Alola-Rattfratz ist eine Form von Rattfratz in derselben Entwicklungsreihe');
+create function test.evolve(p_encounter text, p_species integer) returns jsonb
+language sql as $$
+  select (private.append_event('00000000-0000-0000-0000-0000000000a1', 'encounter_evolved',
+    jsonb_build_object('encounter_id', p_encounter, 'species_id', p_species), 'web', null, null)).payload;
+$$;
+-- t1 ist ein Pikachu: in Alola wird es zu Alola-Raichu
+select test.ok(test.evolve(test.get('t1'), 10100) ->> 'species_id' = '10100', 'Pikachu entwickelt sich zu Alola-Raichu');
+select test.ok((select species_id = 10100 and caught_species_id = 25 from public.encounters
+                where encounter_id = test.get('t1')::uuid), 'Begegnung zeigt die Form, gefangen bleibt Pikachu');
+select test.fails($$ select test.evolve(test.get('t1'), 10091) $$, 'PT400', 'Form einer fremden Reihe wird abgelehnt');
+select test.fails($$ select test.evolve(test.get('t1'), 10099) $$, 'PT400', 'Unbekannte Form wird abgelehnt');
+
 -- ---------------------------------------------------------------- Teams angleichen (change_team)
 insert into public.challenge_members (id, challenge_id, role, display_name, seat)
 values ('00000000-0000-0000-0000-0000000000b2', '00000000-0000-0000-0000-0000000000a1', 'player', 'Janne', 1);

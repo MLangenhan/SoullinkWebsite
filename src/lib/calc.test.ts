@@ -12,6 +12,12 @@ describe('Schadensrechner', () => {
     expect(gen.speciesName('Gibtsnicht')).toBeNull()
   })
 
+  it('findet Regionalformen über den Slug, erst ab Gen 7', () => {
+    expect(generation(7).speciesName('rattata-alola')).toBe('Rattata-Alola')
+    expect(generation(7).speciesName('Alolan Rattata')).toBeNull()
+    expect(gen.speciesName('rattata-alola')).toBeNull()
+  })
+
   it('rechnet beide Richtungen; Statusattacken machen keinen Schaden', () => {
     const result = compute(gen, 'Weavile', attacker, 'Garchomp', defender, emptyField())
     expect(result.leftToRight).toHaveLength(3)
